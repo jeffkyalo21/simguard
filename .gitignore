@@ -1,0 +1,20 @@
+# .NET
+backend/bin/
+backend/obj/
+*.user
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# Python
+ml-service/venv/
+ml-service/__pycache__/
+ml-service/*.pyc
+ml-service/.env
+
+# General
+.vscode/
+.DS_Store
+*.log
