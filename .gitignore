@@ -13,6 +13,8 @@ ml-service/venv/
 ml-service/__pycache__/
 ml-service/*.pyc
 ml-service/.env
+ml-service/mlruns/
+
 
 # General
 .vscode/
