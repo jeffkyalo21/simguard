@@ -2,6 +2,8 @@
 backend/bin/
 backend/obj/
 *.user
+**/bin/
+**/obj/
 
 # Node / Next.js
 frontend/node_modules/
@@ -20,3 +22,8 @@ mlruns.db
 .vscode/
 .DS_Store
 *.log
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/appsettings.*.local.json
