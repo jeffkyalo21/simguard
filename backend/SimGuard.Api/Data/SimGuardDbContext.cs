@@ -73,7 +73,7 @@ public class SimGuardDbContext : DbContext
 
             entity.Property(e => e.CreatedAt)
                 .HasColumnName("created_at")
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("NOW()");
 
             entity.HasIndex(e => e.Email)
@@ -137,7 +137,7 @@ public class SimGuardDbContext : DbContext
 
             entity.Property(e => e.CreatedAt)
                 .HasColumnName("created_at")
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("NOW()");
 
             entity.HasIndex(e => e.PhoneNumber)
@@ -172,12 +172,12 @@ public class SimGuardDbContext : DbContext
 
             entity.Property(e => e.AssignmentDate)
                 .HasColumnName("assignment_date")
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("NOW()");
 
             entity.Property(e => e.ReturnDate)
                 .HasColumnName("return_date")
-                .HasColumnType("timestamp without time zone");
+                .HasColumnType("timestamp with time zone");
 
             entity.HasIndex(e => e.SimId)
                 .HasDatabaseName("idx_allocations_sim");
@@ -241,7 +241,7 @@ public class SimGuardDbContext : DbContext
 
             entity.Property(e => e.DetectedAt)
                 .HasColumnName("detected_at")
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("NOW()");
 
             entity.Property(e => e.Status)
@@ -294,7 +294,7 @@ public class SimGuardDbContext : DbContext
 
             entity.Property(e => e.Timestamp)
                 .HasColumnName("timestamp")
-                .HasColumnType("timestamp without time zone")
+                .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("NOW()");
 
             entity.HasIndex(e => e.Timestamp)
