@@ -40,7 +40,7 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.Property<DateTime>("DetectedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("detected_at")
                         .HasDefaultValueSql("NOW()");
 
@@ -98,7 +98,7 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.Property<DateTime>("AssignmentDate")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("assignment_date")
                         .HasDefaultValueSql("NOW()");
 
@@ -107,7 +107,7 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnName("employee_id");
 
                     b.Property<DateTime?>("ReturnDate")
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("return_date");
 
                     b.Property<int>("SimId")
@@ -156,7 +156,7 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.Property<DateTime>("Timestamp")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("timestamp")
                         .HasDefaultValueSql("NOW()");
 
@@ -211,7 +211,7 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
 
@@ -259,7 +259,7 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp without time zone")
+                        .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
 

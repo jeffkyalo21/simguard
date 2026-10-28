@@ -1,6 +1,350 @@
 @SimGuard.Api_HostAddress = http://localhost:5275
+@api = {{SimGuard.Api_HostAddress}}/api
 
-GET {{SimGuard.Api_HostAddress}}/weatherforecast/
+# Run the requests top to bottom: later requests use ids returned by
+# earlier ones (named requests). Expected status codes are in the comments.
+
+### Status
+GET {{SimGuard.Api_HostAddress}}/
 Accept: application/json
 
-###
+### Database health
+GET {{SimGuard.Api_HostAddress}}/health/database
+Accept: application/json
+
+
+###############################################################################
+# Departments
+###############################################################################
+
+### 201 Create department
+# @name createDepartment
+POST {{api}}/departments
+Content-Type: application/json
+
+{ "name": "Engineering" }
+
+### 201 Create second department
+# @name createDepartment2
+POST {{api}}/departments
+Content-Type: application/json
+
+{ "name": "Sales" }
+
+@departmentId = {{createDepartment.response.body.$.id}}
+@departmentId2 = {{createDepartment2.response.body.$.id}}
+
+### 409 Duplicate department name (case-insensitive)
+POST {{api}}/departments
+Content-Type: application/json
+
+{ "name": "engineering" }
+
+### 400 Missing name
+POST {{api}}/departments
+Content-Type: application/json
+
+{ "name": "   " }
+
+### 200 List departments (paged)
+GET {{api}}/departments?page=1&pageSize=20
+
+### 400 Bad paging values
+GET {{api}}/departments?page=0&pageSize=0
+
+### 200 Get department
+GET {{api}}/departments/{{departmentId}}
+
+### 404 Unknown department
+GET {{api}}/departments/999999
+
+### 200 Rename department
+PUT {{api}}/departments/{{departmentId2}}
+Content-Type: application/json
+
+{ "name": "Sales EMEA" }
+
+### 409 Rename to an existing name
+PUT {{api}}/departments/{{departmentId2}}
+Content-Type: application/json
+
+{ "name": "Engineering" }
+
+
+###############################################################################
+# Employees
+###############################################################################
+
+### 201 Create employee
+# @name createEmployee
+POST {{api}}/employees
+Content-Type: application/json
+
+{
+  "name": "Alice Mwangi",
+  "email": "alice@example.com",
+  "departmentId": {{departmentId}},
+  "jobRole": "Engineer"
+}
+
+### 201 Create manager (used as assignedBy)
+# @name createManager
+POST {{api}}/employees
+Content-Type: application/json
+
+{
+  "name": "Bob Otieno",
+  "email": "bob@example.com",
+  "departmentId": {{departmentId}},
+  "jobRole": "IT Manager"
+}
+
+@employeeId = {{createEmployee.response.body.$.id}}
+@managerId = {{createManager.response.body.$.id}}
+
+### 409 Duplicate email
+POST {{api}}/employees
+Content-Type: application/json
+
+{
+  "name": "Alice Again",
+  "email": "ALICE@example.com",
+  "departmentId": {{departmentId}},
+  "jobRole": "Engineer"
+}
+
+### 400 Invalid email and unknown department
+POST {{api}}/employees
+Content-Type: application/json
+
+{
+  "name": "Bad Data",
+  "email": "not-an-email",
+  "departmentId": 999999,
+  "jobRole": "Engineer"
+}
+
+### 200 List employees (filter, search, paging)
+GET {{api}}/employees?departmentId={{departmentId}}&search=ali&page=1&pageSize=20
+
+### 400 Bad paging values
+GET {{api}}/employees?pageSize=-1
+
+### 200 Get employee
+GET {{api}}/employees/{{employeeId}}
+
+### 404 Unknown employee
+GET {{api}}/employees/999999
+
+### 200 Update employee
+PUT {{api}}/employees/{{employeeId}}
+Content-Type: application/json
+
+{
+  "name": "Alice Mwangi",
+  "email": "alice@example.com",
+  "departmentId": {{departmentId}},
+  "jobRole": "Senior Engineer"
+}
+
+### 200 Department employees (search, paging)
+GET {{api}}/departments/{{departmentId}}/employees?search=alice&page=1&pageSize=20
+
+### 409 Delete department that still has employees
+DELETE {{api}}/departments/{{departmentId}}
+
+
+###############################################################################
+# SIMs
+###############################################################################
+
+### 201 Create SIM (status in the body is ignored, starts "available")
+# @name createSim
+POST {{api}}/sims
+Content-Type: application/json
+
+{
+  "phoneNumber": "+254700000001",
+  "iccid": "8925400000000000001",
+  "operator": "Safaricom",
+  "planType": "Postpaid",
+  "monthlyCost": 1500.00,
+  "status": "inactive"
+}
+
+### 201 Create second SIM
+# @name createSim2
+POST {{api}}/sims
+Content-Type: application/json
+
+{
+  "phoneNumber": "+254700000002",
+  "iccid": "8925400000000000002",
+  "operator": "Airtel",
+  "planType": "Prepaid",
+  "monthlyCost": 500
+}
+
+@simId = {{createSim.response.body.$.id}}
+@simId2 = {{createSim2.response.body.$.id}}
+
+### 409 Duplicate phone number
+POST {{api}}/sims
+Content-Type: application/json
+
+{
+  "phoneNumber": "+254700000001",
+  "iccid": "8925400000000000099",
+  "operator": "Safaricom",
+  "planType": "Postpaid",
+  "monthlyCost": 1500
+}
+
+### 400 Negative cost and phone number too long
+POST {{api}}/sims
+Content-Type: application/json
+
+{
+  "phoneNumber": "+2547000000000000000001",
+  "iccid": "8925400000000000098",
+  "operator": "Safaricom",
+  "planType": "Postpaid",
+  "monthlyCost": -1
+}
+
+### 200 List SIMs (filters, search, paging)
+GET {{api}}/sims?status=available&operator=safaricom&planType=postpaid&search=2547&page=1&pageSize=20
+
+### 400 Invalid status filter
+GET {{api}}/sims?status=lost
+
+### 200 Get SIM (includes currentAllocation)
+GET {{api}}/sims/{{simId}}
+
+### 404 Unknown SIM
+GET {{api}}/sims/999999
+
+### 200 Update SIM (status cannot be changed here)
+PUT {{api}}/sims/{{simId}}
+Content-Type: application/json
+
+{
+  "phoneNumber": "+254700000001",
+  "iccid": "8925400000000000001",
+  "operator": "Safaricom",
+  "planType": "Postpaid Plus",
+  "monthlyCost": 2000
+}
+
+### 200 Set SIM 2 inactive
+PATCH {{api}}/sims/{{simId2}}/status
+Content-Type: application/json
+
+{ "status": "inactive" }
+
+### 400 "assigned" cannot be set through this route
+PATCH {{api}}/sims/{{simId2}}/status
+Content-Type: application/json
+
+{ "status": "assigned" }
+
+
+###############################################################################
+# Allocations
+###############################################################################
+
+### 201 Assign SIM to employee
+# @name createAllocation
+POST {{api}}/allocations
+Content-Type: application/json
+
+{
+  "simId": {{simId}},
+  "employeeId": {{employeeId}},
+  "assignedBy": {{managerId}}
+}
+
+@allocationId = {{createAllocation.response.body.$.id}}
+
+### 409 Assign an already assigned SIM
+POST {{api}}/allocations
+Content-Type: application/json
+
+{
+  "simId": {{simId}},
+  "employeeId": {{managerId}},
+  "assignedBy": {{managerId}}
+}
+
+### 409 Assign an inactive SIM
+POST {{api}}/allocations
+Content-Type: application/json
+
+{
+  "simId": {{simId2}},
+  "employeeId": {{employeeId}},
+  "assignedBy": {{managerId}}
+}
+
+### 400 Unknown SIM and employees
+POST {{api}}/allocations
+Content-Type: application/json
+
+{
+  "simId": 999999,
+  "employeeId": 999999,
+  "assignedBy": 999999
+}
+
+### 409 Set an assigned SIM inactive (return it first)
+PATCH {{api}}/sims/{{simId}}/status
+Content-Type: application/json
+
+{ "status": "inactive" }
+
+### 200 List allocations (filters, paging)
+GET {{api}}/allocations?simId={{simId}}&employeeId={{employeeId}}&active=true&page=1&pageSize=20
+
+### 200 Get allocation
+GET {{api}}/allocations/{{allocationId}}
+
+### 404 Unknown allocation
+GET {{api}}/allocations/999999
+
+### 200 Employee allocations
+GET {{api}}/employees/{{employeeId}}/allocations?active=true
+
+### 200 SIM allocations
+GET {{api}}/sims/{{simId}}/allocations?active=true
+
+### 200 Return allocation (SIM goes back to "available")
+POST {{api}}/allocations/{{allocationId}}/return
+
+### 409 Return twice
+POST {{api}}/allocations/{{allocationId}}/return
+
+### 404 Return unknown allocation
+POST {{api}}/allocations/999999/return
+
+
+###############################################################################
+# Deletes
+###############################################################################
+
+### 409 Delete SIM with allocation history
+DELETE {{api}}/sims/{{simId}}
+
+### 409 Delete employee with allocation history
+DELETE {{api}}/employees/{{employeeId}}
+
+### 204 Delete SIM with no history
+DELETE {{api}}/sims/{{simId2}}
+
+### 404 Delete unknown SIM
+DELETE {{api}}/sims/999999
+
+### 404 Delete unknown employee
+DELETE {{api}}/employees/999999
+
+### 404 Delete unknown department
+DELETE {{api}}/departments/999999
