@@ -1,6 +1,8 @@
 
 using Microsoft.EntityFrameworkCore;
+using SimGuard.Api.Common;
 using SimGuard.Api.Data;
+using SimGuard.Api.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,10 +10,16 @@ builder.Services.AddDbContext<SimGuardDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())
 {
@@ -43,5 +51,12 @@ app.MapGet("/health/database", async (
         : Results.Problem("Database connection failed.");
 })
 .WithName("CheckDatabaseHealth");
+
+var api = app.MapGroup("/api");
+
+api.MapDepartmentEndpoints();
+api.MapEmployeeEndpoints();
+api.MapSimEndpoints();
+api.MapAllocationEndpoints();
 
 app.Run();
