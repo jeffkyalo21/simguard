@@ -1,0 +1,379 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-risk-cleared: var(--risk-cleared);
+  --color-risk-cleared-foreground: var(--risk-cleared-foreground);
+  --color-risk-escalated: var(--risk-escalated);
+  --color-risk-escalated-foreground: var(--risk-escalated-foreground);
+  --color-risk-flagged: var(--risk-flagged);
+  --color-risk-flagged-foreground: var(--risk-flagged-foreground);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Risk badges: tinted background, dark text. Always paired with a label. */
+  --risk-cleared: #dcfce7;
+  --risk-cleared-foreground: #14532d;
+  --risk-escalated: #fef3c7;
+  --risk-escalated-foreground: #78350f;
+  --risk-flagged: #fee2e2;
+  --risk-flagged-foreground: #7f1d1d;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  --risk-cleared: #14532d;
+  --risk-cleared-foreground: #dcfce7;
+  --risk-escalated: #713f12;
+  --risk-escalated-foreground: #fef3c7;
+  --risk-flagged: #7f1d1d;
+  --risk-flagged-foreground: #fee2e2;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+@layer base {
+  /* Visible focus for links and controls that do not draw their own ring. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  :where(main):focus {
+    outline: none;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Glassy Dashboard v4
+   Scoped to the logged-in app: every token below lives under .glass-app,
+   which only the (app) route group layout applies. Portaled surfaces
+   (dialogs, menus, sheets) opened from the app add .glass-app themselves.
+   ------------------------------------------------------------------------- */
+
+.glass-app {
+  --glass-accent: #4f46e5;
+  --glass-bg: rgb(255 255 255 / 0.55);
+  --glass-bg-strong: rgb(255 255 255 / 0.82);
+  --glass-border: rgb(255 255 255 / 0.6);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --glass-blur: 16px;
+  --glass-blur-chrome: 24px;
+  --glass-shadow: 0 8px 32px rgb(30 41 90 / 0.08);
+  --glow-accent: 0 0 24px rgb(79 70 229 / 0.35);
+  --radius-glass: 16px;
+  --radius-glass-control: 12px;
+  --glass-nav-active: rgb(79 70 229 / 0.12);
+  --glass-backdrop: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 45%, #f8fafc 100%);
+  --glass-orb-1: rgb(165 180 252 / 0.55);
+  --glass-orb-2: rgb(196 181 253 / 0.45);
+  --glass-orb-3: rgb(153 246 228 / 0.35);
+
+  /* shadcn tokens re-pointed at the glass palette inside the app only. */
+  --foreground: #0f172a;
+  --card: var(--glass-bg-strong);
+  --card-foreground: var(--foreground);
+  --popover: rgb(255 255 255 / 0.92);
+  --popover-foreground: var(--foreground);
+  --primary: var(--glass-accent);
+  --primary-foreground: #ffffff;
+  --ring: var(--glass-accent);
+  --muted: rgb(15 23 42 / 0.05);
+  --muted-foreground: #475569;
+  --accent: rgb(79 70 229 / 0.08);
+  --accent-foreground: var(--foreground);
+  --border: rgb(15 23 42 / 0.1);
+  --input: rgb(15 23 42 / 0.14);
+  --chart-1: var(--glass-accent);
+
+  color: var(--foreground);
+}
+
+.dark .glass-app {
+  --glass-accent: #818cf8;
+  --glass-bg: rgb(255 255 255 / 0.08);
+  --glass-bg-strong: rgb(15 23 42 / 0.8);
+  --glass-border: rgb(255 255 255 / 0.14);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
+  --glow-accent: 0 0 24px rgb(129 140 248 / 0.35);
+  --glass-nav-active: rgb(129 140 248 / 0.18);
+  --glass-backdrop: linear-gradient(135deg, #0b1033 0%, #1e1b4b 45%, #0f3d3e 100%);
+  --glass-orb-1: rgb(79 70 229 / 0.35);
+  --glass-orb-2: rgb(124 58 237 / 0.3);
+  --glass-orb-3: rgb(13 148 136 / 0.3);
+
+  --foreground: #f1f5f9;
+  --popover: rgb(17 24 39 / 0.92);
+  --primary-foreground: #0b1020;
+  --muted: rgb(255 255 255 / 0.08);
+  --muted-foreground: #cbd5e1;
+  --accent: rgb(129 140 248 / 0.14);
+  --border: rgb(255 255 255 / 0.12);
+  --input: rgb(255 255 255 / 0.16);
+}
+
+/* Without backdrop-filter, thin glass becomes a solid, slightly translucent surface. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-app {
+    --glass-bg: rgb(255 255 255 / 0.92);
+    --glass-bg-strong: rgb(255 255 255 / 0.96);
+  }
+
+  .dark .glass-app {
+    --glass-bg: rgb(17 24 39 / 0.92);
+    --glass-bg-strong: rgb(17 24 39 / 0.96);
+  }
+}
+
+@layer components {
+  /* Fixed gradient with slow blurred orbs behind the app. Pure CSS. */
+  .glass-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    background: var(--glass-backdrop);
+    pointer-events: none;
+  }
+
+  .glass-backdrop::before,
+  .glass-backdrop::after,
+  .glass-orb {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(80px);
+    animation: glass-drift 60s ease-in-out infinite alternate;
+  }
+
+  .glass-backdrop::before {
+    top: -10%;
+    left: -5%;
+    width: 45vw;
+    height: 45vw;
+    background: var(--glass-orb-1);
+  }
+
+  .glass-backdrop::after {
+    right: -10%;
+    bottom: -15%;
+    width: 50vw;
+    height: 50vw;
+    background: var(--glass-orb-2);
+    animation-delay: -20s;
+  }
+
+  .glass-orb {
+    top: 40%;
+    left: 45%;
+    width: 30vw;
+    height: 30vw;
+    background: var(--glass-orb-3);
+    animation-delay: -40s;
+  }
+
+  /* Thin glass for cards. Data-dense content uses .glass-card-strong. */
+  .glass-card {
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-glass);
+    background: var(--glass-bg);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    backdrop-filter: blur(var(--glass-blur));
+    transition: background-color 200ms ease, box-shadow 200ms ease;
+  }
+
+  /* Strong surfaces are opaque enough to read without blurring. */
+  .glass-card-strong {
+    background: var(--glass-bg-strong);
+    backdrop-filter: none;
+  }
+
+  /* Never nest backdrop filters. */
+  .glass-card .glass-card,
+  .glass-chrome .glass-card {
+    backdrop-filter: none;
+  }
+
+  /* Sidebar and top bar. */
+  .glass-chrome {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur-chrome));
+  }
+
+  /* Dialogs, menus and sheets opened from the app. */
+  .glass-popover {
+    border: 1px solid var(--glass-border);
+    background: var(--popover);
+    box-shadow: var(--glass-shadow), var(--glass-highlight);
+    backdrop-filter: blur(var(--glass-blur));
+  }
+
+  .glass-nav-item[aria-current="page"] {
+    background: var(--glass-nav-active);
+    box-shadow: var(--glow-accent);
+    font-weight: 600;
+  }
+
+  /* Glow on primary buttons, on hover only. */
+  .glass-app [data-slot="button"][data-variant="default"] {
+    transition: background-color 200ms ease, box-shadow 200ms ease;
+  }
+
+  .glass-app [data-slot="button"][data-variant="default"]:hover {
+    box-shadow: var(--glow-accent);
+  }
+
+  .glass-page-enter {
+    animation: glass-page-in 220ms ease-out both;
+  }
+}
+
+@keyframes glass-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4vw, 3vh, 0) scale(1.08);
+  }
+}
+
+@keyframes glass-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-app *,
+  .glass-app *::before,
+  .glass-app *::after,
+  .glass-backdrop::before,
+  .glass-backdrop::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+  }
+}
