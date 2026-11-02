@@ -1,0 +1,8 @@
+# Tools for running notebooks locally. Not needed by the ML service itself.
+# Install into ml-service/venv after requirements.txt:
+#   venv/Scripts/python -m pip install -r requirements-dev.txt
+-r requirements.txt
+
+nbconvert==7.16.6
+ipykernel==7.1.0
+matplotlib==3.11.2

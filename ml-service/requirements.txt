@@ -1,0 +1,28 @@
+# SimGuard ML service. Exact versions match the Python 3.13 install the
+# notebooks and saved models were built with (xgboost 3.4.1, scikit-learn
+# 1.8.0). Install into ml-service/venv:
+#   python -m venv venv
+#   venv/Scripts/python -m pip install -r requirements.txt
+
+# Data
+pandas==3.0.0
+numpy==2.3.5
+pyarrow==25.0.1
+
+# Models
+scikit-learn==1.8.0
+xgboost==3.4.1
+shap==0.52.0
+prophet==1.4.0
+joblib==1.5.3
+
+# Tracking
+mlflow==3.16.1
+
+# Service
+fastapi==0.132.0
+uvicorn==0.41.0
+
+# Tests
+pytest==9.1.1
+httpx==0.28.1
