@@ -72,3 +72,14 @@ unknown field), `503` when artifacts are missing.
   (probability 0.10 to 0.90). Case based reasoning (Stage 4) was evaluated
   to settle part of the band and was not adopted (see `docs/cbr_design.md`).
   Analysts review the band using the SHAP reasons.
+
+## Retraining checklist
+
+After any retrain (see `docs/evaluation_report.md`, stability section):
+
+1. Refit the scaler, cohort stats, Isolation Forest and XGBoost on the new training SIMs only.
+2. Do not reuse the 0.10 and 0.90 gate thresholds. The probabilities are uncalibrated (scale_pos_weight is about 48), so their range changes with every retrain.
+3. Re-derive both thresholds on the validation split. Flag: the lowest threshold with validation flag precision of at least 0.95. Clear: the highest threshold that leaves at most a stated number of anomalies in the cleared bucket. Record that number next to the thresholds.
+4. Check the clear, escalated and flag shares before deploying. Stop if more than 60% of rows are escalated.
+5. Regenerate SHAP with `iteration_range` up to `best_iteration`.
+6. Refresh the artifact versions shown by `/version`.
