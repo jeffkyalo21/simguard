@@ -3,7 +3,7 @@
 import { flushSync } from "react-dom";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/layout/icon-button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,16 +38,11 @@ export function ThemeToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="touch-target size-10 rounded-full"
-          aria-label={copy.theme.toggle}
-        >
+        <IconButton label={copy.theme.toggle}>
           {/* Both icons render; CSS picks one, so there is no hydration flash. */}
           <Sun className="dark:hidden" aria-hidden="true" />
           <Moon className="hidden dark:block" aria-hidden="true" />
-        </Button>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-36">
         <DropdownMenuRadioGroup value={theme} onValueChange={changeTheme}>

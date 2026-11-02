@@ -1,13 +1,20 @@
 import { GlassBackdrop } from "@/components/shared/glass-backdrop";
+import { Audience } from "@/components/landing/audience";
+import { Contact } from "@/components/landing/contact";
 import { CtaBand } from "@/components/landing/cta-band";
-import { Features } from "@/components/landing/features";
+import { DemoDialogProvider } from "@/components/landing/demo-dialog";
+import { Faq } from "@/components/landing/faq";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { LandingFooter } from "@/components/landing/landing-footer";
 import { LandingNav } from "@/components/landing/landing-nav";
 import { LandingShell } from "@/components/landing/landing-shell";
+import { Problem } from "@/components/landing/problem";
 import { ProductPreview } from "@/components/landing/product-preview";
-import { StatsStrip } from "@/components/landing/stats-strip";
+import { Results } from "@/components/landing/results";
+import { Tour } from "@/components/landing/tour";
+import { Trust } from "@/components/landing/trust";
+import { WhyItFired } from "@/components/landing/why-it-fired";
 import "./landing.css";
 
 /**
@@ -20,16 +27,24 @@ export function LandingPage() {
     <LandingShell>
       {/* The only animated backdrop in the product; it covers the static one. */}
       <GlassBackdrop animated />
-      <LandingNav />
-      <main id="main" tabIndex={-1} className="flex-1">
-        <Hero />
-        <ProductPreview />
-        <StatsStrip />
-        <Features />
-        <HowItWorks />
-        <CtaBand />
-      </main>
-      <LandingFooter />
+      <DemoDialogProvider>
+        <LandingNav />
+        <main id="main" tabIndex={-1} className="flex-1">
+          <Hero />
+          <ProductPreview />
+          <Problem />
+          <HowItWorks />
+          <WhyItFired />
+          <Results />
+          <Tour />
+          <Audience />
+          <Trust />
+          <Faq />
+          <Contact />
+          <CtaBand />
+        </main>
+        <LandingFooter />
+      </DemoDialogProvider>
     </LandingShell>
   );
 }

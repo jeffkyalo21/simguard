@@ -1,15 +1,41 @@
-import { ShieldX } from "lucide-react";
 import { CountUp } from "@/components/landing/count-up";
 import { InView } from "@/components/landing/in-view";
 import { Parallax } from "@/components/landing/parallax";
+import { SimCard } from "@/components/landing/sim-card";
 import { Tilt } from "@/components/landing/tilt";
+import { riskLevel } from "@/components/data/risk-bar";
+import { getSampleDashboard } from "@/lib/data";
+import { formatNumber, formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 import { cn } from "@/lib/utils";
 
 const text = copy.landing;
+const board = copy.dashboard;
 
-// Fixed points for the mini chart (0 to 100, rising with a late peak).
-const CHART = [30, 34, 31, 40, 38, 45, 43, 52, 49, 58, 56, 63, 61, 72, 66, 70];
+// The real dashboard at "Last 30 days", built from the same mock data on
+// the server, so the preview cannot drift from it.
+const DASHBOARD = getSampleDashboard(30);
+
+const KPIS = [
+  { key: "activeSims", hero: false },
+  { key: "flagged", hero: true },
+  { key: "toReview", hero: false },
+].map(({ key, hero }) => ({ key, hero, label: board.kpis[key], value: DASHBOARD.kpis[key] }));
+
+const REVIEW = DASHBOARD.needsReview.slice(0, 3).map((row) => ({
+  id: row.id,
+  number: formatPhone(row.phoneNumber),
+  employee: row.employeeName ?? copy.sims.unassigned,
+  risk: Math.round(row.riskScore * 100),
+  level: riskLevel(row.riskScore),
+}));
+
+const RISK_FILL = {
+  flagged: "bg-risk-flagged-strong",
+  escalated: "bg-risk-escalated-strong",
+  cleared: "bg-risk-cleared-strong",
+};
+
 const SPARK = [6, 9, 7, 12, 10, 15, 13, 18];
 
 function points(values, width, height, max) {
@@ -17,26 +43,88 @@ function points(values, width, height, max) {
   return values.map((value, index) => `${(index * step).toFixed(1)},${(height - (value / max) * height).toFixed(1)}`).join(" ");
 }
 
-const BARS = [
-  { key: "inactiveBilling", value: 23 },
-  { key: "sharing", value: 18 },
-  { key: "reselling", value: 12 },
-  { key: "ghostUsage", value: 9 },
-];
-
-function MiniSidebar() {
+function MiniNav() {
   return (
-    <div className="hidden w-14 shrink-0 flex-col items-center gap-3 border-r border-border py-4 sm:flex">
-      <span className="mb-2 size-6 rounded-md bg-brand-solid" />
-      {Array.from({ length: 6 }, (_, index) => (
-        <span
-          key={index}
-          className={cn(
-            "relative h-2 w-6 rounded-full bg-foreground/15",
-            index === 0 && "bg-brand-soft before:absolute before:top-0 before:-left-3 before:h-2 before:w-[3px] before:rounded-full before:bg-brand"
-          )}
-        />
-      ))}
+    <div className="flex items-center justify-between gap-3 px-3 pt-3 sm:px-4 sm:pt-4">
+      <span className="size-7 shrink-0 rounded-full bg-brand-solid" />
+      <div className="hidden items-center gap-1 rounded-full border border-glass-border bg-glass-strong p-1 sm:flex">
+        {[copy.nav.dashboard, copy.nav.sims, copy.nav.alerts, copy.nav.usage].map((label, index) => (
+          <span
+            key={label}
+            className={cn(
+              "rounded-full px-3 py-1 text-[11px] font-medium",
+              index === 0 ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            )}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        {[0, 1, 2].map((index) => (
+          <span key={index} className="size-7 rounded-full border border-glass-border bg-glass-strong" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The dashboard's "Data wasted" card, scaled down: total, share and one used against paid bar. */
+function MiniDataWaste() {
+  const { paidGb, usedGb, unusedGb, percent } = DASHBOARD.dataWaste;
+  const usedShare = paidGb > 0 ? usedGb / paidGb : 0;
+  // " GB" from the same unit copy as the dashboard, so only the number counts.
+  const gbSuffix = copy.units.gb("");
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-glass-border bg-glass-strong p-3">
+      <p className="text-xs font-medium">{board.dataWasted}</p>
+      <div className="flex flex-col gap-0.5">
+        <p className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <CountUp value={unusedGb} suffix={gbSuffix} />
+        </p>
+        <p className="text-[11px] text-muted-foreground sm:text-xs">{board.wastedShare(percent)}</p>
+      </div>
+      {/* Sits under the share line, not at the bottom, so the usage chip
+          over the box's lower left corner never covers it. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="block h-2 overflow-hidden rounded-full bg-chart-track">
+          <span className="fill-x block h-full rounded-full bg-foreground" style={{ "--v": usedShare }} />
+        </span>
+        <div className="flex justify-between gap-2 text-[11px]">
+          <span className="truncate">
+            <span className="text-muted-foreground">{board.used}</span>{" "}
+            <span className="font-medium tabular-nums">{copy.units.gb(formatNumber(usedGb))}</span>
+          </span>
+          <span className="truncate">
+            <span className="text-muted-foreground">{board.paid}</span>{" "}
+            <span className="font-medium tabular-nums">{copy.units.gb(formatNumber(paidGb))}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniReview() {
+  return (
+    <div className="glass-card-dark min-w-0 rounded-2xl border p-3">
+      <p className="mb-3 text-xs font-medium">{board.needsReview}</p>
+      <ul className="flex flex-col gap-2.5">
+        {REVIEW.map(({ id, number, employee, risk, level }, index) => (
+          <li key={id} className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-0.5 text-[11px]">
+            <span className="truncate tabular-nums">{number}</span>
+            <span className="tabular-nums">{copy.units.percent(risk)}</span>
+            <span className="col-span-2 truncate opacity-70">{employee}</span>
+            <span className="col-span-2 mt-1 h-1.5 overflow-hidden rounded-full bg-chart-track">
+              <span
+                className={cn("fill-x block h-full rounded-full", RISK_FILL[level])}
+                style={{ "--v": risk / 100, "--i": index }}
+              />
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -45,81 +133,34 @@ function MiniDashboard() {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 sm:p-4">
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        {text.preview.kpis.map(({ key, label, value }) => (
+        {KPIS.map(({ key, label, value, hero }) => (
           <div
             key={key}
             className={cn(
-              "rounded-xl border border-glass-border bg-glass-strong p-2.5 sm:p-3",
-              key === "flagged" && "shadow-[var(--brand-glow)]"
+              "rounded-2xl border border-glass-border bg-glass-strong p-2.5 sm:p-3.5",
+              hero && "shadow-[var(--brand-glow)]"
             )}
           >
             <p className="truncate text-[11px] text-muted-foreground sm:text-xs">{label}</p>
-            <p className={cn("text-lg font-semibold sm:text-2xl", key === "flagged" && "text-brand-text")}>
+            <p className="text-lg font-semibold sm:text-2xl">
               <CountUp value={value} />
             </p>
           </div>
         ))}
       </div>
-      <div className="grid gap-2 sm:grid-cols-[1.6fr_1fr] sm:gap-3">
-        <div className="rounded-xl border border-glass-border bg-glass-strong p-3">
-          <p className="mb-2 text-xs font-medium">{text.preview.chart}</p>
-          <div className="draw-mask">
-            <div className="draw-inner">
-              <svg viewBox="0 0 300 100" className="h-24 w-full sm:h-28" preserveAspectRatio="none">
-                {[25, 50, 75].map((y) => (
-                  <line key={y} x1="0" x2="300" y1={y} y2={y} stroke="var(--chart-grid)" />
-                ))}
-                <polyline
-                  points={points(CHART, 300, 96, 80)}
-                  fill="none"
-                  stroke="var(--foreground)"
-                  strokeWidth="2"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-glass-border bg-glass-strong p-3">
-          <p className="mb-3 text-xs font-medium">{text.preview.bars}</p>
-          <ul className="flex flex-col gap-2.5">
-            {BARS.map(({ key, value }, index) => (
-              <li key={key} className="grid grid-cols-[1fr_1.4fr] items-center gap-2 text-[11px]">
-                <span className="truncate">{copy.alertTypes[key]}</span>
-                <span className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                  <span
-                    className="fill-x block h-full rounded-full bg-foreground"
-                    style={{ "--v": value / 23, "--i": index }}
-                  />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+      <div className="grid gap-2 sm:grid-cols-[1.5fr_1fr] sm:gap-3">
+        <MiniDataWaste />
+        <MiniReview />
       </div>
     </div>
   );
 }
 
+// The SIM card holds the top right corner, so the one chip sits bottom left.
 function Chips() {
   return (
     <div className="pointer-events-none absolute inset-0 hidden md:block" aria-hidden="true">
-      <Parallax speed={0.12} className="absolute top-10 -left-6 lg:-left-14">
-        <div className="chip-float glass-card flex items-center gap-2 rounded-full px-3 py-2 text-sm" style={{ "--delay": "-1s" }}>
-          <span className="inline-flex h-6 items-center gap-1 rounded-full bg-risk-flagged px-2 text-xs font-medium text-risk-flagged-foreground">
-            <ShieldX className="size-3.5" />
-            {text.chips.flagged}
-          </span>
-          <span className="font-semibold tabular-nums">{text.chips.flaggedValue}</span>
-        </div>
-      </Parallax>
-      <Parallax speed={0.2} className="absolute -right-6 bottom-16 lg:-right-14">
-        <div className="chip-float glass-card flex flex-col gap-0.5 px-4 py-3" style={{ "--delay": "-3s" }}>
-          <span className="text-xs text-muted-foreground">{text.chips.savings}</span>
-          <span className="text-lg font-semibold tabular-nums">{text.chips.savingsValue}</span>
-        </div>
-      </Parallax>
-      <Parallax speed={0.07} className="absolute -top-6 right-10 lg:right-24">
+      <Parallax speed={0.07} className="absolute -bottom-5 -left-3 xl:-left-14">
         <div className="chip-float glass-card flex items-center gap-3 px-3 py-2" style={{ "--delay": "-5s" }}>
           <div className="flex flex-col">
             <span className="text-xs text-muted-foreground">{text.chips.usage}</span>
@@ -135,29 +176,35 @@ function Chips() {
 }
 
 /**
- * A built-in-code mock of the dashboard: KPIs count up, the chart draws
- * itself and the bars fill when it scrolls into view; the frame tilts
- * toward the pointer. Floating chips drift around it with parallax.
+ * A built-in-code mock of the dashboard: KPIs and the wasted total count
+ * up, and the used bar and risk bars fill, once, when it scrolls into view;
+ * the frame tilts toward the pointer. The animated SIM card (the first "Needs review" row)
+ * overlaps its top right corner; a usage chip drifts with parallax.
  */
 export function ProductPreview() {
   return (
-    <InView as="section" track threshold={0} aria-label={text.previewLabel} className="px-4 pb-16 sm:px-6">
+    <InView as="section" track threshold={0} aria-label={text.previewLabel} className="px-4 pt-6 pb-16 sm:px-6 md:pt-0">
       <div className="relative mx-auto max-w-5xl">
         <InView threshold={0.3}>
           <Tilt>
             <div
               role="img"
               aria-label={text.previewLabel}
-              className="glass-card flex overflow-hidden p-0 shadow-[var(--glass-shadow-lift)] [--radius-glass:28px]"
+              className="glass-card flex overflow-hidden p-0 shadow-[var(--glass-shadow-lift)] [--radius-card:28px]"
             >
-              <div aria-hidden="true" className="flex min-w-0 flex-1">
-                <MiniSidebar />
+              <div aria-hidden="true" className="flex min-w-0 flex-1 flex-col">
+                <MiniNav />
                 <MiniDashboard />
               </div>
             </div>
           </Tilt>
         </InView>
         <Chips />
+        <SimCard
+          number={REVIEW[0].number}
+          risk={REVIEW[0].risk}
+          className="absolute -top-[65px] -right-1.5 origin-top-right scale-[0.7] md:-top-[112px] md:-right-3 md:scale-100 lg:-right-4 xl:-right-10"
+        />
       </div>
     </InView>
   );

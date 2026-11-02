@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useOpeningKey } from "@/hooks/use-opening-key";
 import { FormDialog } from "@/components/shared/form-dialog";
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ApiError } from "@/lib/api";
 import { createSim, referenceData, updateSim } from "@/lib/data";
+import { useCarriers } from "@/lib/mock/store";
 import { formatPhone } from "@/lib/format";
 import { simFieldErrors } from "@/lib/validation";
 import { copy } from "@/lib/copy";
@@ -25,12 +27,15 @@ const text = copy.sims.form;
 const messages = {
   phoneNumber: { required: text.errors.phoneRequired, invalid: text.errors.phoneInvalid, taken: text.errors.phoneTaken },
   iccid: { required: text.errors.iccidRequired, tooLong: text.errors.iccidTooLong, taken: text.errors.iccidTaken },
-  operator: { required: text.errors.operatorRequired },
+  carrierId: { required: text.errors.operatorRequired, invalid: text.errors.operatorRequired },
   planType: { required: text.errors.planRequired },
   monthlyCost: { invalid: text.errors.costInvalid },
 };
 
-const FIELD_ORDER = ["phoneNumber", "iccid", "operator", "planType", "monthlyCost"];
+const FIELD_ORDER = ["phoneNumber", "iccid", "carrierId", "planType", "monthlyCost"];
+
+// Shown in place of the carrier select when there are no carriers.
+const ADD_CARRIER_ID = "sim-carrierId-add";
 
 function toMessages(codes) {
   return Object.fromEntries(
@@ -42,44 +47,60 @@ function initialValues(sim) {
   return {
     phoneNumber: sim ? formatPhone(sim.phoneNumber) : "",
     iccid: sim?.iccid ?? "",
-    operator: sim?.operator ?? "",
+    carrierId: sim?.carrierId == null ? "" : String(sim.carrierId),
     planType: sim?.planType ?? "",
     monthlyCost: sim ? String(sim.monthlyCost) : "",
   };
 }
 
-function SelectField({ id, label, value, options, error, onChange }) {
+/**
+ * @param {{ id: string, label: string, value: string,
+ *   options: { value: string, label: string }[], error?: string,
+ *   onChange: (value: string) => void, placeholder?: string,
+ *   disabled?: boolean, children?: React.ReactNode }} props
+ */
+function SelectField({ id, label, value, options, error, onChange, placeholder = label, disabled, children }) {
   return (
     <FormField id={id} label={label} error={error}>
       {(field) => (
-        <Select value={value} onValueChange={onChange}>
-          <SelectTrigger {...field} className="h-10 w-full data-[size=default]:h-10">
-            <SelectValue placeholder={label} />
-          </SelectTrigger>
-          <SelectContent position="popper">
-            {options.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <>
+          <Select value={value} onValueChange={onChange} disabled={disabled}>
+            <SelectTrigger {...field} className="h-10 w-full data-[size=default]:h-10">
+              <SelectValue placeholder={placeholder} />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {options.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {children}
+        </>
       )}
     </FormField>
   );
 }
+
+const planOptions = referenceData.planTypes.map((name) => ({ value: name, label: name }));
 
 /** The fields. Keyed by the caller, so each opening starts fresh. */
 function SimForm({ sim, open, onOpenChange, onSaved }) {
   const [values, setValues] = useState(() => initialValues(sim));
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  const carriers = useCarriers();
+  const carrierOptions = carriers.map((carrier) => ({ value: String(carrier.id), label: carrier.name }));
+  const noCarriers = carrierOptions.length === 0;
 
   const set = (field) => (value) => setValues((current) => ({ ...current, [field]: value }));
 
   function focusFirstError(fieldErrors) {
     const first = FIELD_ORDER.find((field) => fieldErrors[field]);
-    if (first) document.getElementById(`sim-${first}`)?.focus();
+    // The disabled carrier select cannot take focus; its link can.
+    const id = first === "carrierId" && noCarriers ? ADD_CARRIER_ID : `sim-${first}`;
+    if (first) document.getElementById(id)?.focus();
   }
 
   async function handleSubmit(event) {
@@ -147,18 +168,30 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
       </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
         <SelectField
-          id="sim-operator"
+          id="sim-carrierId"
           label={text.operator}
-          value={values.operator}
-          options={referenceData.operators}
-          error={errors.operator}
-          onChange={set("operator")}
-        />
+          value={values.carrierId}
+          options={carrierOptions}
+          error={errors.carrierId}
+          onChange={set("carrierId")}
+          placeholder={noCarriers ? text.noCarriers : text.operator}
+          disabled={noCarriers}
+        >
+          {noCarriers && (
+            <Link
+              id={ADD_CARRIER_ID}
+              href="/settings"
+              className="inline-flex min-h-6 w-fit items-center rounded-sm text-sm font-medium underline underline-offset-4 hover:text-foreground"
+            >
+              {text.addCarrier}
+            </Link>
+          )}
+        </SelectField>
         <SelectField
           id="sim-planType"
           label={text.plan}
           value={values.planType}
-          options={referenceData.planTypes}
+          options={planOptions}
           error={errors.planType}
           onChange={set("planType")}
         />

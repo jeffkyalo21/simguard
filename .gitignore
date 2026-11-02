@@ -18,7 +18,6 @@ ml-service/.env
 ml-service/mlruns/
 mlruns.db
 
-
 # General
 .vscode/
 .DS_Store
@@ -28,3 +27,5 @@ mlruns.db
 !.env.example
 **/appsettings.Development.json
 **/appsettings.*.local.json
+docs/SimGuard wireframes
+.claude/

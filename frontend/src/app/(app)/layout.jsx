@@ -1,21 +1,21 @@
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Topbar } from "@/components/layout/topbar";
+import { PillNav } from "@/components/layout/pill-nav";
 import { MockStoreProvider } from "@/lib/mock/store";
 
-// The shell stays mounted across navigation; only the content area
+// The pill nav stays mounted across navigation; only the content area
 // transitions (see template.jsx). The glass theme comes from <body>.
 export default function AppLayout({ children }) {
   return (
     // TEMPORARY (#17): mock data store, replaced by the API in #20.
     <MockStoreProvider>
-      <div className="flex min-h-dvh">
-        <AppSidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          <main id="main" tabIndex={-1} className="flex flex-1 flex-col gap-6 p-4 sm:p-8">
-            {children}
-          </main>
-        </div>
+      <div className="flex min-h-dvh flex-col">
+        <PillNav />
+        <main
+          id="main"
+          tabIndex={-1}
+          className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-6 pt-10 pb-16"
+        >
+          {children}
+        </main>
       </div>
     </MockStoreProvider>
   );

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
  * Marks its element from an IntersectionObserver, written to the DOM
  * directly so scrolling never re-renders React.
  * - Default: data-inview turns "true" on first sighting and stays (reveals,
- *   draw-ins and fills play once).
+ *   counts and fills play once).
  * - `track`: data-onscreen follows visibility (loops pause off screen).
  * @param {{ as?: React.ElementType, track?: boolean, threshold?: number,
  *   className?: string, children: React.ReactNode } & Record<string, unknown>} props

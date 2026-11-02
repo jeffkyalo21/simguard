@@ -1,11 +1,15 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Frosted card. Use "strong" for tables, forms, long text and the alerts
- * queue; thin glass is for light, glanceable content only. `hover` lifts the
- * card slightly; `hero` adds the accent glow (one hero KPI per page).
- * @param {{ variant?: "default" | "strong", hover?: boolean, hero?: boolean,
- *   as?: React.ElementType, className?: string } & Record<string, unknown>} props
+ * Glass card in one of three materials:
+ * - "default": glanceable content (KPIs, charts, short lists)
+ * - "strong": tables, forms and long text
+ * - "dark": the one emphasis card per page (white text)
+ * `hover` lifts the card slightly; `hero` adds the accent glow (one hero
+ * KPI per page).
+ * @param {{ variant?: "default" | "strong" | "dark", hover?: boolean,
+ *   hero?: boolean, as?: React.ElementType, className?: string }
+ *   & Record<string, unknown>} props
  */
 export function GlassCard({
   variant = "default",
@@ -22,6 +26,7 @@ export function GlassCard({
       className={cn(
         "glass-card",
         variant === "strong" && "glass-card-strong",
+        variant === "dark" && "glass-card-dark",
         hover && "glass-card-hover",
         hero && "glass-card-hero",
         className

@@ -7,12 +7,12 @@ import { cn } from "@/lib/utils";
 const MAX_DEG = 6;
 
 /**
- * Tilts gently toward the pointer (3D, at most 6 degrees). Off on touch,
- * small screens and reduced motion. Pointer moves are batched per frame
- * and only write two CSS variables.
- * @param {{ className?: string, children: React.ReactNode }} props
+ * Tilts gently toward the pointer (3D, at most `max` degrees, 6 by
+ * default). Off on touch, small screens and reduced motion. Pointer moves
+ * are batched per frame and only write two CSS variables.
+ * @param {{ max?: number, className?: string, children: React.ReactNode }} props
  */
-export function Tilt({ className, children }) {
+export function Tilt({ max = MAX_DEG, className, children }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -33,8 +33,8 @@ export function Tilt({ className, children }) {
       const y = (event.clientY - rect.top) / rect.height - 0.5;
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        element.style.setProperty("--ry", `${(x * MAX_DEG * 2).toFixed(2)}deg`);
-        element.style.setProperty("--rx", `${(-y * MAX_DEG * 2).toFixed(2)}deg`);
+        element.style.setProperty("--ry", `${(x * max * 2).toFixed(2)}deg`);
+        element.style.setProperty("--rx", `${(-y * max * 2).toFixed(2)}deg`);
       });
     }
 
@@ -55,7 +55,7 @@ export function Tilt({ className, children }) {
       element.removeEventListener("pointermove", onMove);
       element.removeEventListener("pointerleave", onLeave);
     };
-  }, []);
+  }, [max]);
 
   return (
     <div ref={ref} className={cn("tilt", className)}>

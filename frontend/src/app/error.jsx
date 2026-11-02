@@ -9,9 +9,9 @@ export default function ErrorPage({ retry }) {
   return (
     <main id="main" tabIndex={-1} className="flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
       <TriangleAlert className="size-10 text-muted-foreground" aria-hidden="true" />
-      <p role="alert" className="text-muted-foreground">
-        {copy.errors.generic}
-      </p>
+      <div role="alert">
+        <h1 className="text-lg font-medium text-muted-foreground">{copy.errors.generic}</h1>
+      </div>
       <Button onClick={() => retry()} className="h-10 px-4">
         {copy.actions.tryAgain}
       </Button>

@@ -24,10 +24,11 @@ import {
 import { useResource } from "@/hooks/use-resource";
 import { listSims, referenceData } from "@/lib/data";
 import { formatPhone } from "@/lib/format";
+import { useCarriers } from "@/lib/mock/store";
 import { copy } from "@/lib/copy";
 
 const SEARCH_DELAY_MS = 250;
-const FILTER_KEYS = ["q", "status", "tier", "department"];
+const FILTER_KEYS = ["q", "status", "tier", "department", "operator"];
 
 const statusOptions = referenceData.statuses.map((value) => ({ value, label: copy.simStatus[value] }));
 const tierOptions = referenceData.tiers.map(({ name }) => ({ value: name, label: copy.tiers[name] }));
@@ -107,9 +108,11 @@ export function SimsView() {
   }, [search, urlQ, pathname]);
 
   const resource = useResource(
-    () => listSims({ ...query, page }),
-    [query.q, query.status, query.tier, query.department, page]
+    () => listSims({ ...query, carrierId: query.operator, page }),
+    [query.q, query.status, query.tier, query.department, query.operator, page]
   );
+  const carriers = useCarriers();
+  const operatorOptions = carriers.map((carrier) => ({ value: String(carrier.id), label: carrier.name }));
   const result = resource.data;
 
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
@@ -190,6 +193,7 @@ export function SimsView() {
         <FilterSelect label={copy.simStatus.label} value={query.status} options={statusOptions} onChange={setFilter("status")} />
         <FilterSelect label={copy.tiers.label} value={query.tier} options={tierOptions} onChange={setFilter("tier")} />
         <FilterSelect label={copy.sims.department} value={query.department} options={departmentOptions} onChange={setFilter("department")} />
+        <FilterSelect label={copy.sims.operator} value={query.operator} options={operatorOptions} onChange={setFilter("operator")} />
         <p className="ml-auto text-sm text-muted-foreground tabular-nums" aria-live="polite">
           {result ? copy.sims.count(result.total) : " "}
         </p>
@@ -206,7 +210,6 @@ export function SimsView() {
           onRetry={resource.retry}
           busy={resource.loading}
           skeletonRows={8}
-          scroll
           emptyMessage={hasFilters ? copy.sims.noMatch : copy.pages.sims.empty}
           emptyAction={
             hasFilters && (

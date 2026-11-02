@@ -1,5 +1,5 @@
 // TEMPORARY (issue #17): fictional, deterministic mock data. Removed when
-// src/lib/data.js switches to the API in #20. Every name is invented.
+// src/lib/data.js switches to the API in #20. Every person is invented.
 //
 // Records follow the backend shapes (SimResponse, allocation and alert
 // rows). Fields the backend does not have yet sit in blocks marked
@@ -37,7 +37,16 @@ export const TIERS = {
 };
 export const TIER_ORDER = ["Support", "Professional", "Manager", "Field"];
 
-export const OPERATORS = ["Carrier A", "Carrier B", "Carrier C"];
+/**
+ * Mobile carriers the organisation buys SIMs from. The only place carrier
+ * names are written; screens look them up by id from the mock store.
+ * status is "connected" or "not connected".
+ */
+export const CARRIERS = [
+  { id: 1, name: "Safaricom", status: "connected", createdAt: "2025-05-12T08:00:00Z" },
+  { id: 2, name: "Airtel", status: "not connected", createdAt: "2025-05-12T08:05:00Z" },
+  { id: 3, name: "Telkom", status: "not connected", createdAt: "2025-05-12T08:10:00Z" },
+];
 export const PLAN_TYPES = ["Corporate postpaid", "Data bundle", "Prepaid"];
 export const ALERT_TYPES = ["inactiveBilling", "sharing", "reselling", "ghostUsage"];
 
@@ -222,7 +231,7 @@ function buildFixtures() {
       id,
       phoneNumber: featured?.phone ?? newPhone(),
       iccid: `8925 4010 0000 ${String(12 + i * 13).padStart(4, "0")}`,
-      operator: i === 0 ? OPERATORS[0] : random.pick(OPERATORS),
+      carrierId: i === 0 ? CARRIERS[0].id : random.pick(CARRIERS).id,
       planType: random.pick(PLAN_TYPES),
       monthlyCost: limits.monthlyCost,
       status,
@@ -250,7 +259,7 @@ function buildFixtures() {
       : Number(random.float(0.04, 0.38).toFixed(2));
   }
 
-  return { employees, sims, allocations, alerts };
+  return { employees, carriers: CARRIERS, sims, allocations, alerts };
 }
 
 // Open alerts in the last 30 days total 62 (23, 18, 12, 9 by type), 14 of
@@ -268,6 +277,8 @@ function buildAlerts(sims, random) {
       riskScore: Number(riskScore.toFixed(2)),
       status,
       createdAt: iso(createdMs),
+      // Cleared alerts close two days after they open (never after "now").
+      resolvedAt: status === "cleared" ? iso(Math.min(createdMs + 2 * DAY_MS, NOW_MS)) : null,
     });
   }
 

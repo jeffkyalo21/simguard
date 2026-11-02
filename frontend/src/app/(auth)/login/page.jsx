@@ -12,7 +12,7 @@ export default function LoginPage() {
     <main id="main" tabIndex={-1} className="flex min-h-dvh items-center justify-center px-4 py-12">
       <GlassCard
         variant="strong"
-        className="flex w-full max-w-[400px] flex-col gap-6 [--card-pad:32px] [--radius-glass:40px]"
+        className="flex w-full max-w-[400px] flex-col gap-6 [--card-pad:32px] [--radius-card:32px]"
       >
         <Link href="/" className="w-fit rounded-md">
           <Logo />

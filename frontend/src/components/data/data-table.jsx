@@ -21,15 +21,16 @@ import { copy } from "@/lib/copy";
 const INTERACTIVE = "a, button, input, select, [role='menuitem'], [role='checkbox']";
 
 /**
- * The one table pattern: strong glass, sticky header, horizontal scroll
- * inside its surface, skeleton rows, error and empty rows.
+ * The one table pattern: sits on strong (or dark) glass, grows with its
+ * rows (the page scrolls, paging limits length), scrolls sideways inside its
+ * surface on narrow screens, and has skeleton, error and empty rows.
  * Rows with `getRowHref` open on click; the `link` column carries the real
  * link so keyboard and screen reader users get the same path.
  * @param {{ caption: string, columns: Column[], rows: any[] | null,
  *   getRowKey: (row: any) => React.Key, getRowHref?: (row: any) => string,
  *   error?: unknown, onRetry?: () => void, busy?: boolean,
  *   emptyMessage: string, emptyAction?: React.ReactNode,
- *   skeletonRows?: number, scroll?: boolean, className?: string }} props
+ *   skeletonRows?: number, className?: string }} props
  */
 export function DataTable({
   caption,
@@ -43,7 +44,6 @@ export function DataTable({
   emptyMessage,
   emptyAction,
   skeletonRows = 5,
-  scroll = false,
   className,
 }) {
   const router = useRouter();
@@ -95,7 +95,7 @@ export function DataTable({
               : undefined
           }
           className={cn(
-            "border-b border-border transition-colors duration-150 last:border-0 hover:bg-foreground/[0.04]",
+            "row-hover border-b border-border last:border-0",
             href && "cursor-pointer"
           )}
         >
@@ -117,11 +117,9 @@ export function DataTable({
 
   return (
     <div
-      className={cn(
-        "w-full min-w-0 overflow-x-auto",
-        scroll && "max-h-[min(70vh,720px)] overflow-y-auto",
-        className
-      )}
+      // `relative` keeps sr-only labels inside the scroller; without it they
+      // widen the page on narrow screens.
+      className={cn("relative w-full min-w-0 overflow-x-auto", className)}
       // A focusable scroll region lets keyboard users scroll it.
       tabIndex={0}
       role="region"
@@ -136,7 +134,7 @@ export function DataTable({
                 key={column.key}
                 scope="col"
                 className={cn(
-                  "sticky top-0 z-10 h-11 bg-glass-strong px-5 text-left text-xs font-medium whitespace-nowrap text-muted-foreground",
+                  "h-11 px-5 text-left text-xs font-medium whitespace-nowrap text-muted-foreground",
                   column.className
                 )}
               >

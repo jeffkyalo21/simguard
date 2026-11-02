@@ -16,25 +16,26 @@ import {
   DISPLAY_FLEET_SIZE,
   MAX_MOCK_SIM_ID,
   NOW_MS,
-  OPERATORS,
   PLAN_TYPES,
   TIER_ORDER,
   TIERS,
   fixtures,
 } from "@/lib/mock/fixtures";
 import { createRandom } from "@/lib/mock/random";
-import { readMockDb, writeMockDb } from "@/lib/mock/db";
-import { normalizePhone, phoneSearchTerm, simFieldErrors } from "@/lib/validation";
+import { createInitialState, readMockDb, writeMockDb } from "@/lib/mock/db";
+import { carrierNameError, normalizePhone, phoneSearchTerm, simFieldErrors } from "@/lib/validation";
 
 const DELAY_MS = 300;
 const PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 
-/** Reference lists for filters and forms. #20: departments from /departments. */
+/**
+ * Reference lists for filters and forms. #20: departments from /departments.
+ * Carriers change at run time, so they come from useCarriers() instead.
+ */
 export const referenceData = {
   departments: DEPARTMENTS.map((d) => d.name),
   tiers: TIER_ORDER.map((name) => ({ name, ...TIERS[name] })),
-  operators: OPERATORS,
   planTypes: PLAN_TYPES,
   statuses: ["assigned", "available", "inactive"],
   alertTypes: ALERT_TYPES,
@@ -84,9 +85,9 @@ function findSim(id) {
 /**
  * GET /sims. Search matches number, ICCID or employee name.
  * @param {{ q?: string, status?: string, tier?: string, department?: string,
- *   page?: number, pageSize?: number }} [query]
+ *   carrierId?: string | number, page?: number, pageSize?: number }} [query]
  */
-export async function listSims({ q, status, tier, department, page, pageSize } = {}) {
+export async function listSims({ q, status, tier, department, carrierId, page, pageSize } = {}) {
   await wait();
 
   const text = q?.trim().toLowerCase();
@@ -96,6 +97,7 @@ export async function listSims({ q, status, tier, department, page, pageSize } =
     if (status && sim.status !== status) return false;
     if (tier && sim.tier !== tier) return false;
     if (department && sim.currentAllocation?.departmentName !== department) return false;
+    if (carrierId && sim.carrierId !== Number(carrierId)) return false;
     if (!text) return true;
 
     return (
@@ -210,25 +212,41 @@ function tierRecommendation(sim) {
   return "keep";
 }
 
-function lowerTierSaving(sim) {
-  const index = TIER_ORDER.indexOf(sim.tier);
-  return TIERS[sim.tier].monthlyCost - TIERS[TIER_ORDER[index - 1]].monthlyCost;
-}
-
 const INITIAL_ACTIVE = fixtures.sims.filter((sim) => sim.status !== "inactive").length;
 
-// A gently rising daily risk index (0 to 100) with one clear peak.
-function riskSeries(days) {
-  const random = createRandom(days * 31);
-  const points = Array.from({ length: days }, (_, index) => {
-    const at = NOW_MS - (days - 1 - index) * DAY_MS;
-    const trend = 38 + (index / Math.max(days - 1, 1)) * 24;
-    return { date: new Date(at).toISOString(), risk: Math.round(trend + random.float(-5, 5)) };
-  });
+// Share of paid data left unused in each period. Short periods waste more
+// because bundles are paid up front and used through the cycle.
+const WASTE_RATE = { 7: 0.21, 30: 0.18, 90: 0.16 };
 
-  const peakIndex = Math.max(days - 4, 0);
-  points[peakIndex].risk = Math.max(...points.map((p) => p.risk)) + 4;
-  return points;
+// future field: paid against used data for the period, by department.
+function dataWaste(db, days) {
+  const random = createRandom(days * 17);
+  const rate = WASTE_RATE[days] ?? WASTE_RATE[30];
+  const idleByDepartment = new Map();
+  let paid = 0;
+  let idleTotal = 0;
+
+  for (const sim of db.sims) {
+    if (sim.status !== "assigned") continue;
+    const bundle = TIERS[sim.tier].bundleGb;
+    const idle = Math.max(bundle - sim.dataUsedGb, 0);
+    const name = sim.currentAllocation?.departmentName;
+    paid += bundle;
+    idleTotal += idle;
+    if (name) idleByDepartment.set(name, (idleByDepartment.get(name) ?? 0) + idle);
+  }
+
+  const paidGb = Math.round((paid * days) / CYCLE_LENGTH);
+  const unusedGb = Math.round(paidGb * rate);
+  const departments = [...idleByDepartment]
+    .map(([name, idle]) => ({
+      name,
+      unusedGb: Math.round(((unusedGb * idle) / Math.max(idleTotal, 1)) * random.float(0.85, 1.15)),
+    }))
+    .sort((a, b) => b.unusedGb - a.unusedGb)
+    .slice(0, 4);
+
+  return { paidGb, usedGb: paidGb - unusedGb, unusedGb, percent: Math.round(rate * 100), departments };
 }
 
 /**
@@ -237,9 +255,20 @@ function riskSeries(days) {
  */
 export async function getDashboard(days = 30) {
   await wait();
-  const db = readMockDb();
+  return buildDashboard(readMockDb(), days, mockMode() === "empty");
+}
+
+/**
+ * The dashboard as it first loads, before any edits, built on the server
+ * with no delay. The landing page preview uses it so its numbers match
+ * the real dashboard. #20: replace with fixed sample numbers.
+ */
+export function getSampleDashboard(days = 30) {
+  return buildDashboard(createInitialState(), days, false);
+}
+
+function buildDashboard(db, days, empty) {
   const since = NOW_MS - days * DAY_MS;
-  const empty = mockMode() === "empty";
 
   const open = empty
     ? []
@@ -247,19 +276,14 @@ export async function getDashboard(days = 30) {
 
   const active = DISPLAY_FLEET_SIZE - INITIAL_ACTIVE + db.sims.filter((s) => s.status !== "inactive").length;
 
+  const resolved = empty
+    ? 0
+    : db.alerts.filter((alert) => alert.resolvedAt && Date.parse(alert.resolvedAt) >= since).length;
+
   const tiers = { upgrade: 0, downgrade: 0 };
-  let monthlySaving = 0;
   for (const sim of db.sims) {
     const recommendation = tierRecommendation(sim);
-    if (recommendation === "keep") continue;
-    tiers[recommendation] += 1;
-    if (recommendation === "downgrade") monthlySaving += lowerTierSaving(sim);
-  }
-
-  // Unused SIMs that still bill count as savings too.
-  const idleSims = new Set(open.filter((a) => a.type === "inactiveBilling").map((a) => a.simId));
-  for (const simId of idleSims) {
-    monthlySaving += db.sims.find((s) => s.id === simId)?.monthlyCost ?? 0;
+    if (recommendation !== "keep") tiers[recommendation] += 1;
   }
 
   const needsReview = [...open]
@@ -276,9 +300,11 @@ export async function getDashboard(days = 30) {
       activeSims: active,
       flagged: open.filter((a) => a.status === "flagged").length,
       toReview: open.length,
-      estSavingsKes: Math.round((monthlySaving * days) / 30 / 100) * 100,
+      resolved,
     },
-    riskSeries: empty ? [] : riskSeries(days),
+    dataWaste: empty
+      ? { paidGb: 0, usedGb: 0, unusedGb: 0, percent: 0, departments: [] }
+      : dataWaste(db, days),
     alertsByType: ALERT_TYPES.map((type) => ({
       type,
       count: open.filter((a) => a.type === type).length,
@@ -323,10 +349,15 @@ function validateSim(body, excludeId) {
     throw new ApiError({ status: 409, errors: { iccid: ["taken"] } });
   }
 
+  const carrierId = Number(body.carrierId);
+  if (!readMockDb().carriers.some((carrier) => carrier.id === carrierId)) {
+    throw fieldError("carrierId", "invalid");
+  }
+
   return {
     phoneNumber,
     iccid,
-    operator: body.operator.trim(),
+    carrierId,
     planType: body.planType.trim(),
     monthlyCost: Math.round(Number(body.monthlyCost) * 100) / 100,
   };
@@ -404,3 +435,63 @@ export async function setSimTier(id, tier) {
   );
 }
 
+
+/* -------------------------------------------------------------- Carriers */
+
+// future endpoints: carriers are not in the backend yet. Names follow
+// carrierNameError: required, trimmed, up to 40 characters, unique
+// ignoring case. Errors are ApiError 400 with errors.name = [code].
+
+function carrierName(name, excludeId) {
+  const code = carrierNameError(name, readMockDb().carriers, excludeId);
+  if (code) throw fieldError("name", code);
+  return name.trim();
+}
+
+function findCarrier(id) {
+  return readMockDb().carriers.find((carrier) => carrier.id === Number(id));
+}
+
+/** Number of SIMs on a carrier. */
+function simsUsing(id) {
+  return readMockDb().sims.filter((sim) => sim.carrierId === Number(id)).length;
+}
+
+/** POST /carriers. New carriers start as "not connected". */
+export async function addCarrier(name) {
+  await wait();
+  const carriers = readMockDb().carriers;
+  const carrier = {
+    id: Math.max(0, ...carriers.map((c) => c.id)) + 1,
+    name: carrierName(name),
+    status: "not connected",
+    createdAt: new Date().toISOString(),
+  };
+  writeMockDb({ type: "carrier/saved", carrier });
+  return carrier;
+}
+
+/** PATCH /carriers/{id} with a new name. */
+export async function renameCarrier(id, name) {
+  await wait();
+  const carrier = findCarrier(id);
+  if (!carrier) throw notFound();
+  const renamed = { ...carrier, name: carrierName(name, carrier.id) };
+  writeMockDb({ type: "carrier/saved", carrier: renamed });
+  return renamed;
+}
+
+/**
+ * DELETE /carriers/{id}. Blocked while any SIM uses the carrier.
+ * @returns {Promise<{ removed: boolean, simCount: number }>} simCount is the
+ *   number of SIMs on the carrier, so the UI can say why it was kept.
+ */
+export async function removeCarrier(id) {
+  await wait();
+  const carrier = findCarrier(id);
+  if (!carrier) throw notFound();
+  const simCount = simsUsing(carrier.id);
+  if (simCount > 0) return { removed: false, simCount };
+  writeMockDb({ type: "carrier/removed", id: carrier.id });
+  return { removed: true, simCount: 0 };
+}

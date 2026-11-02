@@ -25,6 +25,7 @@ import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
 import { getSim, getSimUsage, listSimActivity, listSimAlerts, listSimAllocations } from "@/lib/data";
 import { formatDate, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
+import { carrierName, useCarriers } from "@/lib/mock/store";
 import { copy } from "@/lib/copy";
 
 const text = copy.simProfile;
@@ -58,12 +59,13 @@ const activityColumns = [
 ];
 
 function Details({ sim }) {
+  const carriers = useCarriers();
   const allocation = sim.currentAllocation;
   const rows = [
     [text.employee, allocation?.employeeName ?? copy.sims.unassigned],
     [text.department, allocation?.departmentName ?? copy.common.noValue],
     [text.tier, copy.tiers[sim.tier]],
-    [text.operator, sim.operator],
+    [text.operator, carrierName(carriers, sim.carrierId) ?? copy.common.noValue],
     [text.iccid, sim.iccid],
     [text.assigned, allocation ? formatDate(allocation.assignedAt) : copy.common.noValue],
   ];
@@ -138,11 +140,12 @@ function RecordTable({ resource, columns, caption, emptyMessage, getRowHref }) {
 function ProfileSkeleton() {
   return (
     <div role="status" aria-busy="true" className="flex flex-col gap-6">
+      <h1 className="sr-only">{copy.pages.simDetail.title}</h1>
       <span className="sr-only">{copy.a11y.loading}</span>
       <Skeleton className="h-5 w-48" />
       <Skeleton className="h-8 w-72" />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <GlassCard variant="strong"><ListSkeleton rows={6} /></GlassCard>
+        <GlassCard><ListSkeleton rows={6} /></GlassCard>
         <GlassCard><ChartSkeleton height={260} /></GlassCard>
       </div>
     </div>
@@ -167,7 +170,14 @@ export function SimProfile({ id }) {
     return <NotFoundContent title={text.notFound} href="/sims" action={copy.actions.viewSims} />;
   }
 
-  if (simResource.error) return <ErrorState onRetry={simResource.retry} />;
+  if (simResource.error) {
+    return (
+      <>
+        <h1 className="sr-only">{copy.pages.simDetail.title}</h1>
+        <ErrorState onRetry={simResource.retry} />
+      </>
+    );
+  }
   if (!sim) return <ProfileSkeleton />;
 
   const number = formatPhone(sim.phoneNumber);
@@ -201,7 +211,7 @@ export function SimProfile({ id }) {
       />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <SectionCard title={text.details} strong>
+        <SectionCard title={text.details}>
           <Details sim={sim} />
         </SectionCard>
         <SectionCard title={text.dataThisCycle}>
@@ -212,10 +222,10 @@ export function SimProfile({ id }) {
       </div>
 
       <Tabs defaultValue="alerts" className="gap-4">
-        <TabsList variant="line" aria-label={text.tabs.label} className="h-10 border-b border-border">
-          <TabsTrigger value="alerts" className="touch-target px-3">{text.tabs.alerts}</TabsTrigger>
-          <TabsTrigger value="allocations" className="touch-target px-3">{text.tabs.allocations}</TabsTrigger>
-          <TabsTrigger value="activity" className="touch-target px-3">{text.tabs.activity}</TabsTrigger>
+        <TabsList variant="pill" aria-label={text.tabs.label}>
+          <TabsTrigger value="alerts">{text.tabs.alerts}</TabsTrigger>
+          <TabsTrigger value="allocations">{text.tabs.allocations}</TabsTrigger>
+          <TabsTrigger value="activity">{text.tabs.activity}</TabsTrigger>
         </TabsList>
         <TabsContent value="alerts">
           <RecordTable

@@ -13,7 +13,7 @@ function SimsFallback() {
   return (
     <div role="status" aria-busy="true" className="flex flex-col gap-6">
       <span className="sr-only">{copy.a11y.loading}</span>
-      <PageHeader title={copy.pages.sims.title} />
+      <PageHeader title={copy.pages.sims.title} as="p" />
       <Skeleton className="h-10 w-full max-w-xl" />
       <GlassCard variant="strong" className="flex flex-col gap-4 p-5">
         {Array.from({ length: 8 }, (_, index) => (

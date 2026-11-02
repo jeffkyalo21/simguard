@@ -27,7 +27,7 @@ export function FilterSelect({ label, value, options, onChange, includeAll = tru
     >
       <SelectTrigger
         aria-label={label}
-        className={cn("touch-target h-10 min-w-28 bg-glass-control data-[size=default]:h-10", className)}
+        className={cn("glass-field touch-target h-10 min-w-28 px-4 data-[size=default]:h-10", className)}
       >
         <SelectValue>{selected ? selected.label : label}</SelectValue>
       </SelectTrigger>

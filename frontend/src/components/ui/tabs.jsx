@@ -79,7 +79,7 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 rounded-glass text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50", className)}
+      className={cn("flex-1 rounded-card text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50", className)}
       {...props}
     />
   )

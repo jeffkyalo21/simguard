@@ -7,20 +7,21 @@ import { DataState } from "@/components/data/data-state";
 import { DataTable } from "@/components/data/data-table";
 import { FilterSelect } from "@/components/data/filter-select";
 import { KpiCard } from "@/components/data/kpi-card";
-import { LineChart } from "@/components/data/line-chart";
 import { RiskBar } from "@/components/data/risk-bar";
 import { SectionCard } from "@/components/data/section-card";
-import { ChartSkeleton, ListSkeleton } from "@/components/data/skeletons";
+import { ListSkeleton } from "@/components/data/skeletons";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { ErrorState } from "@/components/shared/error-state";
 import { Button } from "@/components/ui/button";
 import { useResource } from "@/hooks/use-resource";
 import { getDashboard, referenceData } from "@/lib/data";
-import { formatKes, formatNumber, formatPhone, formatShortDate } from "@/lib/format";
+import { formatNumber, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.dashboard;
+
+const formatGb = (value) => copy.units.gb(formatNumber(value));
 
 const periodOptions = referenceData.periods.map((days) => ({
   value: String(days),
@@ -39,30 +40,56 @@ function Kpis({ data }) {
   const kpis = data?.kpis;
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <KpiCard label={text.kpis.activeSims} value={formatNumber(kpis?.activeSims)} loading={!kpis} />
       <KpiCard label={text.kpis.flagged} value={formatNumber(kpis?.flagged)} loading={!kpis} hero />
       <KpiCard label={text.kpis.toReview} value={formatNumber(kpis?.toReview)} loading={!kpis} />
-      <KpiCard label={text.kpis.savings} value={formatKes(kpis?.estSavingsKes)} loading={!kpis} />
+      <KpiCard label={text.kpis.resolved} value={formatNumber(kpis?.resolved)} loading={!kpis} />
     </div>
   );
 }
 
-function RiskChart({ series }) {
-  const peak = series.reduce((max, point) => (point.risk > max.risk ? point : max), series[0]);
+/**
+ * Unused paid data for the period: the total, used against paid, and the
+ * departments wasting most. Screen readers get the numbers as one sentence;
+ * the visual number and bar are hidden from them.
+ */
+function DataWaste({ waste }) {
+  const { paidGb, usedGb, unusedGb, percent, departments } = waste;
+  const usedShare = paidGb > 0 ? (usedGb / paidGb) * 100 : 0;
 
   return (
-    <LineChart
-      data={series}
-      xKey="date"
-      yKey="risk"
-      label={text.riskOverTime}
-      xTicks={[series[0].date, series.at(-1).date]}
-      formatX={formatShortDate}
-      yDomain={[0, 100]}
-      peak={{ x: peak.date, y: peak.risk, label: text.peak }}
-      height={240}
-    />
+    <div className="flex flex-1 flex-col gap-6">
+      <p className="sr-only">
+        {`${text.wasteUnused(formatGb(unusedGb), formatGb(paidGb))} ${text.wasteUsed(formatGb(usedGb), percent)}`}
+      </p>
+      <div aria-hidden="true" className="flex flex-col gap-1">
+        <p className="text-4xl font-semibold tracking-tight tabular-nums">{formatGb(unusedGb)}</p>
+        <p className="text-sm text-muted-foreground">{text.wastedShare(percent)}</p>
+      </div>
+      <div aria-hidden="true" className="flex flex-col gap-2">
+        <div className="h-2.5 w-full overflow-hidden rounded-full bg-chart-track">
+          <div className="h-full rounded-full bg-foreground" style={{ width: `${usedShare}%` }} />
+        </div>
+        <div className="flex justify-between text-sm">
+          <span>
+            <span className="text-muted-foreground">{text.used}</span>{" "}
+            <span className="font-medium tabular-nums">{formatGb(usedGb)}</span>
+          </span>
+          <span>
+            <span className="text-muted-foreground">{text.paid}</span>{" "}
+            <span className="font-medium tabular-nums">{formatGb(paidGb)}</span>
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium text-muted-foreground">{text.topDepartments}</h3>
+        <BarList
+          items={departments.map(({ name, unusedGb: value }) => ({ key: name, label: name, value }))}
+          formatValue={formatGb}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -120,14 +147,14 @@ export function DashboardView() {
       )}
 
       <div className="grid gap-4 xl:grid-cols-3">
-        <SectionCard title={text.riskOverTime} className="xl:col-span-2">
+        <SectionCard title={text.dataWasted} className="xl:col-span-2">
           <DataState
             resource={resource}
-            skeleton={<ChartSkeleton height={240} />}
-            isEmpty={(d) => !d.riskSeries.length}
-            emptyMessage={text.emptyChart}
+            skeleton={<ListSkeleton rows={4} />}
+            isEmpty={(d) => d.dataWaste.paidGb === 0}
+            emptyMessage={text.emptyWaste}
           >
-            {(d) => <RiskChart series={d.riskSeries} />}
+            {(d) => <DataWaste waste={d.dataWaste} />}
           </DataState>
         </SectionCard>
 
@@ -154,7 +181,7 @@ export function DashboardView() {
       <div className="grid gap-4 xl:grid-cols-3">
         <SectionCard
           title={text.needsReview}
-          strong
+          variant="dark"
           flush
           className="overflow-hidden xl:col-span-2"
           action={

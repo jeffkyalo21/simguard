@@ -48,7 +48,11 @@ src/
     (app)/layout.jsx        app shell + mock store provider
     (app)/dashboard, sims, sims/[id]        built screens
     (app)/alerts, alerts/[id], usage, allocations, audit-log, settings   placeholders
-    not-found.jsx, error.jsx, loading.jsx
+    not-found.jsx, error.jsx
+                (no root loading.jsx: the nav would then stream first; the
+                dynamic routes set `instant = false` and block instead)
+  proxy.js                  404s unknown SIM ids before /sims/[id] renders
+                            (its prerendered shell would otherwise send a 200)
   components/
     landing/    landing sections, landing.css and its motion helpers (used by "/" only)
     dashboard/  dashboard-view
@@ -58,7 +62,8 @@ src/
     shared/     status-badge, form-dialog, confirm-dialog, form-field, busy-button,
                 error-state, empty-state, disabled-reason, page-breadcrumb,
                 not-found-content, glass-backdrop
-    layout/     app-sidebar, topbar, theme-toggle, page-header, page-transition, logo
+    layout/     pill-nav, icon-button, nav-items, theme-toggle, page-header,
+                page-transition, logo
     glass/      glass-card
     auth/       login-form
     ui/         shadcn/ui components (generated, keep edits minimal)
@@ -101,12 +106,21 @@ is an array of the inputs, like effect deps). It gives
 
 ## Theme
 
-**One glass theme everywhere.** The root layout puts `.glass-theme` on
-`<body>` and renders one shared `GlassBackdrop` behind every page. It is static
-on all pages and only animated on Landing (`<GlassBackdrop animated />`). Use
-`GlassCard` (`variant="strong"` for tables, forms and long text) instead of
-per-page surfaces. Portaled dialogs, menus, selects and sheets pick up the
-same glass styles automatically.
+**One cream glass theme everywhere.** The root layout puts `.glass-theme` on
+`<body>` and renders one shared `GlassBackdrop` (a warm cream base with soft
+blurred shapes) behind every page. It is static on all pages and only animated
+on Landing (`<GlassBackdrop animated />`). Portaled dialogs, menus, selects and
+sheets pick up the glass popover style automatically.
+
+Use `GlassCard` (or `SectionCard`) with one of three surfaces:
+
+| Variant | Use |
+| ------- | --- |
+| `default` | Most cards: KPIs, charts, details. Lifts 4 px on hover. |
+| `strong` | Tables, forms and long text (more opaque, no lift). |
+| `dark` | At most one per page, for the item that needs attention (dashboard: "Needs review"). |
+
+`hero` adds the brand glow to one KPI per page (dashboard: Flagged).
 
 Light and dark mode come from `next-themes` (system default). The toggle
 cross-fades with the View Transitions API where the browser supports it.
@@ -118,16 +132,32 @@ through `@theme`:
 
 | Token | Use |
 | ----- | --- |
-| `--brand` (`#ED1C24`), `--brand-text`, `--brand-soft` | Brand red: the logo, active nav marker, focus ring, text links (`.link-accent`), the hero KPI |
-| `--primary` (near-black in light, near-white in dark) | Primary buttons |
+| `--ink` (`#141414`) | Text and chart lines |
+| `--brand` (`#ED1C24`), `--brand-text`, `--brand-soft`, `--brand-glow` | Brand red accent (see the rule below) |
+| `--primary` (`#111` in light, near-white in dark) | Primary buttons and the active nav pill |
 | `--risk-flagged-*`, `--risk-escalated-*`, `--risk-cleared-*` | Status badges and risk bars, each with a background, foreground and strong bar colour |
-| `--glass-bg`, `--glass-bg-strong`, `--glass-border` | Glass surfaces |
-| `--chart-grid`, `--chart-axis` | Chart lines and labels |
+| `--glass-bg`, `--glass-bg-strong`, `--glass-dark-bg`, `--glass-border` | The three glass surfaces |
+| `--radius-card` (24 px), `--radius-pill`, `--radius-popover` (16 px) | Corner radii |
+| `--chart-track`, `--chart-grid`, `--chart-axis`, `--warm-grey` | Chart and progress tracks, grid lines, labels |
 
-**Accent rule:** brand red is an accent, not a fill. Never use it for primary
-buttons, chart data or risk levels; risk colours are separate tokens so a
-flagged badge is never confused with branding. shadcn's own `--accent` stays
+**Accent rule:** brand red is only for the logo, text links (`.link-accent`),
+focus rings, the notification dot, the Landing hero accent words and gradient
+accents, and the glow of the one hero KPI. Never use it for buttons, the active
+nav pill, chart data or risk levels. Risk colours are separate tokens (flagged
+`#B42318`, escalated amber, cleared `#1E7F4F`), always shown with an icon and
+text, so a flagged badge is never confused with branding. shadcn's own `--accent` stays
 the neutral hover colour, which is why the brand token is called `--brand`.
+
+## Navigation
+
+The app shell (`components/layout/pill-nav.jsx`) is a floating pill bar, not a
+sidebar: a round logo button (to `/dashboard`), a centre pill of the links from
+`nav-items.js` with an ink indicator that slides to the active link
+(`transform` only, 200 ms), and a cluster of round controls on the right:
+search (opens on click or `/`, Escape closes; on pages with their own search
+`/` focuses that), notifications, theme and the account menu with Sign out.
+Below 1100 px the links move into a sheet behind a "Menu" button. Content is
+centred at a 1280 px max width with 24 px side padding. Login has no nav.
 
 ## Motion
 
@@ -135,10 +165,13 @@ the neutral hover colour, which is why the brand token is called `--brand`.
   draw-in, tilt, parallax and the drifting backdrop. It uses CSS plus
   IntersectionObserver (no animation library), only animates `transform` and
   `opacity`, and pauses when off screen or when the tab is hidden.
-- **Everywhere else** motion is limited to hover, focus, press and short
-  transitions (page enter, dialogs, menus): 150 to 250 ms using the
-  `--dur-fast`, `--dur-base`, `--dur-slow` and `--ease-out` tokens, on
-  `transform` and `opacity` only. Charts render without animation.
+- **Login and the app** allow only: hover and focus (cards lift 4 px), the
+  page content transition (fade, 6 px slide and a 4 px blur clearing, 200 to
+  250 ms), the sliding nav indicator, dialogs, sheets, menus, tooltips, the
+  search expand, the theme cross-fade, the spinner and the skeleton pulse.
+  Durations come from the `--dur-fast`, `--dur-base`, `--dur-slow` and
+  `--ease-out` tokens. Charts render without animation
+  (`isAnimationActive={false}`).
 - `prefers-reduced-motion: reduce` turns all of it off (spinners stay), and
   content is never hidden waiting for an animation.
 
@@ -165,10 +198,10 @@ the neutral hover colour, which is why the brand token is called `--brand`.
   `"tsx": false`, so `npm exec shadcn@latest add <name>` generates `.jsx`.
 - **All copy lives in `src/lib/copy.js`.** Sentence case, short, no status
   codes shown to users.
-- **Branding.** The product is "SimGuard" with its generic shield mark. Do not
-  name real companies, carriers or partners anywhere (code, copy, mock data,
-  file names, alt text) and do not add third-party logos or "trusted by"
-  strips. Mock people and departments stay fictional and generic.
+- **Branding.** The product is "SimGuard" with its generic shield mark. Never
+  include real company names or logos anywhere (code, comments, copy, mock
+  data, file names, alt text, docs), and no "trusted by" strips. Mock people
+  and departments stay fictional and generic. No photo or image backdrops.
 
 ## Adding a screen
 
@@ -179,9 +212,12 @@ the neutral hover colour, which is why the brand token is called `--brand`.
    `src/lib/mock`), returning the backend's response shape.
 3. Load data with `useResource`, and build from `PageHeader`, `GlassCard`,
    `SectionCard`, `DataTable`, `FilterSelect`, `Pagination`, `FormDialog` and
-   `ConfirmDialog` so states (loading, empty, error) come for free.
+   `ConfirmDialog` so states (loading, empty, error) come for free. Pick the
+   surface by content (`strong` for tables and forms) and keep to one `dark`
+   card per page.
 4. Put every string in `copy.js` and add the route to
-   `components/layout/nav-items.js` if it belongs in the sidebar.
+   `components/layout/nav-items.js` if it belongs in the pill nav (it then
+   appears in the centre pill and the Menu sheet).
 
 ## Dates, money and phone numbers
 

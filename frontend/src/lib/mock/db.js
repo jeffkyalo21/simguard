@@ -10,6 +10,8 @@ import { fixtures } from "@/lib/mock/fixtures";
 export function createInitialState() {
   return {
     version: 0,
+    /** { id, name, status: "connected" | "not connected", createdAt } */
+    carriers: fixtures.carriers,
     sims: fixtures.sims,
     allocations: fixtures.allocations,
     alerts: fixtures.alerts,
@@ -19,8 +21,10 @@ export function createInitialState() {
 }
 
 /**
- * One action saves a SIM (insert or replace) and logs what happened.
- * Pure: ids and timestamps arrive in the action.
+ * Actions: "sim/saved" inserts or replaces a SIM and logs what happened;
+ * "carrier/saved" inserts or replaces a carrier; "carrier/removed" drops
+ * one. Pure: ids and timestamps arrive in the action, and the rules
+ * (unique names, carriers in use) are checked in src/lib/data.js.
  */
 export function mockReducer(state, action) {
   switch (action.type) {
@@ -36,6 +40,23 @@ export function mockReducer(state, action) {
         activity: [...state.activity, action.activity],
       };
     }
+    case "carrier/saved": {
+      const exists = state.carriers.some((carrier) => carrier.id === action.carrier.id);
+
+      return {
+        ...state,
+        version: state.version + 1,
+        carriers: exists
+          ? state.carriers.map((carrier) => (carrier.id === action.carrier.id ? action.carrier : carrier))
+          : [...state.carriers, action.carrier],
+      };
+    }
+    case "carrier/removed":
+      return {
+        ...state,
+        version: state.version + 1,
+        carriers: state.carriers.filter((carrier) => carrier.id !== action.id),
+      };
     default:
       return state;
   }

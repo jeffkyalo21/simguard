@@ -24,7 +24,7 @@ export function ProgressBar({ value, max = 100, label, valueText, tone = "ink", 
       aria-valuemax={max}
       aria-valuenow={Math.min(value, max)}
       aria-valuetext={valueText}
-      className={cn("h-1.5 w-full overflow-hidden rounded-full bg-foreground/10", className)}
+      className={cn("h-1.5 w-full overflow-hidden rounded-full bg-chart-track", className)}
     >
       <div className={cn("h-full rounded-full", tones[tone])} style={{ width: `${percent}%` }} />
     </div>
