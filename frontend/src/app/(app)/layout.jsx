@@ -1,21 +1,22 @@
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Topbar } from "@/components/layout/topbar";
+import { PillNav } from "@/components/layout/pill-nav";
+import { MockStoreProvider } from "@/lib/mock/store";
 
-// The only place .glass-app is applied: the glass theme cannot reach the
-// landing or login pages.
+// The pill nav stays mounted across navigation; only the content area
+// transitions (see template.jsx). The glass theme comes from <body>.
 export default function AppLayout({ children }) {
   return (
-    <div className="glass-app relative isolate flex min-h-dvh">
-      <div className="glass-backdrop" aria-hidden="true">
-        <span className="glass-orb" />
-      </div>
-      <AppSidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
-        <main id="main" tabIndex={-1} className="flex flex-1 flex-col gap-6 p-4 sm:p-8">
+    // TEMPORARY (#17): mock data store, replaced by the API in #20.
+    <MockStoreProvider>
+      <div className="flex min-h-dvh flex-col">
+        <PillNav />
+        <main
+          id="main"
+          tabIndex={-1}
+          className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-6 pt-10 pb-16"
+        >
           {children}
         </main>
       </div>
-    </div>
+    </MockStoreProvider>
   );
 }

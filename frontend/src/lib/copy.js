@@ -1,7 +1,9 @@
 // All user-facing text lives here. Components import from this file.
 // Rules: sentence case, no exclamation marks, no filler words.
 // Nav labels 1-2 words, page titles 1-3 words, buttons a verb (max 2 words),
-// empty states one short line, errors max 12 words with no status codes.
+// empty states one short line, errors max 12 words with no status codes,
+// field errors max 6 words. One term per concept: SIM, Employee, Alert,
+// Allocation.
 
 export const copy = {
   app: {
@@ -36,22 +38,27 @@ export const copy = {
     signOut: "Sign out",
     tryAgain: "Try again",
     goHome: "Go home",
+    viewSims: "View SIMs",
     close: "Close",
     cancel: "Cancel",
+    save: "Save",
+    add: "Add",
+    edit: "Edit",
+    review: "Review",
+    viewAll: "View all",
+    clearFilters: "Clear filters",
+    previous: "Previous",
+    next: "Next",
+    rowActions: (number) => `Actions for ${number}`,
   },
 
-  topbar: {
-    searchLabel: "Search",
-    searchPlaceholder: "Search",
+  shell: {
+    menu: "Menu",
+    search: "Search",
+    searchPlaceholder: "Search SIMs",
     searchShortcut: "/",
     notifications: "Notifications",
-    openMenu: "Open menu",
-    userMenu: "Account",
-  },
-
-  sidebar: {
-    collapse: "Collapse sidebar",
-    expand: "Expand sidebar",
+    account: "Account",
   },
 
   theme: {
@@ -70,32 +77,456 @@ export const copy = {
   a11y: {
     skipToContent: "Skip to content",
     loading: "Loading",
+    breadcrumb: "Breadcrumb",
+    more: "More",
+    pagination: "Pagination",
   },
 
   landing: {
-    heroTitle: "Control every SIM.",
-    heroSubtitle: "Track usage. Catch misuse. Cut waste.",
+    nav: {
+      label: "Sections",
+      features: "Features",
+      how: "How it works",
+      results: "Results",
+      faq: "FAQ",
+      contact: "Contact",
+    },
+    heroLead: "Control",
+    heroAccent: "every SIM.",
+    heroSubtitle: "Track usage, catch misuse and cut waste.",
+    bookDemo: "Book a demo",
+    seeHow: "See how it works",
+    chips: {
+      usage: "Usage",
+      usageValue: "28 GB",
+    },
+    simCard: {
+      clear: "Clear",
+      flagged: "Flagged",
+    },
     previewLabel: "Product preview",
-    features: [
-      { key: "detect", title: "Detect", text: "Flag misuse early." },
-      { key: "allocate", title: "Allocate", text: "Right-size every plan." },
-      { key: "explain", title: "Explain", text: "See why an alert fired." },
-    ],
-    footer: "SimGuard",
+    // Landing only: headings up to 8 words, descriptions up to 20.
+    problem: {
+      title: "What goes wrong with company SIMs",
+      intro: "Four kinds of misuse that are easy to miss on a monthly bill.",
+      signalLabel: "Example signal",
+      items: [
+        {
+          key: "ghostUsage",
+          title: "Ghost usage",
+          text: "A SIM that should be idle keeps using data.",
+          signal: "Night data on an idle SIM",
+        },
+        {
+          key: "sharing",
+          title: "Unauthorized sharing",
+          text: "One SIM is used by more people or devices than it should be.",
+          signal: "Several devices in one day",
+        },
+        {
+          key: "reselling",
+          title: "Data reselling",
+          text: "Heavy data use that looks like the bundle is being sold on.",
+          signal: "Hotspot use far above peers",
+        },
+        {
+          key: "inactiveBilling",
+          title: "Inactive billing",
+          text: "The company keeps paying for a SIM that nobody uses.",
+          signal: "Billed every month, never used",
+        },
+      ],
+    },
+    detection: {
+      title: "How detection works",
+      intro: "Four checks run on every SIM, from its own usage to similar past cases.",
+      steps: [
+        {
+          key: "behaviour",
+          title: "Behaviour check",
+          text: "Usage patterns that stand out from normal use are picked up.",
+          model: "Isolation Forest",
+        },
+        {
+          key: "peers",
+          title: "Peer comparison",
+          text: "Each SIM is compared with other SIMs on the same tier.",
+          model: "Cohort Z-score",
+        },
+        {
+          key: "triage",
+          title: "Risk triage",
+          text: "Each case is flagged, sent for review or cleared by its risk score.",
+          model: "XGBoost",
+        },
+        {
+          key: "cases",
+          title: "Similar cases",
+          text: "Past cases that look alike are shown to help the reviewer decide.",
+          model: "Case based reasoning",
+        },
+      ],
+      note: "Plan sizing uses a usage forecast.",
+      noteModel: "Prophet",
+    },
+    why: {
+      title: "Why it fired",
+      intro: "Every alert lists its top reasons, so you can check it before acting.",
+    },
+    visuals: {
+      whyTitle: "Why it fired",
+      why: [
+        { label: "Night usage", value: 82 },
+        { label: "New devices", value: 64 },
+        { label: "Data spikes", value: 47 },
+      ],
+    },
+    results: {
+      title: "Results from testing",
+      intro: "How well the detection models performed in our tests.",
+      note: "Measured on synthetic test data.",
+      rangeJoin: "to",
+      tiles: [
+        { key: "precision", label: "Auto flag precision", text: "Of the SIMs flagged automatically, about this share were real misuse." },
+        { key: "recall", label: "Recall by misuse type", text: "The share of each misuse type that was caught, from lowest to highest." },
+        { key: "types", label: "Misuse types", text: "Ghost usage, sharing, reselling and inactive billing." },
+      ],
+    },
+    tour: {
+      title: "A look inside the app",
+      intro: "Three screens from SimGuard, shown with sample data.",
+      label: "App screens",
+      tabs: [
+        { key: "dashboard", label: "Dashboard", caption: "See flagged SIMs, unused data and tier changes across the whole fleet." },
+        { key: "profile", label: "SIM profile", caption: "Open any SIM to see its user, plan, usage and risk." },
+        { key: "alerts", label: "Alerts", caption: "Work through alerts by risk, with the type of misuse for each one." },
+      ],
+    },
+    audience: {
+      title: "Who it is for",
+      intro: "The teams that pay for, manage and secure company SIMs.",
+      items: [
+        {
+          key: "fleet",
+          title: "Fleet manager",
+          points: ["See which SIMs are idle, shared or over their plan.", "Move SIMs to the tier that fits their use."],
+        },
+        {
+          key: "finance",
+          title: "Finance",
+          points: ["Find SIMs that are billed but never used.", "Check data spend by department in KES."],
+        },
+        {
+          key: "security",
+          title: "IT and security",
+          points: ["Review flagged SIMs with their top reasons.", "Trace every change in the audit log."],
+        },
+      ],
+    },
+    trust: {
+      title: "People stay in control",
+      intro: "Alerts guide the work, and a person makes every decision.",
+      items: [
+        { key: "review", title: "Human review before action", text: "No SIM is suspended on a score alone." },
+        { key: "audit", title: "Audit log of every change", text: "Who changed what, and when." },
+        { key: "roles", title: "Roles and access control", text: "People see only what their role allows." },
+        { key: "kenya", title: "Kenyan formats", text: "+254 numbers, KES amounts and Nairobi time." },
+      ],
+    },
+    faq: {
+      title: "Frequently asked questions",
+      intro: "Short answers about data, alerts and accuracy.",
+      items: [
+        {
+          key: "data",
+          question: "What data is needed?",
+          answer: "A list of SIMs with their users, departments and tiers, plus usage records for data, voice and SMS.",
+        },
+        {
+          key: "decided",
+          question: "How are alerts decided?",
+          answer: "Each SIM is checked against normal use and against SIMs on the same tier. A risk model then flags it, sends it for review or clears it.",
+        },
+        {
+          key: "wrong",
+          question: "Can it be wrong?",
+          answer: "Yes. Some alerts will be false and some misuse will be missed. That is why a person reviews alerts before any action.",
+        },
+        {
+          key: "reviews",
+          question: "Who reviews alerts?",
+          answer: "A fleet manager or security reviewer opens the alert, checks its top reasons and similar past cases, then decides what to do.",
+        },
+        {
+          key: "private",
+          question: "Is data kept private?",
+          answer: "SIM, employee and usage records stay in the SimGuard database. Access depends on each user's role, and every change is logged.",
+        },
+        {
+          key: "accuracy",
+          question: "What is the accuracy based on?",
+          answer: "Tests on synthetic data built to look like real SIM usage, with known misuse cases. Results on real company data may differ.",
+        },
+      ],
+    },
+    ctaTitle: "Take control of your SIMs.",
+    ctaText: "Book a demo and see it on your own SIMs.",
+    contact: {
+      title: "Talk to us",
+      intro: "Questions about your fleet or a demo? Send a note.",
+      submit: "Send message",
+      again: "Send another message",
+    },
+    demo: {
+      title: "Book a demo",
+      submit: "Request demo",
+    },
+    // Shared by the demo dialog and the contact form. Nothing is sent.
+    leadForm: {
+      name: "Name",
+      email: "Work email",
+      emailPlaceholder: "name@company.com",
+      company: "Company",
+      sims: "Number of SIMs",
+      simsPlaceholder: "Choose a range",
+      simsOptions: [
+        { value: "under-50", label: "Under 50" },
+        { value: "50-250", label: "50 to 250" },
+        { value: "250-1000", label: "250 to 1000" },
+        { value: "over-1000", label: "Over 1000" },
+      ],
+      time: "Preferred time",
+      timePlaceholder: "Choose a time",
+      timeOptions: [
+        { value: "morning", label: "Morning" },
+        { value: "afternoon", label: "Afternoon" },
+        { value: "any", label: "No preference" },
+      ],
+      message: "Message (optional)",
+      note: "Demo only. Nothing is sent.",
+      success: "Thanks. We will reply within two working days.",
+      errors: {
+        name: "Enter your name.",
+        emailRequired: "Enter your work email.",
+        emailInvalid: "Enter a valid email.",
+        company: "Enter your company.",
+        sims: "Choose the number of SIMs.",
+        time: "Choose a preferred time.",
+      },
+    },
+    footer: {
+      label: "Footer",
+      tagline: "Spot SIM misuse before it costs you.",
+      product: "Product",
+      detects: "Detects",
+      touch: "Get in touch",
+      contactUs: "Contact us",
+      copyright: "© 2026 SimGuard",
+    },
   },
 
   login: {
     title: "Sign in",
     email: "Email",
+    emailPlaceholder: "name@company.com",
     password: "Password",
+    passwordPlaceholder: "Password",
     forgotPassword: "Forgot password?",
-    unavailable: "Sign-in is not available yet.",
+    forgotHint: "Ask an admin to reset it.",
+    errors: {
+      emailRequired: "Enter your email.",
+      emailInvalid: "Enter a valid email.",
+      passwordRequired: "Enter your password.",
+    },
   },
 
   risk: {
     cleared: "Cleared",
     escalated: "Escalated",
     flagged: "Flagged",
+  },
+
+  simStatus: {
+    label: "Status",
+    assigned: "Assigned",
+    available: "Available",
+    inactive: "Inactive",
+  },
+
+  tiers: {
+    label: "Tier",
+    Support: "Support",
+    Professional: "Professional",
+    Manager: "Manager",
+    Field: "Field",
+  },
+
+  alertTypes: {
+    inactiveBilling: "Inactive billing",
+    sharing: "Sharing",
+    reselling: "Reselling",
+    ghostUsage: "Ghost usage",
+  },
+
+  units: {
+    gb: (value) => `${value} GB`,
+    ofGb: (used, limit) => `${used} of ${limit} GB`,
+    ofMin: (used, limit) => `${used} of ${limit} min`,
+    ofCount: (used, limit) => `${used} of ${limit}`,
+    percent: (value) => `${value}%`,
+    day: (value) => `Day ${value}`,
+  },
+
+  filters: {
+    all: "All",
+  },
+
+  pagination: {
+    range: (from, to, total) =>
+      `${from.toLocaleString("en-KE")} to ${to.toLocaleString("en-KE")} of ${total.toLocaleString("en-KE")}`,
+  },
+
+  dashboard: {
+    period: "Period",
+    periods: {
+      7: "Last 7 days",
+      30: "Last 30 days",
+      90: "Last 90 days",
+    },
+    kpis: {
+      activeSims: "Active SIMs",
+      flagged: "Flagged",
+      toReview: "To review",
+      resolved: "Resolved",
+    },
+    dataWasted: "Data wasted",
+    wastedShare: (percent) => `${percent}% of paid data`,
+    used: "Used",
+    paid: "Paid",
+    topDepartments: "Most unused by department",
+    wasteUnused: (unused, paid) => `${unused} unused of ${paid} paid.`,
+    wasteUsed: (used, percent) => `${used} used. ${percent}% wasted.`,
+    alertsByType: "Alerts by type",
+    needsReview: "Needs review",
+    tierChanges: "Tier changes",
+    tierUpgrade: "Upgrade",
+    tierDowngrade: "Downgrade",
+    tierKeep: "Keep",
+    emptyWaste: "No data use for this period.",
+    emptyAlerts: "No alerts for this period.",
+    emptyReview: "Nothing to review.",
+    emptyTiers: "No tier changes.",
+  },
+
+  columns: {
+    sim: "SIM",
+    number: "Number",
+    employee: "Employee",
+    department: "Department",
+    tier: "Tier",
+    dataUsed: "Data used",
+    status: "Status",
+    risk: "Risk",
+    type: "Type",
+    date: "Date",
+    from: "From",
+    to: "To",
+    time: "Time",
+    action: "Action",
+    actions: "Actions",
+  },
+
+  sims: {
+    add: "Add SIM",
+    searchLabel: "Search SIMs",
+    searchPlaceholder: "Number or employee",
+    department: "Department",
+    operator: "Operator",
+    count: (total) => `${total.toLocaleString("en-KE")} ${total === 1 ? "SIM" : "SIMs"}`,
+    noMatch: "No SIMs match.",
+    unassigned: "Unassigned",
+    setInactive: "Set inactive",
+    setAvailable: "Set available",
+    allocatedReason: "Return the SIM first",
+    form: {
+      addTitle: "Add SIM",
+      editTitle: "Edit SIM",
+      phone: "Number",
+      phonePlaceholder: "0712 345 678",
+      iccid: "ICCID",
+      iccidPlaceholder: "8925 4010 0000 0012",
+      operator: "Operator",
+      noCarriers: "No carriers yet",
+      addCarrier: "Add a carrier",
+      plan: "Plan",
+      cost: "Monthly cost (KES)",
+      errors: {
+        phoneRequired: "Enter a number.",
+        phoneInvalid: "Use a valid Kenyan number.",
+        phoneTaken: "Number already exists.",
+        iccidRequired: "Enter an ICCID.",
+        iccidTooLong: "Use 30 characters or fewer.",
+        iccidTaken: "ICCID already exists.",
+        operatorRequired: "Choose an operator.",
+        planRequired: "Choose a plan.",
+        costInvalid: "Enter 0 or more.",
+      },
+    },
+    confirm: {
+      inactiveTitle: "Set SIM inactive?",
+      inactiveText: (number) => `${number} stops working until reactivated.`,
+      availableTitle: "Set SIM available?",
+      availableText: (number) => `${number} can be allocated again.`,
+    },
+    toasts: {
+      added: (number) => `${number} added.`,
+      saved: (number) => `${number} saved.`,
+      inactive: (number) => `${number} set inactive.`,
+      available: (number) => `${number} set available.`,
+      tierChanged: (tier) => `Tier changed to ${tier}.`,
+    },
+  },
+
+  simProfile: {
+    changeTier: "Change tier",
+    suspend: "Suspend",
+    activate: "Activate",
+    tierTitle: "Change tier",
+    tierOption: (tier, gb) => `${tier}, ${gb} GB`,
+    details: "Details",
+    employee: "Employee",
+    department: "Department",
+    tier: "Tier",
+    operator: "Operator",
+    iccid: "ICCID",
+    assigned: "Assigned",
+    dataThisCycle: "Data this cycle",
+    dataSeries: "Data used",
+    limit: "Limit",
+    data: "Data",
+    voice: "Voice",
+    sms: "SMS",
+    tabs: {
+      label: "SIM records",
+      alerts: "Alerts",
+      allocations: "Allocations",
+      activity: "Activity",
+    },
+    current: "Current",
+    noAlerts: "No alerts.",
+    noAllocations: "No allocations.",
+    noActivity: "No activity.",
+    notFound: "SIM not found.",
+    activity: {
+      created: "SIM added",
+      edited: "Details edited",
+      allocated: (name) => `Allocated to ${name}`,
+      returned: (name) => `Returned by ${name}`,
+      alert: (type) => `Alert raised: ${type}`,
+      tier: (tier) => `Tier changed to ${tier}`,
+      inactive: "Set inactive",
+      available: "Set available",
+    },
   },
 
   notFound: {
@@ -105,10 +536,11 @@ export const copy = {
 
   errors: {
     generic: "Something went wrong. Try again.",
-    network: "Cannot reach the server. Check your connection and retry.",
-    validation: "Some fields need attention. Fix them and retry.",
-    notFound: "That item no longer exists. Go back and refresh.",
-    conflict: "This change clashes with current data. Refresh and retry.",
+    load: "Could not load data. Try again.",
+    network: "Cannot reach the server. Check your connection.",
+    validation: "Some fields are invalid. Fix them and retry.",
+    notFound: "That item no longer exists. Refresh the page.",
+    conflict: "This clashes with newer data. Refresh and retry.",
     server: "The server had a problem. Try again shortly.",
   },
 

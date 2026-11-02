@@ -1,45 +1,89 @@
 "use client";
 
-import Link from "next/link";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { BusyButton } from "@/components/shared/busy-button";
+import { FormField } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { isEmail } from "@/lib/validation";
 import { copy } from "@/lib/copy";
 
-// Placeholder form: submitting never sends credentials anywhere (auth is #15).
+const SIGN_IN_DELAY_MS = 600;
+
+function validate({ email, password }) {
+  const errors = {};
+  if (!email.trim()) errors.email = copy.login.errors.emailRequired;
+  else if (!isEmail(email.trim())) errors.email = copy.login.errors.emailInvalid;
+  if (!password) errors.password = copy.login.errors.passwordRequired;
+  return errors;
+}
+
+// Mock sign-in: any valid-looking credentials go to the dashboard.
 export function LoginForm() {
-  function handleSubmit(event) {
+  const router = useRouter();
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const emailRef = useRef(null);
+  const passwordRef = useRef(null);
+
+  async function handleSubmit(event) {
     event.preventDefault();
-    toast.info(copy.login.unavailable);
+    const form = new FormData(event.currentTarget);
+    const values = { email: String(form.get("email")), password: String(form.get("password")) };
+    const nextErrors = validate(values);
+
+    setErrors(nextErrors);
+    if (nextErrors.email) return emailRef.current?.focus();
+    if (nextErrors.password) return passwordRef.current?.focus();
+
+    setBusy(true);
+    // TODO #15 replace with real auth
+    await new Promise((resolve) => setTimeout(resolve, SIGN_IN_DELAY_MS));
+    setBusy(false);
+    router.push("/dashboard");
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="email">{copy.login.email}</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required className="h-10" />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="password">{copy.login.password}</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="h-10"
-        />
-      </div>
-      <Button type="submit" className="mt-2 h-10 w-full">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4" aria-busy={busy || undefined}>
+      <FormField id="email" label={copy.login.email} error={errors.email}>
+        {(field) => (
+          <Input
+            {...field}
+            ref={emailRef}
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder={copy.login.emailPlaceholder}
+            className="h-10"
+          />
+        )}
+      </FormField>
+      <FormField id="password" label={copy.login.password} error={errors.password}>
+        {(field) => (
+          <Input
+            {...field}
+            ref={passwordRef}
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder={copy.login.passwordPlaceholder}
+            className="h-10"
+          />
+        )}
+      </FormField>
+      <BusyButton type="submit" busy={busy} size="lg" className="mt-2 h-10 w-full">
         {copy.actions.signIn}
-      </Button>
-      <Link
-        href="/login"
-        className="self-center rounded-sm text-sm text-muted-foreground underline-offset-4 hover:underline"
+      </BusyButton>
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => toast.info(copy.login.forgotHint)}
+        className="h-10 self-center text-muted-foreground"
       >
         {copy.login.forgotPassword}
-      </Link>
+      </Button>
     </form>
   );
 }

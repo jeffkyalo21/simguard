@@ -45,6 +45,23 @@
   --color-risk-escalated-foreground: var(--risk-escalated-foreground);
   --color-risk-flagged: var(--risk-flagged);
   --color-risk-flagged-foreground: var(--risk-flagged-foreground);
+  --color-risk-flagged-strong: var(--risk-flagged-strong);
+  --color-risk-escalated-strong: var(--risk-escalated-strong);
+  --color-risk-cleared-strong: var(--risk-cleared-strong);
+  --color-brand: var(--brand);
+  --color-brand-solid: var(--brand-solid);
+  --color-brand-text: var(--brand-text);
+  --color-brand-soft: var(--brand-soft);
+  --color-glass: var(--glass-bg);
+  --color-glass-strong: var(--glass-bg-strong);
+  --color-glass-dark: var(--glass-dark-bg);
+  --color-ink: var(--ink);
+  --color-chart-track: var(--chart-track);
+  --color-glass-border: var(--glass-border);
+  --radius-card: var(--radius-card);
+  --radius-pill: var(--radius-pill);
+  --radius-popover: var(--radius-popover);
+  --ease-out: var(--ease-out);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -87,14 +104,6 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-
-  /* Risk badges: tinted background, dark text. Always paired with a label. */
-  --risk-cleared: #dcfce7;
-  --risk-cleared-foreground: #14532d;
-  --risk-escalated: #fef3c7;
-  --risk-escalated-foreground: #78350f;
-  --risk-flagged: #fee2e2;
-  --risk-flagged-foreground: #7f1d1d;
 }
 
 .dark {
@@ -129,13 +138,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-
-  --risk-cleared: #14532d;
-  --risk-cleared-foreground: #dcfce7;
-  --risk-escalated: #713f12;
-  --risk-escalated-foreground: #fef3c7;
-  --risk-flagged: #7f1d1d;
-  --risk-flagged-foreground: #fee2e2;
 }
 
 @layer base {
@@ -162,188 +164,627 @@
 }
 
 /* -------------------------------------------------------------------------
-   Glassy Dashboard v4
-   Scoped to the logged-in app: every token below lives under .glass-app,
-   which only the (app) route group layout applies. Portaled surfaces
-   (dialogs, menus, sheets) opened from the app add .glass-app themselves.
+   Cream glass: one glass theme for the whole product.
+   Every token lives under .glass-theme, which the root layout puts on
+   <body>, so portaled dialogs, menus, sheets and toasts inherit it.
+   Surfaces: default glass (glanceable cards), strong glass (tables, forms,
+   long text) and dark glass (exactly one emphasis card per page).
+   Accent rule: --brand marks identity and focus only (logo, links, focus
+   rings, the notification dot, Landing hero accents, the one hero KPI
+   glow). Never a filled button, never a data mark, never the active nav.
    ------------------------------------------------------------------------- */
 
-.glass-app {
-  --glass-accent: #4f46e5;
-  --glass-bg: rgb(255 255 255 / 0.55);
-  --glass-bg-strong: rgb(255 255 255 / 0.82);
-  --glass-border: rgb(255 255 255 / 0.6);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.7);
-  --glass-blur: 16px;
-  --glass-blur-chrome: 24px;
-  --glass-shadow: 0 8px 32px rgb(30 41 90 / 0.08);
-  --glow-accent: 0 0 24px rgb(79 70 229 / 0.35);
-  --radius-glass: 16px;
-  --radius-glass-control: 12px;
-  --glass-nav-active: rgb(79 70 229 / 0.12);
-  --glass-backdrop: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 45%, #f8fafc 100%);
-  --glass-orb-1: rgb(165 180 252 / 0.55);
-  --glass-orb-2: rgb(196 181 253 / 0.45);
-  --glass-orb-3: rgb(153 246 228 / 0.35);
+:root {
+  /* Motion tokens. Transitions stay between 150 and 250 ms. */
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --lift: -4px;
+}
 
-  /* shadcn tokens re-pointed at the glass palette inside the app only. */
-  --foreground: #0f172a;
+.glass-theme {
+  /* Brand accent. --brand-text is the AA-safe shade for text on glass. */
+  --brand: #ed1c24;
+  --brand-solid: #ed1c24;
+  --brand-text: #c4101a;
+  --brand-soft: rgb(237 28 36 / 0.1);
+  --brand-glow: 0 0 0 1px rgb(237 28 36 / 0.18), 0 10px 36px rgb(237 28 36 / 0.22);
+
+  /* Ink and its warm greys (data marks, tracks, secondary series). */
+  --ink: #141414;
+  --ink-inverse: #ffffff;
+  --warm-grey: #a39a8f;
+  --chart-track: rgb(60 45 30 / 0.1);
+  --chart-secondary: var(--warm-grey);
+  --chart-grid: rgb(60 45 30 / 0.1);
+  --chart-axis: #554e47;
+
+  /* Glass materials. */
+  --glass-bg: rgb(255 255 255 / 0.6);
+  --glass-bg-strong: rgb(255 255 255 / 0.85);
+  --glass-dark-bg: rgb(18 16 14 / 0.9);
+  --glass-dark-border: rgb(255 255 255 / 0.14);
+  --glass-control: rgb(255 255 255 / 0.62);
+  --glass-border: rgb(255 255 255 / 0.62);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.8);
+  --glass-blur: 24px;
+  --glass-blur-strong: 32px;
+  --glass-shadow: 0 1px 2px rgb(70 50 30 / 0.04), 0 12px 40px rgb(70 50 30 / 0.08);
+  --glass-shadow-lift: 0 2px 4px rgb(70 50 30 / 0.05), 0 20px 52px rgb(70 50 30 / 0.13);
+  --scrim: rgb(30 24 18 / 0.3);
+
+  /* Radii. Nested surfaces use concentric radii: inner = outer - padding. */
+  --radius-card: 24px;
+  --radius-pill: 9999px;
+  --radius-popover: 16px;
+  --card-pad: 20px;
+
+  /* Backdrop: warm cream base with soft out-of-focus shapes. */
+  --backdrop-base: #f3ede3;
+  --shape-sand: rgb(226 203 166 / 0.6);
+  --shape-peach: rgb(247 196 166 / 0.5);
+  --shape-beige: rgb(236 222 200 / 0.75);
+  --shape-rose: rgb(236 188 190 / 0.38);
+  --shape-sage: rgb(170 192 160 / 0.26);
+  --dot-grid: rgb(60 45 30 / 0.08);
+
+  /* Risk: flagged is a darker, cooler crimson so it never reads as brand. */
+  --risk-flagged: #fde4e1;
+  --risk-flagged-foreground: #a0201a;
+  --risk-flagged-strong: #b42318;
+  --risk-escalated: #fdefcc;
+  --risk-escalated-foreground: #8a3a0c;
+  --risk-escalated-strong: #c26a0a;
+  --risk-cleared: #dcf3e5;
+  --risk-cleared-foreground: #17603c;
+  --risk-cleared-strong: #1e7f4f;
+
+  /* shadcn tokens re-pointed at the glass palette. */
+  --background: var(--backdrop-base);
+  --foreground: var(--ink);
   --card: var(--glass-bg-strong);
   --card-foreground: var(--foreground);
-  --popover: rgb(255 255 255 / 0.92);
+  --popover: rgb(255 253 250 / 0.94);
   --popover-foreground: var(--foreground);
-  --primary: var(--glass-accent);
+  --primary: #111111;
   --primary-foreground: #ffffff;
-  --ring: var(--glass-accent);
-  --muted: rgb(15 23 42 / 0.05);
-  --muted-foreground: #475569;
-  --accent: rgb(79 70 229 / 0.08);
+  --secondary: var(--glass-control);
+  --secondary-foreground: var(--foreground);
+  --ring: var(--brand);
+  /* Focus: an ink inner ring (>= 3:1 on any glass) inside the red outer one. */
+  --focus-inner: #141414;
+  --destructive: var(--risk-flagged-foreground);
+  --muted: rgb(60 45 30 / 0.06);
+  --muted-foreground: #554e47;
+  --accent: rgb(60 45 30 / 0.07);
   --accent-foreground: var(--foreground);
-  --border: rgb(15 23 42 / 0.1);
-  --input: rgb(15 23 42 / 0.14);
-  --chart-1: var(--glass-accent);
+  --border: rgb(60 45 30 / 0.12);
+  --input: rgb(60 45 30 / 0.18);
 
   color: var(--foreground);
 }
 
-.dark .glass-app {
-  --glass-accent: #818cf8;
-  --glass-bg: rgb(255 255 255 / 0.08);
-  --glass-bg-strong: rgb(15 23 42 / 0.8);
-  --glass-border: rgb(255 255 255 / 0.14);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
-  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
-  --glow-accent: 0 0 24px rgb(129 140 248 / 0.35);
-  --glass-nav-active: rgb(129 140 248 / 0.18);
-  --glass-backdrop: linear-gradient(135deg, #0b1033 0%, #1e1b4b 45%, #0f3d3e 100%);
-  --glass-orb-1: rgb(79 70 229 / 0.35);
-  --glass-orb-2: rgb(124 58 237 / 0.3);
-  --glass-orb-3: rgb(13 148 136 / 0.3);
+.dark .glass-theme {
+  --brand: #ff4d55;
+  --brand-text: #ff7a7f;
+  --brand-soft: rgb(255 77 85 / 0.14);
+  --brand-glow: 0 0 0 1px rgb(255 77 85 / 0.22), 0 10px 36px rgb(255 77 85 / 0.2);
 
-  --foreground: #f1f5f9;
-  --popover: rgb(17 24 39 / 0.92);
-  --primary-foreground: #0b1020;
-  --muted: rgb(255 255 255 / 0.08);
-  --muted-foreground: #cbd5e1;
-  --accent: rgb(129 140 248 / 0.14);
-  --border: rgb(255 255 255 / 0.12);
-  --input: rgb(255 255 255 / 0.16);
+  --ink: #f4efe8;
+  --ink-inverse: #141414;
+  --warm-grey: #8c8379;
+  --chart-track: rgb(255 245 230 / 0.12);
+  --chart-grid: rgb(255 245 230 / 0.09);
+  --chart-axis: #c2b9ae;
+
+  --glass-bg: rgb(255 245 235 / 0.07);
+  --glass-bg-strong: rgb(30 25 21 / 0.86);
+  /* Lighter than the page in dark mode so the emphasis card still stands out. */
+  --glass-dark-bg: rgb(66 56 48 / 0.82);
+  --glass-dark-border: rgb(255 255 255 / 0.3);
+  --glass-control: rgb(255 245 235 / 0.08);
+  --glass-border: rgb(255 255 255 / 0.12);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  --glass-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 12px 40px rgb(0 0 0 / 0.35);
+  --glass-shadow-lift: 0 2px 4px rgb(0 0 0 / 0.25), 0 20px 52px rgb(0 0 0 / 0.45);
+  --scrim: rgb(0 0 0 / 0.5);
+
+  /* Warm near-black charcoal, the same shapes in deep brown and maroon. */
+  --backdrop-base: #16120f;
+  --shape-sand: rgb(92 64 40 / 0.4);
+  --shape-peach: rgb(112 48 40 / 0.32);
+  --shape-beige: rgb(70 54 40 / 0.4);
+  --shape-rose: rgb(104 34 46 / 0.3);
+  --shape-sage: rgb(52 70 52 / 0.22);
+  --dot-grid: rgb(255 245 230 / 0.06);
+
+  --risk-flagged: #4b1712;
+  --risk-flagged-foreground: #fdaaa2;
+  --risk-flagged-strong: #f2685c;
+  --risk-escalated: #4a2c08;
+  --risk-escalated-foreground: #fcc867;
+  --risk-escalated-strong: #f0a63a;
+  --risk-cleared: #10392a;
+  --risk-cleared-foreground: #84dcae;
+  --risk-cleared-strong: #4cc98b;
+
+  --popover: rgb(34 28 24 / 0.94);
+  --primary: #f6f2ec;
+  --primary-foreground: #141414;
+  --focus-inner: #f6f2ec;
+  --muted: rgb(255 245 235 / 0.07);
+  --muted-foreground: #c2b9ae;
+  --accent: rgb(255 245 235 / 0.09);
+  --border: rgb(255 245 235 / 0.12);
+  --input: rgb(255 245 235 / 0.2);
 }
 
-/* Without backdrop-filter, thin glass becomes a solid, slightly translucent surface. */
+/* Dark glass: white text and its own tokens, so tables, bars and links
+   inside it adapt without extra classes. */
+.glass-theme .glass-card-dark {
+  --foreground: #ffffff;
+  --card-foreground: #ffffff;
+  --muted-foreground: #d3ccc4;
+  --border: rgb(255 255 255 / 0.12);
+  --input: rgb(255 255 255 / 0.22);
+  --accent: rgb(255 255 255 / 0.08);
+  --glass-bg-strong: #1d1a17;
+  --chart-track: rgb(255 255 255 / 0.16);
+  --brand-text: #ff8a8e;
+  --primary: #f6f2ec;
+  --primary-foreground: #141414;
+  --risk-flagged-strong: #f2685c;
+  --risk-escalated-strong: #f0a63a;
+  --risk-cleared-strong: #4cc98b;
+  --focus-inner: #ffffff;
+  color: var(--foreground);
+}
+
+.dark .glass-theme .glass-card-dark {
+  --glass-bg-strong: #3d342d;
+}
+
+/* Focus: red outer ring plus an inner ring in ink (white on dark), so the
+   indicator keeps at least 3:1 on cream, glass and dark surfaces. Unlayered
+   so it wins over the shadcn ring utilities. */
+.glass-theme :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-inner);
+}
+
+/* Menu and list items sit inside clipped popovers: draw the rings inside. */
+.glass-theme :is([role="menuitem"], [role="option"], [role="tab"]):focus-visible {
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--focus-inner);
+}
+
+.glass-theme main:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Without backdrop-filter, glass becomes a solid warm surface. */
 @supports not (backdrop-filter: blur(1px)) {
-  .glass-app {
-    --glass-bg: rgb(255 255 255 / 0.92);
-    --glass-bg-strong: rgb(255 255 255 / 0.96);
+  .glass-theme {
+    --glass-bg: rgb(252 249 244 / 0.95);
+    --glass-bg-strong: #fdfbf8;
+    --glass-dark-bg: #1d1a17;
+    --popover: #fdfbf8;
   }
 
-  .dark .glass-app {
-    --glass-bg: rgb(17 24 39 / 0.92);
-    --glass-bg-strong: rgb(17 24 39 / 0.96);
+  .dark .glass-theme {
+    --glass-bg: rgb(36 30 26 / 0.96);
+    --glass-bg-strong: #241e1a;
+    --glass-dark-bg: #0c0a09;
+    --popover: #241e1a;
+  }
+}
+
+/* Reduced transparency: every surface turns solid, nothing blurs and the
+   backdrop is a flat colour. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-theme {
+    --glass-bg: #fdfbf8;
+    --glass-bg-strong: #ffffff;
+    --glass-dark-bg: #1d1a17;
+    --glass-control: #ffffff;
+    --popover: #ffffff;
+    --glass-border: rgb(60 45 30 / 0.16);
+    --glass-blur: 0px;
+    --glass-blur-strong: 0px;
+  }
+
+  .dark .glass-theme {
+    --glass-bg: #221d19;
+    --glass-bg-strong: #1b1714;
+    --glass-dark-bg: #0c0a09;
+    --glass-control: #2a241f;
+    --popover: #221d19;
+    --glass-border: rgb(255 255 255 / 0.16);
+  }
+
+  .glass-shape {
+    display: none;
+  }
+}
+
+/* More contrast: stronger borders and text, near-opaque surfaces. */
+@media (prefers-contrast: more) {
+  .glass-theme {
+    --muted-foreground: #2f2a25;
+    --chart-axis: #2f2a25;
+    --border: rgb(20 20 20 / 0.5);
+    --input: rgb(20 20 20 / 0.65);
+    --glass-border: rgb(20 20 20 / 0.5);
+    --brand-text: #9a0c14;
+    --glass-bg: rgb(255 255 255 / 0.96);
+    --glass-bg-strong: #ffffff;
+  }
+
+  .dark .glass-theme {
+    --muted-foreground: #ece6df;
+    --chart-axis: #ece6df;
+    --border: rgb(255 255 255 / 0.55);
+    --input: rgb(255 255 255 / 0.65);
+    --glass-border: rgb(255 255 255 / 0.55);
+    --brand-text: #ffa3a6;
+    --glass-bg: rgb(22 18 15 / 0.97);
+    --glass-bg-strong: #16120f;
+  }
+
+  .glass-theme .glass-card-dark {
+    --muted-foreground: #f1ece6;
+    --border: rgb(255 255 255 / 0.5);
+    --glass-dark-border: rgb(255 255 255 / 0.6);
   }
 }
 
 @layer components {
-  /* Fixed gradient with slow blurred orbs behind the app. Pure CSS. */
+  /* Fixed cream base with soft blurred shapes (radial gradients, no
+     images, no filters). Static unless data-animated (Landing only). */
   .glass-backdrop {
     position: fixed;
     inset: 0;
     z-index: -1;
     overflow: hidden;
-    background: var(--glass-backdrop);
+    background: var(--backdrop-base);
     pointer-events: none;
   }
 
-  .glass-backdrop::before,
-  .glass-backdrop::after,
-  .glass-orb {
-    content: "";
+  .glass-shape {
     position: absolute;
     border-radius: 9999px;
-    filter: blur(80px);
-    animation: glass-drift 60s ease-in-out infinite alternate;
+    background: radial-gradient(closest-side, var(--shape) 0%, transparent 100%);
   }
 
-  .glass-backdrop::before {
-    top: -10%;
-    left: -5%;
-    width: 45vw;
-    height: 45vw;
-    background: var(--glass-orb-1);
+  .glass-shape:nth-child(1) {
+    --shape: var(--shape-sand);
+    top: -22vmax;
+    left: -16vmax;
+    width: 70vmax;
+    height: 60vmax;
   }
 
-  .glass-backdrop::after {
-    right: -10%;
-    bottom: -15%;
-    width: 50vw;
-    height: 50vw;
-    background: var(--glass-orb-2);
+  .glass-shape:nth-child(2) {
+    --shape: var(--shape-peach);
+    top: -14vmax;
+    right: -18vmax;
+    width: 62vmax;
+    height: 56vmax;
+  }
+
+  .glass-shape:nth-child(3) {
+    --shape: var(--shape-beige);
+    bottom: -26vmax;
+    left: 12vw;
+    width: 80vmax;
+    height: 56vmax;
+  }
+
+  .glass-shape:nth-child(4) {
+    --shape: var(--shape-rose);
+    right: -10vmax;
+    bottom: -18vmax;
+    width: 54vmax;
+    height: 50vmax;
+  }
+
+  .glass-shape:nth-child(5) {
+    --shape: var(--shape-sage);
+    top: 38vh;
+    left: -14vmax;
+    width: 40vmax;
+    height: 36vmax;
+  }
+
+  /* Landing only: very slow drift, transform only. */
+  .glass-backdrop[data-animated] .glass-shape {
+    will-change: transform;
+    animation: glass-drift 46s ease-in-out infinite alternate;
+  }
+
+  .glass-backdrop[data-animated] .glass-shape:nth-child(2n) {
+    animation-duration: 58s;
+    animation-direction: alternate-reverse;
+  }
+
+  .glass-backdrop[data-animated] .glass-shape:nth-child(3n) {
+    animation-duration: 64s;
     animation-delay: -20s;
   }
 
-  .glass-orb {
-    top: 40%;
-    left: 45%;
-    width: 30vw;
-    height: 30vw;
-    background: var(--glass-orb-3);
-    animation-delay: -40s;
-  }
-
-  /* Thin glass for cards. Data-dense content uses .glass-card-strong. */
+  /* Default glass: glanceable cards. */
   .glass-card {
     border: 1px solid var(--glass-border);
-    border-radius: var(--radius-glass);
+    border-radius: var(--radius-card);
+    padding: var(--card-pad);
     background: var(--glass-bg);
     box-shadow: var(--glass-shadow), var(--glass-highlight);
-    backdrop-filter: blur(var(--glass-blur));
-    transition: background-color 200ms ease, box-shadow 200ms ease;
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+    transition:
+      transform var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out);
   }
 
-  /* Strong surfaces are opaque enough to read without blurring. */
+  /* Strong glass: dense content, opaque enough to read without blur. */
   .glass-card-strong {
     background: var(--glass-bg-strong);
     backdrop-filter: none;
   }
 
+  /* Dark glass: the one emphasis card per page. */
+  .glass-card-dark {
+    border-color: var(--glass-dark-border);
+    background: var(--glass-dark-bg);
+    box-shadow: var(--glass-shadow), inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+
+  /* Cards lift a little on hover. */
+  @media (hover: hover) {
+    .glass-card-hover:hover {
+      transform: translateY(var(--lift));
+      box-shadow: var(--glass-shadow-lift), var(--glass-highlight);
+    }
+  }
+
+  /* The one hero KPI per page: an accent glow. */
+  .glass-card-hero,
+  .glass-card-hero.glass-card-hover:hover {
+    box-shadow: var(--glass-shadow), var(--glass-highlight), var(--brand-glow);
+  }
+
   /* Never nest backdrop filters. */
-  .glass-card .glass-card,
-  .glass-chrome .glass-card {
+  :is(.glass-card, .glass-pill) :is(.glass-card, .glass-pill) {
     backdrop-filter: none;
   }
 
-  /* Sidebar and top bar. */
-  .glass-chrome {
-    background: var(--glass-bg);
-    border-color: var(--glass-border);
-    backdrop-filter: blur(var(--glass-blur-chrome));
-  }
-
-  /* Dialogs, menus and sheets opened from the app. */
-  .glass-popover {
+  /* Navigation pills and floating controls: stronger blur, pill radius. */
+  .glass-pill {
     border: 1px solid var(--glass-border);
-    background: var(--popover);
+    border-radius: var(--radius-pill);
+    background: var(--glass-bg);
     box-shadow: var(--glass-shadow), var(--glass-highlight);
-    backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.4);
   }
 
-  .glass-nav-item[aria-current="page"] {
-    background: var(--glass-nav-active);
-    box-shadow: var(--glow-accent);
+  /* Pill nav links. The active one sits on the sliding ink indicator. */
+  .pill-link {
+    position: relative;
+    z-index: 1;
+    transition:
+      color var(--dur-base) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .pill-link:not([aria-current="page"]):hover {
+    background: var(--accent);
+  }
+
+  .pill-link[aria-current="page"] {
+    color: var(--primary-foreground);
     font-weight: 600;
   }
 
-  /* Glow on primary buttons, on hover only. */
-  .glass-app [data-slot="button"][data-variant="default"] {
-    transition: background-color 200ms ease, box-shadow 200ms ease;
+  /* Before the indicator is measured (and without JavaScript) the active
+     link draws its own ink pill. */
+  .pill-nav:not([data-ready]) .pill-link[aria-current="page"] {
+    background: var(--primary);
   }
 
-  .glass-app [data-slot="button"][data-variant="default"]:hover {
-    box-shadow: var(--glow-accent);
+  .pill-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: var(--radius-pill);
+    background: var(--primary);
+    transform-origin: left center;
+    opacity: 0;
   }
 
-  .glass-page-enter {
-    animation: glass-page-in 220ms ease-out both;
+  .pill-nav[data-ready] .pill-indicator {
+    opacity: 1;
+  }
+
+  .pill-indicator[data-animate] {
+    transition: transform var(--dur-base) var(--ease-out);
+  }
+
+  /* The notification dot. */
+  .notify-dot {
+    position: absolute;
+    top: 9px;
+    right: 10px;
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background: var(--brand);
+    box-shadow: 0 0 0 2px var(--backdrop-base);
+  }
+
+  /* Expanding search: scales out from its button (transform and opacity). */
+  .search-pop {
+    transform-origin: right center;
+    animation: search-in var(--dur-base) var(--ease-out) both;
+  }
+
+  /* Accent links. */
+  .link-accent {
+    border-radius: 4px;
+    color: var(--brand-text);
+    text-underline-offset: 4px;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+
+  .link-accent:hover {
+    text-decoration: underline;
+  }
+
+  /* Table rows highlight on hover. */
+  .row-hover {
+    transition: background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .row-hover:hover {
+    background: var(--accent);
+  }
+
+  /* The only page transition: fade, rise 6px, unblur 4px to 0. */
+  .page-enter {
+    animation: page-in var(--dur-slow) var(--ease-out) both;
+  }
+}
+
+/* Portaled surfaces get the glass material without per-component classes. */
+.glass-theme :where(
+  [data-slot="dialog-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"],
+  [data-slot="select-content"],
+  [data-slot="sheet-content"]
+) {
+  border: 1px solid var(--glass-border);
+  background: var(--popover);
+  box-shadow: var(--glass-shadow-lift), var(--glass-highlight);
+  backdrop-filter: blur(var(--glass-blur-strong)) saturate(1.4);
+}
+
+.glass-theme :where([data-slot="dropdown-menu-content"], [data-slot="select-content"]) {
+  border-radius: var(--radius-popover);
+}
+
+.glass-theme [data-slot="dialog-content"] {
+  border-radius: var(--radius-card);
+  padding: 24px;
+}
+
+.glass-theme :where([data-slot="dialog-overlay"], [data-slot="sheet-overlay"]) {
+  background: var(--scrim);
+}
+
+/* Buttons: pill shaped; lift and tint on hover, press feedback. */
+.glass-theme [data-slot="button"] {
+  border-radius: var(--radius-pill);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+@media (hover: hover) {
+  .glass-theme [data-slot="button"]:where([data-variant="default"], [data-variant="outline"]):not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: var(--glass-shadow-lift);
+  }
+}
+
+.glass-theme [data-slot="button"][data-variant="default"]:hover {
+  background: color-mix(in oklab, var(--primary) 88%, var(--muted-foreground));
+}
+
+/* Secondary: glass with a border. */
+.glass-theme [data-slot="button"][data-variant="outline"] {
+  border-color: var(--input);
+  background: var(--glass-control);
+}
+
+.glass-theme [data-slot="button"][data-variant="outline"]:hover {
+  background: var(--glass-bg-strong);
+}
+
+/* Toolbar fields and selects: glass pills. */
+.glass-theme .glass-field {
+  border: 1px solid var(--input);
+  border-radius: var(--radius-pill);
+  background: var(--glass-control);
+}
+
+/* Tabs in the pill look: a glass track with an ink pill for the active tab. */
+.glass-theme [data-slot="tabs-list"][data-variant="pill"] {
+  height: 44px;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-theme [data-slot="tabs-list"][data-variant="pill"] [data-slot="tabs-trigger"] {
+  height: 100%;
+  padding-inline: 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--muted-foreground);
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+
+.glass-theme [data-slot="tabs-list"][data-variant="pill"] [data-slot="tabs-trigger"]:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.glass-theme [data-slot="tabs-list"][data-variant="pill"] [data-slot="tabs-trigger"]:is([data-active], [data-state="active"]) {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: none;
+}
+
+.glass-theme [data-slot="tabs-list"][data-variant="pill"] [data-slot="tabs-trigger"]::after {
+  display: none;
+}
+
+/* Functional feedback only: a calm 1.2 s opacity pulse for skeletons. */
+.glass-theme [data-slot="skeleton"] {
+  background: var(--chart-track);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+/* Theme change cross-fade (View Transitions, opacity only). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-out);
+}
+
+/* Touch screens get 44px targets. */
+@media (pointer: coarse) {
+  .glass-theme :where([data-slot="button"], .touch-target) {
+    min-height: 44px;
+  }
+
+  .glass-theme :where([data-slot="button"][data-size^="icon"], .icon-button) {
+    min-width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-scroll-behavior="smooth"] {
+    scroll-behavior: smooth;
   }
 }
 
@@ -352,28 +793,64 @@
     transform: translate3d(0, 0, 0) scale(1);
   }
   to {
-    transform: translate3d(4vw, 3vh, 0) scale(1.08);
+    transform: translate3d(7vw, 5vh, 0) scale(1.12);
   }
 }
 
-@keyframes glass-page-in {
+@keyframes page-in {
   from {
     opacity: 0;
     transform: translateY(6px);
+    filter: blur(4px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
+    filter: none;
   }
 }
 
+@keyframes search-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Reduced motion: nothing moves. Spinners keep turning because they are
+   functional; everything else changes instantly. */
 @media (prefers-reduced-motion: reduce) {
-  .glass-app *,
-  .glass-app *::before,
-  .glass-app *::after,
-  .glass-backdrop::before,
-  .glass-backdrop::after {
+  *:not(.animate-spin),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .glass-backdrop .glass-shape {
     animation: none !important;
-    transition-duration: 0ms !important;
+  }
+
+  .glass-card-hover:hover,
+  .glass-theme [data-slot="button"]:hover {
+    transform: none !important;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
   }
 }

@@ -11,7 +11,7 @@ export function Logo({ showName = true, className }) {
     <span className={cn("flex items-center gap-2", className)}>
       <span
         aria-hidden="true"
-        className="flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"
+        className="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand-solid text-white"
       >
         <ShieldCheck className="size-4" />
       </span>

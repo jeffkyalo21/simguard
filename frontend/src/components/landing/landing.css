@@ -1,0 +1,642 @@
+/* Landing page only. Rich motion is allowed here and nowhere else.
+   Rules: transform and opacity only; content is visible without JavaScript
+   (hidden start states apply only under `scripting: enabled`); looping
+   motion pauses off screen ([data-onscreen="false"]) and with a hidden tab
+   ([data-paused]); reduced motion gets a static page with final values. */
+
+.landing {
+  --reveal-shift: 16px;
+  overflow-x: clip;
+}
+
+.landing section[id] {
+  scroll-margin-top: 80px;
+}
+
+/* ---- Nav and scroll progress ------------------------------------------ */
+
+.landing-nav-pill {
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+/* Stronger blur, surface and border once the page has scrolled. */
+.landing-nav[data-scrolled="true"] .landing-nav-pill {
+  --glass-blur-strong: 40px;
+  border-color: var(--input);
+  background: var(--glass-bg-strong);
+  box-shadow: var(--glass-shadow-lift), var(--glass-highlight);
+}
+
+.landing-progress {
+  transform: scaleX(0);
+  transform-origin: left;
+  will-change: transform;
+}
+
+/* ---- Hero --------------------------------------------------------------- */
+
+.landing-dots {
+  background-image: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 40%, transparent 100%);
+}
+
+/* A soft scrim keeps hero text legible over the orbs in both themes. */
+.landing-scrim {
+  background: radial-gradient(ellipse 60% 55% at 50% 45%, var(--backdrop-base) 0%, transparent 70%);
+  opacity: 0.85;
+}
+
+.hero-word {
+  display: inline-block;
+  animation: word-in 600ms var(--ease-out) both;
+  animation-delay: calc(120ms + var(--i) * 110ms);
+}
+
+/* Accent words: a brand gradient (large text, at least 3:1 on the backdrop). */
+.hero-accent {
+  padding-bottom: 0.08em;
+  background: linear-gradient(100deg, var(--brand-text) 10%, var(--brand) 90%);
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-contrast: more), (forced-colors: active) {
+  .hero-accent {
+    background: none;
+    color: var(--brand-text);
+  }
+}
+
+.hero-fade {
+  animation: fade-up 600ms var(--ease-out) both;
+  animation-delay: calc(450ms + var(--i, 0) * 100ms);
+}
+
+/* Floating chips: parallax on the wrapper, a slow bob on the inner card. */
+.chip-float {
+  animation: chip-bob 7s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s);
+}
+
+/* ---- Reveal on scroll ---------------------------------------------------- */
+
+.reveal {
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+
+/* ---- Product preview ------------------------------------------------------ */
+
+.tilt {
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform var(--dur-slow) var(--ease-out);
+  will-change: transform;
+}
+
+.tilt[data-active="true"] {
+  transition-duration: 80ms;
+}
+
+/* Bars fill once from the left to their value (--v, 0 to 1). */
+.fill-x {
+  transform: scaleX(var(--v, 1));
+  transform-origin: left;
+}
+
+/* ---- SIM card (hero preview) ---------------------------------------------- */
+
+.sim-card {
+  --sim-edge: rgb(70 50 30 / 0.16);
+  --sim-highlight: rgb(255 255 255 / 0.7);
+  --sim-shadow: rgb(70 50 30 / 0.24);
+  --sim-beam: rgb(255 255 255 / 0.8);
+}
+
+.dark .sim-card {
+  --sim-edge: rgb(255 255 255 / 0.2);
+  --sim-highlight: rgb(255 255 255 / 0.09);
+  --sim-shadow: rgb(0 0 0 / 0.55);
+  --sim-beam: rgb(255 255 255 / 0.24);
+}
+
+/* Frosted glass from the shared tokens, with a soft top left highlight. */
+.sim-body {
+  background: linear-gradient(140deg, var(--sim-highlight), transparent 55%), var(--glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.3);
+}
+
+/* A thin slanted beam, parked off the left edge between sweeps. */
+.sim-beam {
+  position: absolute;
+  inset-block: -20%;
+  left: 0;
+  width: 34px;
+  background: linear-gradient(90deg, transparent, var(--sim-beam), transparent);
+  opacity: 0;
+  transform: translateX(-60px) skewX(-16deg);
+  pointer-events: none;
+}
+
+.sim-status {
+  transform-origin: right center;
+}
+
+.sim-status-flagged {
+  opacity: 0;
+}
+
+/* One 6 s cycle: the beam sweeps for 900 ms, then the status flips to
+   flagged, holds about 3 s and returns to clear. Beam and status share the
+   duration and delay, so they stay in step (also when paused). */
+@media (prefers-reduced-motion: no-preference) {
+  .sim-float {
+    animation: sim-float 6.5s ease-in-out infinite alternate;
+    will-change: transform;
+  }
+
+  .sim-beam {
+    animation: sim-beam 6s ease-in-out 1.2s infinite;
+  }
+
+  .sim-status-clear {
+    animation: sim-clear 6s var(--ease-out) 1.2s infinite;
+  }
+
+  .sim-status-flagged {
+    animation: sim-flagged 6s var(--ease-out) 1.2s infinite;
+  }
+}
+
+/* Solid cream (or dark) surface when glass cannot blur or should not. */
+@supports not (backdrop-filter: blur(1px)) {
+  .sim-body {
+    background: var(--glass-bg-strong);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sim-body {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* ---- Feature visuals ------------------------------------------------------ */
+
+.pop-in {
+  transform-origin: left center;
+}
+
+.slide-x {
+  transform: translateX(var(--x, 0));
+}
+
+/* ---- How it works --------------------------------------------------------- */
+
+.steps-line {
+  transform: scaleY(var(--progress, 1));
+  transform-origin: top;
+  will-change: transform;
+}
+
+.step {
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out),
+    box-shadow var(--dur-slow) var(--ease-out);
+}
+
+.step[data-active="true"] .step-card {
+  box-shadow: var(--glass-shadow-lift), var(--glass-highlight), 0 0 0 1px var(--input);
+}
+
+.step-dot {
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.step[data-active="true"] .step-dot {
+  transform: scale(1.15);
+}
+
+/* ---- Product tour ----------------------------------------------------------- */
+
+/* The screens are drawn on a 960 x 560 canvas and scaled to the frame.
+   ProductTour sets the exact scale; these steps are the no-JS fallback. */
+.tour {
+  --tour-scale: 0.3;
+}
+
+@media (min-width: 480px) {
+  .tour {
+    --tour-scale: 0.43;
+  }
+}
+
+@media (min-width: 640px) {
+  .tour {
+    --tour-scale: 0.58;
+  }
+}
+
+@media (min-width: 768px) {
+  .tour {
+    --tour-scale: 0.72;
+  }
+}
+
+@media (min-width: 1024px) {
+  .tour {
+    --tour-scale: 1;
+  }
+}
+
+.tour-frame {
+  height: calc(560px * var(--tour-scale));
+}
+
+.tour-canvas {
+  width: 960px;
+  height: 560px;
+  transform: scale(var(--tour-scale));
+  transform-origin: 0 0;
+}
+
+.tour-panels {
+  display: grid;
+  gap: 2.5rem;
+}
+
+/* Without JavaScript the tabs cannot switch, so every panel shows in turn. */
+@media (scripting: none) {
+  .tour-tabs {
+    display: none;
+  }
+}
+
+/* With JavaScript the panels stack and cross-fade. Visibility flips after
+   the fade out, so the hidden panels leave the tab order and the
+   accessibility tree. */
+@media (scripting: enabled) {
+  .tour-panels > .tour-panel {
+    grid-area: 1 / 1;
+  }
+
+  .tour-panel {
+    transition:
+      opacity var(--dur-slow) var(--ease-out),
+      transform var(--dur-slow) var(--ease-out),
+      visibility 0s;
+  }
+
+  .tour-panel[data-active="false"] {
+    opacity: 0;
+    transform: translateY(8px);
+    visibility: hidden;
+    transition-delay: 0s, 0s, var(--dur-slow);
+  }
+}
+
+/* ---- FAQ ------------------------------------------------------------------- */
+
+.faq-chevron {
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .faq-item[open] .faq-answer {
+    animation: fade-up var(--dur-slow) var(--ease-out) both;
+  }
+
+  /* Smooth in-page jumps for plain #links (ScrollLink handles the rest). */
+  html:has(.landing) {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ---- Demo and contact forms ------------------------------------------------ */
+
+/* The thank-you state fades in. The dialog is portaled out of .landing, so
+   this is not scoped to it. */
+@media (prefers-reduced-motion: no-preference) {
+  .lead-success {
+    animation: fade-up var(--dur-slow) var(--ease-out) both;
+  }
+}
+
+/* ---- Call to action --------------------------------------------------------- */
+
+/* A rotating conic gradient behind a 1px inset panel: a moving border. */
+.cta-border::before {
+  content: "";
+  position: absolute;
+  inset: -60%;
+  background: conic-gradient(from 0deg, transparent 0deg, var(--brand) 60deg, transparent 140deg, transparent 360deg);
+  animation: spin 8s linear infinite;
+}
+
+/* Opaque panel so the rotating gradient shows only as the 1px border. */
+.cta-panel {
+  background: linear-gradient(var(--glass-bg-strong), var(--glass-bg-strong)), var(--backdrop-base);
+}
+
+.cta-glow::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 0 28px 4px rgb(237 28 36 / 0.25);
+  animation: glow-pulse 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ---- Footer ---------------------------------------------------------------- */
+
+/* The faint wordmark: about 5% ink over the panel, cropped by its bottom
+   edge. It sits under the columns and is decoration only. */
+.footer-wordmark {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -0.3em;
+  font-size: clamp(4rem, 19vw, 15rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-align: center;
+  white-space: nowrap;
+  color: color-mix(in oklab, var(--foreground) 5%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
+@media (forced-colors: active) {
+  .footer-wordmark {
+    display: none;
+  }
+}
+
+/* Underline that slides in from the left on hover and keyboard focus. */
+.footer-link {
+  position: relative;
+}
+
+.footer-link::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 4px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.footer-link:hover::after,
+.footer-link:focus-visible::after {
+  transform: scaleX(1);
+}
+
+/* ---- Hidden start states: only with scripting and full motion ----------- */
+
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  [data-inview]:not([data-inview="true"]) .reveal {
+    opacity: 0;
+    transform: translateY(var(--reveal-shift));
+  }
+
+  [data-inview]:not([data-inview="true"]) :is(.fill-x, .pop-in, .slide-x) {
+    opacity: 0;
+  }
+
+  [data-inview="true"] .fill-x {
+    animation: fill 1s var(--ease-out) both;
+    animation-delay: calc(200ms + var(--i, 0) * 120ms);
+  }
+
+  [data-inview="true"] .pop-in {
+    animation: pop 400ms var(--ease-out) both;
+    animation-delay: var(--delay, 900ms);
+  }
+
+  [data-inview="true"] .slide-x {
+    animation: slide 900ms var(--ease-out) both;
+    animation-delay: calc(300ms + var(--i, 0) * 160ms);
+  }
+
+  .step:not([data-active="true"]) {
+    opacity: 0.45;
+    transform: translateY(6px);
+  }
+}
+
+/* Loops pause off screen and while the tab is hidden. */
+[data-onscreen="false"] .chip-float,
+[data-onscreen="false"] :is(.sim-float, .sim-beam, .sim-status),
+[data-onscreen="false"] .cta-border::before,
+[data-onscreen="false"] .cta-glow::before,
+.landing[data-paused] *,
+.landing[data-paused] *::before {
+  animation-play-state: paused !important;
+}
+
+@keyframes word-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chip-bob {
+  from {
+    transform: translateY(-6px);
+  }
+  to {
+    transform: translateY(6px);
+  }
+}
+
+@keyframes sim-float {
+  from {
+    transform: translateY(-4px) rotate(-0.6deg);
+  }
+  to {
+    transform: translateY(4px) rotate(0.6deg);
+  }
+}
+
+@keyframes sim-beam {
+  0% {
+    opacity: 0;
+    transform: translateX(-60px) skewX(-16deg);
+  }
+  3%,
+  12% {
+    opacity: 1;
+  }
+  15%,
+  100% {
+    opacity: 0;
+    transform: translateX(300px) skewX(-16deg);
+  }
+}
+
+@keyframes sim-flagged {
+  0%,
+  15% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  18% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  20%,
+  65% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  69%,
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+@keyframes sim-clear {
+  0%,
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  18%,
+  66% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  70%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fill {
+  from {
+    opacity: 1;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(var(--v, 1));
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(var(--x, 0));
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* Heavy effects off on small and touch screens. */
+@media (max-width: 767px), (pointer: coarse) {
+  .tilt {
+    transform: none;
+  }
+}
+
+/* Reduced motion: static page, no loops (globals.css also stops them). */
+@media (prefers-reduced-motion: reduce) {
+  .landing :is(.hero-word, .hero-fade, .chip-float, .fill-x, .pop-in, .slide-x, .faq-answer),
+  .landing :is(.cta-border, .cta-glow)::before {
+    animation: none !important;
+  }
+
+  .tilt {
+    transform: none;
+  }
+
+  .tour-panel,
+  .faq-chevron,
+  .footer-link::after {
+    transition: none;
+  }
+
+  .footer-wordmark {
+    transform: none !important;
+  }
+
+  /* A still card in the flagged state: no float, tilt, beam or flip. */
+  .landing :is(.sim-float, .sim-beam, .sim-status) {
+    animation: none !important;
+  }
+
+  .sim-beam {
+    display: none;
+  }
+
+  .sim-status-clear {
+    opacity: 0;
+  }
+
+  .sim-status-flagged {
+    opacity: 1;
+  }
+}
