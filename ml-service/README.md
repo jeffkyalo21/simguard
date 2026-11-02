@@ -68,3 +68,7 @@ unknown field), `503` when artifacts are missing.
   rows (`vol_zscore_7d` and `vol_zscore_14d`, parity fixture of 30 SIMs).
 - At inference time it is a fixed constant read from the artifact, so it
   does not change with new data.
+- The 42-column model sends 28.8% of rows to the escalated band
+  (probability 0.10 to 0.90). Case based reasoning (Stage 4) was evaluated
+  to settle part of the band and was not adopted (see `docs/cbr_design.md`).
+  Analysts review the band using the SHAP reasons.
