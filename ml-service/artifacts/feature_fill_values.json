@@ -1,0 +1,9 @@
+{
+  "source": "notebooks/feature_engineering.ipynb cell 4. Rolling means are filled with the median of total_mb, rolling stds with 1.0, rolling sums with 0, trend_slope_14d with 0.0.",
+  "total_mb_median": 415.90892,
+  "rolling_std_fill": 1.0,
+  "rolling_sum_fill": 0.0,
+  "trend_slope_fill": 0.0,
+  "total_mb_median_train_only": 415.95534999999995,
+  "note": "total_mb_median is the notebook value, taken over all 90,000 rows before the split, because the saved X_* files and models were built with it. total_mb_median_train_only (700 training SIMs) is for reference only and is not read by build_features. See README.md, Known limitations."
+}

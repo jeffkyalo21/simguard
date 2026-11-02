@@ -1,6 +1,10 @@
 {
-  "base_value_log_odds": 0.10656826943159103,
+  "base_value_log_odds": 0.035505764186382294,
   "shap_source": "xgboost pred_contribs",
+  "iteration_range": [
+    0,
+    57
+  ],
   "feature_cols": [
     "total_download_mb",
     "total_upload_mb",
@@ -15,10 +19,6 @@
     "total_mb",
     "roaming_sessions",
     "billed_mb",
-    "voice_minutes_used",
-    "sms_count",
-    "voice_minutes_remaining",
-    "sms_remaining",
     "billing_gap_mb",
     "billing_ratio",
     "offpeak_ratio",
@@ -47,13 +47,6 @@
     "cohort_z_iso_anomaly_score",
     "cohort_z_total_mb",
     "cohort_z_vol_zscore_7d",
-    "cohort_z_vol_zscore_14d",
-    "projected_overage_mb",
-    "days_to_depletion",
-    "prophet_rec_upgrade",
-    "prophet_rec_downgrade",
-    "prophet_rec_no_change",
-    "prophet_rec_insufficient_history",
-    "prophet_missing_flag"
+    "cohort_z_vol_zscore_14d"
   ]
 }

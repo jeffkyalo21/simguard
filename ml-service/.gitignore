@@ -1,0 +1,20 @@
+# Local files that must not be committed from ml-service.
+# Files over 25 MB (large CSV or parquet) are also kept out; add them here by name.
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# MLflow
+mlruns/
+mlruns.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets
+.env
+.env.*
+!.env.example
