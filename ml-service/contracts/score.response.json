@@ -1,0 +1,125 @@
+{
+  "asOfDate": "2025-03-15",
+  "results": [
+    {
+      "simId": 21,
+      "date": "2025-03-15",
+      "probability": 0.9712348580360413,
+      "bucket": "flag",
+      "reasons": [
+        {
+          "feature": "peak_mb",
+          "value": -0.9441622283215833,
+          "contribution": 2.76198410987854,
+          "direction": "increases_risk"
+        },
+        {
+          "feature": "bytes_per_session",
+          "value": -0.8203156675085568,
+          "contribution": 0.4256759583950043,
+          "direction": "increases_risk"
+        },
+        {
+          "feature": "offpeak_mb",
+          "value": 0.0,
+          "contribution": 0.42511460185050964,
+          "direction": "increases_risk"
+        },
+        {
+          "feature": "offpeak_ratio",
+          "value": 0.0,
+          "contribution": -0.24175140261650085,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "total_download_mb",
+          "value": -1.014260676269147,
+          "contribution": 0.13515086472034454,
+          "direction": "increases_risk"
+        }
+      ],
+      "similarCases": []
+    },
+    {
+      "simId": 407,
+      "date": "2025-03-15",
+      "probability": 0.08282358199357986,
+      "bucket": "clear",
+      "reasons": [
+        {
+          "feature": "peak_mb",
+          "value": 1.2391917823690823,
+          "contribution": -1.1565701961517334,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "hotspot_session_ratio",
+          "value": 0.124998437519531,
+          "contribution": -0.4918060004711151,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "offpeak_ratio",
+          "value": 0.0,
+          "contribution": -0.2104916274547577,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "hotspot_sessions",
+          "value": 1.0,
+          "contribution": -0.10825547575950623,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "bytes_per_session",
+          "value": 0.0994192778260559,
+          "contribution": -0.10603409260511398,
+          "direction": "decreases_risk"
+        }
+      ],
+      "similarCases": []
+    },
+    {
+      "simId": 731,
+      "date": "2025-03-15",
+      "probability": 0.10538989305496216,
+      "bucket": "escalated",
+      "reasons": [
+        {
+          "feature": "peak_mb",
+          "value": -0.05466048376635472,
+          "contribution": -1.0346004962921143,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "cohort_z_iso_anomaly_score",
+          "value": -0.7511576928238056,
+          "contribution": -0.3944641649723053,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "hotspot_session_ratio",
+          "value": 0.0,
+          "contribution": -0.22340238094329834,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "offpeak_ratio",
+          "value": 0.0,
+          "contribution": -0.12725530564785004,
+          "direction": "decreases_risk"
+        },
+        {
+          "feature": "vol_zscore_7d",
+          "value": -0.9885046203310203,
+          "contribution": -0.10601291805505753,
+          "direction": "decreases_risk"
+        }
+      ],
+      "similarCases": []
+    }
+  ],
+  "notFound": [
+    99999
+  ]
+}

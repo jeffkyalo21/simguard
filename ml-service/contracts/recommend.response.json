@@ -1,0 +1,49 @@
+{
+  "billingCycle": 1,
+  "results": [
+    {
+      "simId": 187,
+      "billingCycle": 1,
+      "currentTier": "professional",
+      "recommendation": "upgrade",
+      "recommendedTier": "manager",
+      "projectedOverageMb": 924.2728962687834,
+      "daysToDepletion": 5,
+      "checkpointDay": 25,
+      "source": "precomputed"
+    },
+    {
+      "simId": 407,
+      "billingCycle": 1,
+      "currentTier": "manager",
+      "recommendation": "downgrade",
+      "recommendedTier": "support",
+      "projectedOverageMb": -42939.225079836804,
+      "daysToDepletion": null,
+      "checkpointDay": 25,
+      "source": "precomputed"
+    },
+    {
+      "simId": 12,
+      "billingCycle": 1,
+      "currentTier": "support",
+      "recommendation": "no_change",
+      "recommendedTier": "support",
+      "projectedOverageMb": -13532.81246031647,
+      "daysToDepletion": null,
+      "checkpointDay": 25,
+      "source": "precomputed"
+    }
+  ],
+  "notFound": [
+    99999
+  ],
+  "failed": [],
+  "timings": {
+    "readMs": 8.6,
+    "fitMs": 0.0,
+    "totalMs": 8.6,
+    "fitted": 0,
+    "precomputed": 3
+  }
+}
