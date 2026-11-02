@@ -92,7 +92,7 @@ export function AppSidebar() {
   return (
     <aside
       className={cn(
-        "glass-chrome sticky top-0 hidden h-dvh shrink-0 flex-col border-r transition-[width] duration-200 ease-out md:flex",
+        "glass-chrome sticky top-0 hidden h-dvh shrink-0 flex-col border-r md:flex",
         collapsed ? "w-16" : "w-[220px]"
       )}
     >

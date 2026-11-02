@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search, Settings } from "lucide-react";
 import { NavList } from "@/components/layout/app-sidebar";
 import { Logo } from "@/components/layout/logo";
@@ -43,7 +44,7 @@ function MobileNav() {
           <Menu aria-hidden="true" />
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="glass-app glass-popover w-[260px] gap-2 border-0 p-0">
+      <SheetContent side="left" className="w-[260px] gap-2 p-0">
         <SheetHeader className="h-14 justify-center px-4">
           <SheetTitle asChild>
             <div>
@@ -59,8 +60,17 @@ function MobileNav() {
   );
 }
 
+// A page's own search (data-page-search) wins over the top bar search.
+// Pages kept hidden by navigation stay in the DOM, so only visible ones count.
+function visiblePageSearch() {
+  return [...document.querySelectorAll("[data-page-search]")].find(
+    (element) => element.offsetParent !== null
+  );
+}
+
 function SearchField() {
   const inputRef = useRef(null);
+  const router = useRouter();
 
   // "/" focuses search from anywhere except while typing in a field.
   useEffect(() => {
@@ -73,7 +83,7 @@ function SearchField() {
         !isTypingTarget(event.target)
       ) {
         event.preventDefault();
-        inputRef.current?.focus();
+        (visiblePageSearch() ?? inputRef.current)?.focus();
       }
     }
 
@@ -81,14 +91,22 @@ function SearchField() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // Global search opens the SIM list filtered by the query.
+  function handleSubmit(event) {
+    event.preventDefault();
+    const query = inputRef.current?.value.trim();
+    router.push(query ? `/sims?q=${encodeURIComponent(query)}` : "/sims");
+  }
+
   return (
-    <form role="search" onSubmit={(event) => event.preventDefault()} className="min-w-0 flex-1 sm:flex-none">
+    <form role="search" onSubmit={handleSubmit} className="min-w-0 flex-1 sm:flex-none">
       <label className="relative flex h-9 w-full items-center rounded-lg bg-muted transition-shadow duration-150 focus-within:ring-2 focus-within:ring-ring sm:w-[360px]">
         <span className="sr-only">{copy.topbar.searchLabel}</span>
         <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" aria-hidden="true" />
         <input
           ref={inputRef}
           type="search"
+          name="q"
           placeholder={copy.topbar.searchPlaceholder}
           aria-keyshortcuts={copy.topbar.searchShortcut}
           className="h-full w-full min-w-0 rounded-lg bg-transparent pr-10 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:outline-none"
@@ -115,7 +133,7 @@ function UserMenu() {
           <span className="hidden text-sm font-medium sm:inline">{copy.user.name}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="glass-app glass-popover w-44">
+      <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuLabel>{copy.user.name}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
@@ -147,7 +165,7 @@ export function Topbar() {
         <Button variant="ghost" size="icon" className="rounded-full" aria-label={copy.topbar.notifications}>
           <Bell aria-hidden="true" />
         </Button>
-        <ThemeToggle glass />
+        <ThemeToggle />
         <UserMenu />
       </div>
     </header>

@@ -45,6 +45,20 @@
   --color-risk-escalated-foreground: var(--risk-escalated-foreground);
   --color-risk-flagged: var(--risk-flagged);
   --color-risk-flagged-foreground: var(--risk-flagged-foreground);
+  --color-risk-flagged-strong: var(--risk-flagged-strong);
+  --color-risk-escalated-strong: var(--risk-escalated-strong);
+  --color-risk-cleared-strong: var(--risk-cleared-strong);
+  --color-brand: var(--brand);
+  --color-brand-solid: var(--brand-solid);
+  --color-brand-text: var(--brand-text);
+  --color-brand-soft: var(--brand-soft);
+  --color-glass: var(--glass-bg);
+  --color-glass-strong: var(--glass-bg-strong);
+  --color-glass-control: var(--glass-bg-control);
+  --color-glass-border: var(--glass-border);
+  --radius-glass: var(--radius-glass);
+  --radius-control: var(--radius-control);
+  --ease-out: var(--ease-out);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -87,14 +101,6 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-
-  /* Risk badges: tinted background, dark text. Always paired with a label. */
-  --risk-cleared: #dcfce7;
-  --risk-cleared-foreground: #14532d;
-  --risk-escalated: #fef3c7;
-  --risk-escalated-foreground: #78350f;
-  --risk-flagged: #fee2e2;
-  --risk-flagged-foreground: #7f1d1d;
 }
 
 .dark {
@@ -129,13 +135,6 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
-
-  --risk-cleared: #14532d;
-  --risk-cleared-foreground: #dcfce7;
-  --risk-escalated: #713f12;
-  --risk-escalated-foreground: #fef3c7;
-  --risk-flagged: #7f1d1d;
-  --risk-flagged-foreground: #fee2e2;
 }
 
 @layer base {
@@ -162,148 +161,286 @@
 }
 
 /* -------------------------------------------------------------------------
-   Glassy Dashboard v4
-   Scoped to the logged-in app: every token below lives under .glass-app,
-   which only the (app) route group layout applies. Portaled surfaces
-   (dialogs, menus, sheets) opened from the app add .glass-app themselves.
+   Glassy Dashboard v4: one glass theme for the whole product.
+   Every token lives under .glass-theme, which the root layout puts on
+   <body>, so portaled dialogs, menus, sheets and toasts inherit it.
+   Palette rule: the brand accent marks identity and focus (logo, active
+   nav, links, focus rings, the one hero KPI per page). It is never a filled
+   primary button and never a data colour; risk uses its own --risk-* set.
    ------------------------------------------------------------------------- */
 
-.glass-app {
-  --glass-accent: #4f46e5;
+:root {
+  /* Motion tokens. Transitions stay between 150 and 250 ms. */
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --dur-slow: 250ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.glass-theme {
+  /* Brand accent. --brand-text is the AA-safe shade for text on glass. */
+  --brand: #ed1c24;
+  --brand-solid: #ed1c24;
+  --brand-text: #c8101a;
+  --brand-soft: rgb(237 28 36 / 0.1);
+  --brand-glow: 0 0 24px rgb(237 28 36 / 0.25);
+
+  /* Neutrals. */
+  --ink: #111111;
+  --ink-inverse: #ffffff;
+
+  /* Glass materials. Thin glass for chrome and glanceable cards, strong
+     glass (opaque enough to read without blur) for dense content. */
   --glass-bg: rgb(255 255 255 / 0.55);
-  --glass-bg-strong: rgb(255 255 255 / 0.82);
-  --glass-border: rgb(255 255 255 / 0.6);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.7);
+  --glass-bg-strong: rgb(255 255 255 / 0.88);
+  --glass-bg-control: rgb(255 255 255 / 0.6);
+  --glass-border: rgb(255 255 255 / 0.7);
+  --glass-edge: rgb(17 17 17 / 0.08);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.75);
   --glass-blur: 16px;
   --glass-blur-chrome: 24px;
-  --glass-shadow: 0 8px 32px rgb(30 41 90 / 0.08);
-  --glow-accent: 0 0 24px rgb(79 70 229 / 0.35);
-  --radius-glass: 16px;
-  --radius-glass-control: 12px;
-  --glass-nav-active: rgb(79 70 229 / 0.12);
-  --glass-backdrop: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 45%, #f8fafc 100%);
-  --glass-orb-1: rgb(165 180 252 / 0.55);
-  --glass-orb-2: rgb(196 181 253 / 0.45);
-  --glass-orb-3: rgb(153 246 228 / 0.35);
+  --glass-shadow: 0 8px 32px rgb(60 20 24 / 0.08);
+  --glass-shadow-lift: 0 14px 40px rgb(60 20 24 / 0.12);
+  --scrim: rgb(17 17 17 / 0.28);
 
-  /* shadcn tokens re-pointed at the glass palette inside the app only. */
-  --foreground: #0f172a;
+  /* Concentric radii: outer radius = inner radius + padding. */
+  --radius-control: 8px;
+  --card-pad: 16px;
+  --radius-glass: calc(var(--radius-control) + var(--card-pad));
+
+  /* Backdrop: warm grey to faint rose, one red and one green orb. */
+  --backdrop: linear-gradient(140deg, #f4f2f1 0%, #f6eff0 55%, #f8ecee 100%);
+  --backdrop-base: #f5f1f1;
+  --orb-red: rgb(237 28 36 / 0.11);
+  --orb-green: rgb(30 127 79 / 0.09);
+  --dot-grid: rgb(17 17 17 / 0.07);
+
+  /* Risk: a darker, cooler crimson for flagged so it never reads as brand. */
+  --risk-flagged: #fee4e2;
+  --risk-flagged-foreground: #b42318;
+  --risk-flagged-strong: #b42318;
+  --risk-escalated: #fef0c7;
+  --risk-escalated-foreground: #93370d;
+  --risk-escalated-strong: #dc6803;
+  --risk-cleared: #dcfae6;
+  --risk-cleared-foreground: #14653a;
+  --risk-cleared-strong: #1e7f4f;
+
+  /* shadcn tokens re-pointed at the glass palette. */
+  --background: var(--backdrop-base);
+  --foreground: var(--ink);
   --card: var(--glass-bg-strong);
   --card-foreground: var(--foreground);
-  --popover: rgb(255 255 255 / 0.92);
+  --popover: rgb(255 255 255 / 0.94);
   --popover-foreground: var(--foreground);
-  --primary: var(--glass-accent);
-  --primary-foreground: #ffffff;
-  --ring: var(--glass-accent);
-  --muted: rgb(15 23 42 / 0.05);
-  --muted-foreground: #475569;
-  --accent: rgb(79 70 229 / 0.08);
+  --primary: var(--ink);
+  --primary-foreground: var(--ink-inverse);
+  --secondary: var(--glass-bg-control);
+  --secondary-foreground: var(--foreground);
+  --ring: var(--brand);
+  --destructive: var(--risk-flagged-foreground);
+  --muted: rgb(17 17 17 / 0.05);
+  --muted-foreground: #57534e;
+  --accent: rgb(17 17 17 / 0.06);
   --accent-foreground: var(--foreground);
-  --border: rgb(15 23 42 / 0.1);
-  --input: rgb(15 23 42 / 0.14);
-  --chart-1: var(--glass-accent);
+  --border: rgb(17 17 17 / 0.1);
+  --input: rgb(17 17 17 / 0.16);
+  --chart-1: var(--brand);
+  --chart-grid: rgb(17 17 17 / 0.08);
+  --chart-axis: #57534e;
 
   color: var(--foreground);
 }
 
-.dark .glass-app {
-  --glass-accent: #818cf8;
-  --glass-bg: rgb(255 255 255 / 0.08);
-  --glass-bg-strong: rgb(15 23 42 / 0.8);
-  --glass-border: rgb(255 255 255 / 0.14);
-  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.08);
-  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
-  --glow-accent: 0 0 24px rgb(129 140 248 / 0.35);
-  --glass-nav-active: rgb(129 140 248 / 0.18);
-  --glass-backdrop: linear-gradient(135deg, #0b1033 0%, #1e1b4b 45%, #0f3d3e 100%);
-  --glass-orb-1: rgb(79 70 229 / 0.35);
-  --glass-orb-2: rgb(124 58 237 / 0.3);
-  --glass-orb-3: rgb(13 148 136 / 0.3);
+.dark .glass-theme {
+  --brand: #ff4d55;
+  --brand-text: #ff6b71;
+  --brand-soft: rgb(255 77 85 / 0.14);
+  --brand-glow: 0 0 24px rgb(255 77 85 / 0.25);
 
-  --foreground: #f1f5f9;
-  --popover: rgb(17 24 39 / 0.92);
-  --primary-foreground: #0b1020;
-  --muted: rgb(255 255 255 / 0.08);
-  --muted-foreground: #cbd5e1;
-  --accent: rgb(129 140 248 / 0.14);
-  --border: rgb(255 255 255 / 0.12);
-  --input: rgb(255 255 255 / 0.16);
+  --ink: #f5f3f3;
+  --ink-inverse: #111111;
+
+  --glass-bg: rgb(255 255 255 / 0.06);
+  --glass-bg-strong: rgb(24 19 21 / 0.88);
+  --glass-bg-control: rgb(255 255 255 / 0.07);
+  --glass-border: rgb(255 255 255 / 0.12);
+  --glass-edge: rgb(255 255 255 / 0.06);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.07);
+  --glass-shadow: 0 8px 32px rgb(0 0 0 / 0.4);
+  --glass-shadow-lift: 0 14px 40px rgb(0 0 0 / 0.5);
+  --scrim: rgb(0 0 0 / 0.5);
+
+  /* Near-black charcoal to deep maroon ink, same two orbs at low opacity. */
+  --backdrop: linear-gradient(140deg, #0c0b0d 0%, #140c10 55%, #1f0a10 100%);
+  --backdrop-base: #110b0e;
+  --orb-red: rgb(237 28 36 / 0.16);
+  --orb-green: rgb(30 127 79 / 0.12);
+  --dot-grid: rgb(255 255 255 / 0.06);
+
+  --risk-flagged: #4a1512;
+  --risk-flagged-foreground: #fda29b;
+  --risk-flagged-strong: #f97066;
+  --risk-escalated: #4a2a06;
+  --risk-escalated-foreground: #fec84b;
+  --risk-escalated-strong: #fdb022;
+  --risk-cleared: #0d3a24;
+  --risk-cleared-foreground: #75e0a7;
+  --risk-cleared-strong: #47cd89;
+
+  --popover: rgb(28 22 25 / 0.94);
+  --muted: rgb(255 255 255 / 0.07);
+  --muted-foreground: #bdb6b7;
+  --accent: rgb(255 255 255 / 0.08);
+  --border: rgb(255 255 255 / 0.11);
+  --input: rgb(255 255 255 / 0.18);
+  --chart-grid: rgb(255 255 255 / 0.08);
+  --chart-axis: #bdb6b7;
 }
 
 /* Without backdrop-filter, thin glass becomes a solid, slightly translucent surface. */
 @supports not (backdrop-filter: blur(1px)) {
-  .glass-app {
+  .glass-theme {
     --glass-bg: rgb(255 255 255 / 0.92);
     --glass-bg-strong: rgb(255 255 255 / 0.96);
   }
 
-  .dark .glass-app {
-    --glass-bg: rgb(17 24 39 / 0.92);
-    --glass-bg-strong: rgb(17 24 39 / 0.96);
+  .dark .glass-theme {
+    --glass-bg: rgb(28 22 25 / 0.92);
+    --glass-bg-strong: rgb(28 22 25 / 0.96);
+  }
+}
+
+/* Reduced transparency: every surface turns solid and nothing blurs. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass-theme {
+    --glass-bg: #ffffff;
+    --glass-bg-strong: #ffffff;
+    --glass-bg-control: #ffffff;
+    --popover: #ffffff;
+    --glass-border: rgb(17 17 17 / 0.14);
+    --glass-blur: 0px;
+    --glass-blur-chrome: 0px;
+    --orb-red: transparent;
+    --orb-green: transparent;
+  }
+
+  /* The orbs are invisible here, so do not animate them. */
+  .glass-backdrop[data-animated]::before,
+  .glass-backdrop[data-animated]::after {
+    animation: none;
+  }
+
+  .dark .glass-theme {
+    --glass-bg: #1c1619;
+    --glass-bg-strong: #1c1619;
+    --glass-bg-control: #251e21;
+    --popover: #1c1619;
+    --glass-border: rgb(255 255 255 / 0.16);
+  }
+}
+
+/* More contrast: stronger borders and text, no faint edges. */
+@media (prefers-contrast: more) {
+  .glass-theme {
+    --muted-foreground: #2e2b29;
+    --border: rgb(17 17 17 / 0.45);
+    --input: rgb(17 17 17 / 0.6);
+    --glass-border: rgb(17 17 17 / 0.45);
+    --glass-edge: rgb(17 17 17 / 0.45);
+    --brand-text: #a10d15;
+    --glass-bg: rgb(255 255 255 / 0.95);
+    --glass-bg-strong: #ffffff;
+  }
+
+  .dark .glass-theme {
+    --muted-foreground: #e7e2e3;
+    --border: rgb(255 255 255 / 0.5);
+    --input: rgb(255 255 255 / 0.6);
+    --glass-border: rgb(255 255 255 / 0.5);
+    --glass-edge: rgb(255 255 255 / 0.5);
+    --brand-text: #ff9a9e;
+    --glass-bg: rgb(20 16 18 / 0.96);
+    --glass-bg-strong: #141012;
   }
 }
 
 @layer components {
-  /* Fixed gradient with slow blurred orbs behind the app. Pure CSS. */
+  /* Fixed gradient with two blurred orbs. Static unless data-animated. */
   .glass-backdrop {
     position: fixed;
     inset: 0;
     z-index: -1;
     overflow: hidden;
-    background: var(--glass-backdrop);
+    background: var(--backdrop);
     pointer-events: none;
   }
 
   .glass-backdrop::before,
-  .glass-backdrop::after,
-  .glass-orb {
+  .glass-backdrop::after {
     content: "";
     position: absolute;
     border-radius: 9999px;
-    filter: blur(80px);
-    animation: glass-drift 60s ease-in-out infinite alternate;
+    filter: blur(90px);
   }
 
   .glass-backdrop::before {
-    top: -10%;
-    left: -5%;
-    width: 45vw;
-    height: 45vw;
-    background: var(--glass-orb-1);
+    top: -12%;
+    left: -8%;
+    width: 48vw;
+    height: 48vw;
+    background: var(--orb-red);
   }
 
   .glass-backdrop::after {
     right: -10%;
-    bottom: -15%;
-    width: 50vw;
-    height: 50vw;
-    background: var(--glass-orb-2);
+    bottom: -18%;
+    width: 46vw;
+    height: 46vw;
+    background: var(--orb-green);
+  }
+
+  /* Landing only: slow drift, transform only. */
+  .glass-backdrop[data-animated]::before,
+  .glass-backdrop[data-animated]::after {
+    will-change: transform;
+    animation: glass-drift 40s ease-in-out infinite alternate;
+  }
+
+  .glass-backdrop[data-animated]::after {
     animation-delay: -20s;
+    animation-direction: alternate-reverse;
   }
 
-  .glass-orb {
-    top: 40%;
-    left: 45%;
-    width: 30vw;
-    height: 30vw;
-    background: var(--glass-orb-3);
-    animation-delay: -40s;
-  }
-
-  /* Thin glass for cards. Data-dense content uses .glass-card-strong. */
+  /* Thin glass for glanceable cards. Data-dense content adds .glass-card-strong. */
   .glass-card {
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-glass);
+    padding: var(--card-pad);
     background: var(--glass-bg);
     box-shadow: var(--glass-shadow), var(--glass-highlight);
-    backdrop-filter: blur(var(--glass-blur));
-    transition: background-color 200ms ease, box-shadow 200ms ease;
+    backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+    transition:
+      transform var(--dur-base) var(--ease-out),
+      box-shadow var(--dur-base) var(--ease-out);
   }
 
   /* Strong surfaces are opaque enough to read without blurring. */
   .glass-card-strong {
     background: var(--glass-bg-strong);
     backdrop-filter: none;
+  }
+
+  /* Cards that react to hover lift a little. */
+  .glass-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--glass-shadow-lift), var(--glass-highlight);
+  }
+
+  /* The one hero KPI per page. */
+  .glass-card-hero,
+  .glass-card-hero.glass-card-hover:hover {
+    box-shadow: var(--glass-shadow), var(--glass-highlight), var(--brand-glow);
   }
 
   /* Never nest backdrop filters. */
@@ -315,35 +452,119 @@
   /* Sidebar and top bar. */
   .glass-chrome {
     background: var(--glass-bg);
-    border-color: var(--glass-border);
-    backdrop-filter: blur(var(--glass-blur-chrome));
+    border-color: var(--glass-edge);
+    backdrop-filter: blur(var(--glass-blur-chrome)) saturate(1.4);
   }
 
-  /* Dialogs, menus and sheets opened from the app. */
-  .glass-popover {
-    border: 1px solid var(--glass-border);
-    background: var(--popover);
-    box-shadow: var(--glass-shadow), var(--glass-highlight);
-    backdrop-filter: blur(var(--glass-blur));
+  .glass-nav-item {
+    position: relative;
   }
 
+  /* Active nav: thin accent bar, tinted background, soft glow. */
   .glass-nav-item[aria-current="page"] {
-    background: var(--glass-nav-active);
-    box-shadow: var(--glow-accent);
+    background: var(--brand-soft);
+    box-shadow: var(--brand-glow);
     font-weight: 600;
   }
 
-  /* Glow on primary buttons, on hover only. */
-  .glass-app [data-slot="button"][data-variant="default"] {
-    transition: background-color 200ms ease, box-shadow 200ms ease;
+  .glass-nav-item[aria-current="page"]::before {
+    content: "";
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 9999px;
+    background: var(--brand);
   }
 
-  .glass-app [data-slot="button"][data-variant="default"]:hover {
-    box-shadow: var(--glow-accent);
+  /* Accent links. */
+  .link-accent {
+    border-radius: 4px;
+    color: var(--brand-text);
+    text-underline-offset: 4px;
+    transition: color var(--dur-fast) var(--ease-out);
   }
 
-  .glass-page-enter {
-    animation: glass-page-in 220ms ease-out both;
+  .link-accent:hover {
+    text-decoration: underline;
+  }
+
+  .page-enter {
+    animation: page-in var(--dur-slow) var(--ease-out) both;
+  }
+}
+
+/* Portaled surfaces get the glass material without per-component classes. */
+.glass-theme :where(
+  [data-slot="dialog-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"],
+  [data-slot="select-content"],
+  [data-slot="sheet-content"]
+) {
+  border: 1px solid var(--glass-border);
+  background: var(--popover);
+  box-shadow: var(--glass-shadow-lift), var(--glass-highlight);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+}
+
+.glass-theme [data-slot="dialog-content"] {
+  border-radius: var(--radius-glass);
+  padding: var(--card-pad);
+}
+
+.glass-theme :where([data-slot="dialog-overlay"], [data-slot="sheet-overlay"]) {
+  background: var(--scrim);
+}
+
+/* Buttons: colour, glow and press feedback only. */
+.glass-theme [data-slot="button"] {
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+/* Primary: near-black (near-white in dark), soft accent glow on hover. */
+.glass-theme [data-slot="button"][data-variant="default"]:hover {
+  background: var(--primary);
+  box-shadow: var(--brand-glow);
+}
+
+/* Secondary: glass surface with a border. */
+.glass-theme [data-slot="button"][data-variant="outline"] {
+  border-color: var(--input);
+  background: var(--glass-bg-control);
+}
+
+.glass-theme [data-slot="button"][data-variant="outline"]:hover {
+  background: var(--glass-bg-strong);
+}
+
+/* Functional feedback only: a calm 1.2 s opacity pulse for skeletons. */
+.glass-theme [data-slot="skeleton"] {
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+/* Theme change cross-fade (View Transitions, opacity only). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease-out);
+}
+
+/* Touch screens get 44px targets for primary controls. */
+@media (pointer: coarse) {
+  .glass-theme :where([data-slot="button"][data-size="lg"], .touch-target) {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-scroll-behavior="smooth"] {
+    scroll-behavior: smooth;
   }
 }
 
@@ -352,28 +573,47 @@
     transform: translate3d(0, 0, 0) scale(1);
   }
   to {
-    transform: translate3d(4vw, 3vh, 0) scale(1.08);
+    transform: translate3d(6vw, 4vh, 0) scale(1.1);
   }
 }
 
-@keyframes glass-page-in {
+@keyframes page-in {
   from {
     opacity: 0;
     transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .glass-app *,
-  .glass-app *::before,
-  .glass-app *::after,
-  .glass-backdrop::before,
-  .glass-backdrop::after {
-    animation: none !important;
-    transition-duration: 0ms !important;
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
   }
 }
+
+/* Reduced motion: nothing moves. Spinners keep turning because they are
+   functional; everything else changes instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .glass-card-hover:hover {
+    transform: none;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+

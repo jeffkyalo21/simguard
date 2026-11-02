@@ -1,5 +1,6 @@
 "use client";
 
+import { flushSync } from "react-dom";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,6 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
 const options = [
@@ -19,11 +19,21 @@ const options = [
   { value: "system", label: copy.theme.system, Icon: Monitor },
 ];
 
-/**
- * @param {{ glass?: boolean }} props  glass styles the menu for the app shell
- */
-export function ThemeToggle({ glass = false }) {
+export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+
+  // Cross-fades the whole page (opacity only) where View Transitions exist;
+  // elsewhere, and with reduced motion, the theme switches instantly.
+  function changeTheme(value) {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (!document.startViewTransition || reduceMotion) {
+      setTheme(value);
+      return;
+    }
+
+    document.startViewTransition(() => flushSync(() => setTheme(value)));
+  }
 
   return (
     <DropdownMenu>
@@ -31,7 +41,7 @@ export function ThemeToggle({ glass = false }) {
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full"
+          className="touch-target size-10 rounded-full"
           aria-label={copy.theme.toggle}
         >
           {/* Both icons render; CSS picks one, so there is no hydration flash. */}
@@ -39,11 +49,8 @@ export function ThemeToggle({ glass = false }) {
           <Moon className="hidden dark:block" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className={cn("w-36", glass && "glass-app glass-popover")}
-      >
-        <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+      <DropdownMenuContent align="end" className="w-36">
+        <DropdownMenuRadioGroup value={theme} onValueChange={changeTheme}>
           {options.map(({ value, label, Icon }) => (
             <DropdownMenuRadioItem key={value} value={value}>
               <Icon aria-hidden="true" />

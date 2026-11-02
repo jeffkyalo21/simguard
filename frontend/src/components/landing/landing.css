@@ -1,0 +1,342 @@
+/* Landing page only. Rich motion is allowed here and nowhere else.
+   Rules: transform and opacity only; content is visible without JavaScript
+   (hidden start states apply only under `scripting: enabled`); looping
+   motion pauses off screen ([data-onscreen="false"]) and with a hidden tab
+   ([data-paused]); reduced motion gets a static page with final values. */
+
+.landing {
+  --reveal-shift: 16px;
+  overflow-x: clip;
+}
+
+.landing section[id] {
+  scroll-margin-top: 80px;
+}
+
+/* ---- Nav and scroll progress ------------------------------------------ */
+
+.landing-nav {
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+.landing-nav[data-scrolled="true"] {
+  --glass-blur-chrome: 32px;
+  background: var(--glass-bg-strong);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.landing-progress {
+  transform: scaleX(0);
+  transform-origin: left;
+  will-change: transform;
+}
+
+/* ---- Hero --------------------------------------------------------------- */
+
+.landing-dots {
+  background-image: radial-gradient(var(--dot-grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 40%, transparent 100%);
+}
+
+/* A soft scrim keeps hero text legible over the orbs in both themes. */
+.landing-scrim {
+  background: radial-gradient(ellipse 60% 55% at 50% 45%, var(--backdrop-base) 0%, transparent 70%);
+  opacity: 0.85;
+}
+
+.hero-word {
+  display: inline-block;
+  animation: word-in 600ms var(--ease-out) both;
+  animation-delay: calc(120ms + var(--i) * 110ms);
+}
+
+.hero-accent {
+  color: var(--brand-text);
+  text-shadow: 0 0 32px rgb(237 28 36 / 0.25);
+}
+
+.hero-fade {
+  animation: fade-up 600ms var(--ease-out) both;
+  animation-delay: calc(450ms + var(--i, 0) * 100ms);
+}
+
+/* Floating chips: parallax on the wrapper, a slow bob on the inner card. */
+.chip-float {
+  animation: chip-bob 7s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s);
+}
+
+/* ---- Reveal on scroll ---------------------------------------------------- */
+
+.reveal {
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 90ms);
+}
+
+/* ---- Product preview ------------------------------------------------------ */
+
+.tilt {
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform var(--dur-slow) var(--ease-out);
+  will-change: transform;
+}
+
+.tilt[data-active="true"] {
+  transition-duration: 80ms;
+}
+
+/* Line "draws" by sliding a mask open: the outer box moves in from the
+   left while the inner box moves the other way, so the line stays put. */
+.draw-mask {
+  overflow: hidden;
+}
+
+.fill-x {
+  transform: scaleX(var(--v, 1));
+  transform-origin: left;
+}
+
+/* ---- Feature visuals ------------------------------------------------------ */
+
+.pop-in {
+  transform-origin: left center;
+}
+
+.slide-x {
+  transform: translateX(var(--x, 0));
+}
+
+/* ---- How it works --------------------------------------------------------- */
+
+.steps-line {
+  transform: scaleY(var(--progress, 1));
+  transform-origin: top;
+  will-change: transform;
+}
+
+.step {
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out),
+    box-shadow var(--dur-slow) var(--ease-out);
+}
+
+.glow-hover:hover {
+  box-shadow: var(--glass-shadow-lift), var(--glass-highlight), var(--brand-glow);
+}
+
+.step[data-active="true"] .step-card {
+  box-shadow: var(--glass-shadow), var(--glass-highlight), var(--brand-glow);
+}
+
+.step-dot {
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.step[data-active="true"] .step-dot {
+  transform: scale(1.15);
+}
+
+/* ---- Call to action --------------------------------------------------------- */
+
+/* A rotating conic gradient behind a 1px inset panel: a moving border. */
+.cta-border::before {
+  content: "";
+  position: absolute;
+  inset: -60%;
+  background: conic-gradient(from 0deg, transparent 0deg, var(--brand) 60deg, transparent 140deg, transparent 360deg);
+  animation: spin 8s linear infinite;
+}
+
+/* Opaque panel so the rotating gradient shows only as the 1px border. */
+.cta-panel {
+  background: linear-gradient(var(--glass-bg-strong), var(--glass-bg-strong)), var(--backdrop-base);
+}
+
+.cta-glow::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 0 28px 4px rgb(237 28 36 / 0.25);
+  animation: glow-pulse 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ---- Hidden start states: only with scripting and full motion ----------- */
+
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  [data-inview]:not([data-inview="true"]) .reveal {
+    opacity: 0;
+    transform: translateY(var(--reveal-shift));
+  }
+
+  [data-inview]:not([data-inview="true"]) :is(.draw-mask, .fill-x, .pop-in, .slide-x) {
+    opacity: 0;
+  }
+
+  [data-inview="true"] .draw-mask {
+    animation: draw-out 1.4s var(--ease-out) both;
+  }
+
+  [data-inview="true"] .draw-inner {
+    animation: draw-in 1.4s var(--ease-out) both;
+  }
+
+  [data-inview="true"] .fill-x {
+    animation: fill 1s var(--ease-out) both;
+    animation-delay: calc(200ms + var(--i, 0) * 120ms);
+  }
+
+  [data-inview="true"] .pop-in {
+    animation: pop 400ms var(--ease-out) both;
+    animation-delay: var(--delay, 900ms);
+  }
+
+  [data-inview="true"] .slide-x {
+    animation: slide 900ms var(--ease-out) both;
+    animation-delay: calc(300ms + var(--i, 0) * 160ms);
+  }
+
+  .step:not([data-active="true"]) {
+    opacity: 0.45;
+    transform: translateY(6px);
+  }
+}
+
+/* Loops pause off screen and while the tab is hidden. */
+[data-onscreen="false"] .chip-float,
+[data-onscreen="false"] .cta-border::before,
+[data-onscreen="false"] .cta-glow::before,
+.landing[data-paused] *,
+.landing[data-paused] *::before {
+  animation-play-state: paused !important;
+}
+
+@keyframes word-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.35em);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chip-bob {
+  from {
+    transform: translateY(-6px);
+  }
+  to {
+    transform: translateY(6px);
+  }
+}
+
+@keyframes draw-out {
+  from {
+    opacity: 1;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes draw-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes fill {
+  from {
+    opacity: 1;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(var(--v, 1));
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(var(--x, 0));
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+/* Heavy effects off on small and touch screens. */
+@media (max-width: 767px), (pointer: coarse) {
+  .tilt {
+    transform: none;
+  }
+}
+
+/* Reduced motion: static page, no loops (globals.css also stops them). */
+@media (prefers-reduced-motion: reduce) {
+  .landing :is(.hero-word, .hero-fade, .chip-float, .draw-mask, .draw-inner, .fill-x, .pop-in, .slide-x),
+  .landing :is(.cta-border, .cta-glow)::before {
+    animation: none !important;
+  }
+
+  .tilt {
+    transform: none;
+  }
+}

@@ -15,6 +15,14 @@ const dateFormat = new Intl.DateTimeFormat(LOCALE, {
   dateStyle: "medium",
 });
 
+const shortDateFormat = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: TIME_ZONE,
+  day: "numeric",
+  month: "short",
+});
+
+const numberFormat = new Intl.NumberFormat(LOCALE);
+
 function parseUtc(iso) {
   if (!iso) return null;
 
@@ -37,6 +45,17 @@ export function formatDate(iso) {
   return date ? dateFormat.format(date) : copy.common.noValue;
 }
 
+/** "28 Oct" for compact tables and chart axes. */
+export function formatShortDate(iso) {
+  const date = parseUtc(iso);
+  return date ? shortDateFormat.format(date) : copy.common.noValue;
+}
+
+/** 1000 becomes "1,000". */
+export function formatNumber(value) {
+  return value === null || value === undefined ? copy.common.noValue : numberFormat.format(value);
+}
+
 /** KES with no decimals for whole amounts, two otherwise. */
 export function formatKes(amount) {
   const value = Number(amount);
@@ -50,6 +69,7 @@ export function formatKes(amount) {
   return new Intl.NumberFormat(LOCALE, {
     style: "currency",
     currency: "KES",
+    currencyDisplay: "code",
     minimumFractionDigits: whole ? 0 : 2,
     maximumFractionDigits: 2,
   }).format(value);

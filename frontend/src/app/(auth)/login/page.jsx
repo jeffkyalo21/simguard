@@ -1,26 +1,25 @@
 import Link from "next/link";
-import { Logo } from "@/components/layout/logo";
 import { LoginForm } from "@/components/auth/login-form";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { GlassCard } from "@/components/glass/glass-card";
+import { Logo } from "@/components/layout/logo";
 import { copy } from "@/lib/copy";
 
 export const metadata = { title: copy.login.title };
 
-// Plain style. No real auth until #15.
+// Strong glass card on the static backdrop. No real auth until #15.
 export default function LoginPage() {
   return (
-    <main id="main" tabIndex={-1} className="flex min-h-dvh items-center justify-center bg-muted px-4 py-12">
-      <Card className="w-full max-w-[400px] gap-6 py-8">
-        <CardHeader className="items-center gap-4 px-8 text-center">
-          <Link href="/" className="justify-self-center rounded-md">
-            <Logo />
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">{copy.login.title}</h1>
-        </CardHeader>
-        <CardContent className="px-8">
-          <LoginForm />
-        </CardContent>
-      </Card>
+    <main id="main" tabIndex={-1} className="flex min-h-dvh items-center justify-center px-4 py-12">
+      <GlassCard
+        variant="strong"
+        className="flex w-full max-w-[400px] flex-col gap-6 [--card-pad:32px] [--radius-glass:40px]"
+      >
+        <Link href="/" className="w-fit rounded-md">
+          <Logo />
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight">{copy.login.title}</h1>
+        <LoginForm />
+      </GlassCard>
     </main>
   );
 }
