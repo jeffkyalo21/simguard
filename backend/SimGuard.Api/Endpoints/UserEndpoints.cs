@@ -138,6 +138,7 @@ public static class UserEndpoints
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -206,6 +207,13 @@ public static class UserEndpoints
                 throw new InvalidOperationException($"Could not add user to role {role}.");
             }
 
+            await audit.WriteAsync(
+                AuditActions.UserCreated,
+                null,
+                null,
+                new { id = user.Id, email = user.Email, name = user.Name, role, employeeId = user.EmployeeId },
+                cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
         }
 
@@ -223,6 +231,7 @@ public static class UserEndpoints
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -273,6 +282,13 @@ public static class UserEndpoints
             // Invalidates tokens that still carry the old role.
             EnsureSucceeded(await userManager.UpdateSecurityStampAsync(user));
 
+            await audit.WriteAsync(
+                AuditActions.UserRoleChanged,
+                null,
+                new { id = user.Id, email = user.Email, role = currentRole },
+                new { id = user.Id, email = user.Email, role },
+                cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
         }
 
@@ -287,6 +303,7 @@ public static class UserEndpoints
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var user = await userManager.FindByIdAsync(id.ToString());
@@ -320,6 +337,13 @@ public static class UserEndpoints
             // Invalidates the user's current tokens immediately.
             EnsureSucceeded(await userManager.UpdateSecurityStampAsync(user));
 
+            await audit.WriteAsync(
+                AuditActions.UserDisabled,
+                null,
+                new { id = user.Id, email = user.Email, isDisabled = false },
+                new { id = user.Id, email = user.Email, isDisabled = true },
+                cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
         }
 
@@ -333,6 +357,7 @@ public static class UserEndpoints
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var user = await userManager.FindByIdAsync(id.ToString());
@@ -345,7 +370,19 @@ public static class UserEndpoints
         if (user.IsDisabled)
         {
             user.IsDisabled = false;
-            EnsureSucceeded(await userManager.UpdateAsync(user));
+
+            await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+            {
+                EnsureSucceeded(await userManager.UpdateAsync(user));
+                await audit.WriteAsync(
+                    AuditActions.UserEnabled,
+                    null,
+                    new { id = user.Id, email = user.Email, isDisabled = true },
+                    new { id = user.Id, email = user.Email, isDisabled = false },
+                    cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+
             await events.LogAsync(AuthEventTypes.UserEnabled, true, user.Id, user.Email, cancellationToken);
         }
 
@@ -359,6 +396,7 @@ public static class UserEndpoints
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var user = await userManager.FindByIdAsync(id.ToString());
@@ -373,6 +411,12 @@ public static class UserEndpoints
             EnsureSucceeded(await userManager.SetTwoFactorEnabledAsync(user, false));
             EnsureSucceeded(await userManager.ResetAuthenticatorKeyAsync(user));
             EnsureSucceeded(await AuthEndpoints.ClearRecoveryCodesAsync(userManager, user));
+            await audit.WriteAsync(
+                AuditActions.UserMfaReset,
+                null,
+                null,
+                new { id = user.Id, email = user.Email, mfaEnabled = false },
+                cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
 
@@ -389,6 +433,7 @@ public static class UserEndpoints
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(request.TemporaryPassword))
@@ -419,6 +464,14 @@ public static class UserEndpoints
             EnsureSucceeded(await userManager.UpdateAsync(user));
             EnsureSucceeded(await userManager.SetLockoutEndDateAsync(user, null));
             EnsureSucceeded(await userManager.ResetAccessFailedCountAsync(user));
+
+            // The temporary password itself is never recorded.
+            await audit.WriteAsync(
+                AuditActions.UserPasswordReset,
+                null,
+                null,
+                new { id = user.Id, email = user.Email, mustChangePassword = true },
+                cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
         }

@@ -79,5 +79,7 @@ api.MapAuthEndpoints();
 api.MapUserEndpoints();
 api.MapAlertEndpoints();
 api.MapRiskEndpoints();
+api.MapDashboardEndpoints();
+api.MapAuditLogEndpoints();
 
 app.Run();

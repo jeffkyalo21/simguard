@@ -167,6 +167,7 @@ public static class SimEndpoints
     private static async Task<IResult> CreateSim(
         SimRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -195,8 +196,13 @@ public static class SimEndpoints
             CreatedAt = Timestamps.UtcNow()
         };
 
-        db.Sims.Add(sim);
-        await db.SaveChangesAsync(cancellationToken);
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            db.Sims.Add(sim);
+            await db.SaveChangesAsync(cancellationToken);
+            await audit.WriteAsync(AuditActions.SimCreated, sim.Id, null, Snapshot(sim), cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return TypedResults.Created($"/api/sims/{sim.Id}", ToResponse(sim, currentAllocation: null));
     }
@@ -205,6 +211,7 @@ public static class SimEndpoints
         int id,
         SimRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -229,12 +236,15 @@ public static class SimEndpoints
             return ApiProblems.Conflict(conflict);
         }
 
+        var before = Snapshot(sim);
+
         sim.PhoneNumber = values.PhoneNumber;
         sim.Iccid = values.Iccid;
         sim.Operator = values.Operator;
         sim.PlanType = values.PlanType;
         sim.MonthlyCost = values.MonthlyCost;
 
+        audit.Add(AuditActions.SimUpdated, sim.Id, before, Snapshot(sim));
         await db.SaveChangesAsync(cancellationToken);
 
         return TypedResults.Ok(await FindSimResponseAsync(db, id, cancellationToken));
@@ -244,6 +254,7 @@ public static class SimEndpoints
         int id,
         SimStatusRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var status = request.Status?.Trim().ToLowerInvariant();
@@ -284,7 +295,9 @@ public static class SimEndpoints
                     $"SIM {id} has an active allocation. Return it before changing the status.");
             }
 
+            var oldStatus = sim.Status;
             sim.Status = status;
+            audit.Add(AuditActions.SimStatusChanged, sim.Id, new { status = oldStatus }, new { status });
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -295,6 +308,7 @@ public static class SimEndpoints
     private static async Task<IResult> DeleteSim(
         int id,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var sim = await db.Sims.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
@@ -314,11 +328,15 @@ public static class SimEndpoints
             return ApiProblems.Conflict($"SIM {id} has alerts and cannot be deleted.");
         }
 
-        if (await db.AuditLogs.AnyAsync(l => l.AffectedSimId == id, cancellationToken))
+        if (await db.RiskScores.AnyAsync(r => r.SimId == id, cancellationToken))
         {
-            return ApiProblems.Conflict($"SIM {id} has audit log entries and cannot be deleted.");
+            return ApiProblems.Conflict($"SIM {id} has risk scores and cannot be deleted.");
         }
 
+        // Earlier audit rows keep their history: the database sets their
+        // affected_sim_id to null. The deletion row carries the SIM in
+        // oldValues because the SIM no longer exists.
+        audit.Add(AuditActions.SimDeleted, null, Snapshot(sim), null);
         db.Sims.Remove(sim);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -415,6 +433,17 @@ public static class SimEndpoints
         errors.Add(field, message);
         return errors.ToProblem();
     }
+
+    private static object Snapshot(Sim sim) => new
+    {
+        id = sim.Id,
+        phoneNumber = sim.PhoneNumber,
+        iccid = sim.Iccid,
+        @operator = sim.Operator,
+        planType = sim.PlanType,
+        monthlyCost = sim.MonthlyCost,
+        status = sim.Status
+    };
 
     private static SimResponse ToResponse(Sim sim, CurrentAllocationResponse? currentAllocation) =>
         new(

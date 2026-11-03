@@ -128,6 +128,7 @@ public static class EmployeeEndpoints
     private static async Task<IResult> CreateEmployee(
         EmployeeRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var (values, validationError) = await ValidateAsync(request, db, cancellationToken);
@@ -151,8 +152,13 @@ public static class EmployeeEndpoints
             CreatedAt = Timestamps.UtcNow()
         };
 
-        db.Employees.Add(employee);
-        await db.SaveChangesAsync(cancellationToken);
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            db.Employees.Add(employee);
+            await db.SaveChangesAsync(cancellationToken);
+            await audit.WriteAsync(AuditActions.EmployeeCreated, null, null, Snapshot(employee), cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return TypedResults.Created(
             $"/api/employees/{employee.Id}",
@@ -163,6 +169,7 @@ public static class EmployeeEndpoints
         int id,
         EmployeeRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var (values, validationError) = await ValidateAsync(request, db, cancellationToken);
@@ -185,11 +192,14 @@ public static class EmployeeEndpoints
             return ApiProblems.Conflict($"An employee with email '{values.Email}' already exists.");
         }
 
+        var before = Snapshot(employee);
+
         employee.Name = values.Name;
         employee.Email = values.Email;
         employee.DepartmentId = values.DepartmentId;
         employee.JobRole = values.JobRole;
 
+        audit.Add(AuditActions.EmployeeUpdated, null, before, Snapshot(employee));
         await db.SaveChangesAsync(cancellationToken);
 
         return TypedResults.Ok(ToResponse(employee, values.DepartmentName));
@@ -198,6 +208,7 @@ public static class EmployeeEndpoints
     private static async Task<IResult> DeleteEmployee(
         int id,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var employee = await db.Employees
@@ -222,6 +233,7 @@ public static class EmployeeEndpoints
                 $"Employee {id} has audit log entries and cannot be deleted.");
         }
 
+        audit.Add(AuditActions.EmployeeDeleted, null, Snapshot(employee), null);
         db.Employees.Remove(employee);
         await db.SaveChangesAsync(cancellationToken);
 
@@ -300,6 +312,15 @@ public static class EmployeeEndpoints
             e => e.Email.ToLower() == lowered && (excludeId == null || e.Id != excludeId),
             cancellationToken);
     }
+
+    private static object Snapshot(Employee employee) => new
+    {
+        id = employee.Id,
+        name = employee.Name,
+        email = employee.Email,
+        departmentId = employee.DepartmentId,
+        jobRole = employee.JobRole
+    };
 
     private static EmployeeResponse ToResponse(Employee employee, string departmentName) =>
         new(
