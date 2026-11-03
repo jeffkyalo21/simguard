@@ -118,6 +118,43 @@ export async function getSim(id) {
   return sim;
 }
 
+/** GET /alerts with the AlertListItem API shape. */
+export async function listAlerts({ status, type, simId, minScore, sort = "createdAt", order = "desc", page, pageSize } = {}) {
+  await wait();
+  const db = readMockDb();
+  const allocationBySim = new Map(db.allocations.filter((item) => !item.returnedAt).map((item) => [item.simId, item]));
+  const items = db.alerts
+    .filter((alert) => (!status || alert.status === status)
+      && (!type || alert.type === type)
+      && (!simId || alert.simId === Number(simId))
+      && (minScore === undefined || alert.riskScore >= Number(minScore)))
+    .map((alert) => {
+      const sim = db.sims.find((item) => item.id === alert.simId);
+      const allocation = allocationBySim.get(alert.simId);
+      return {
+        id: alert.id,
+        simId: alert.simId,
+        simPhoneNumber: sim?.phoneNumber ?? "",
+        type: alert.type,
+        riskScore: alert.riskScore,
+        riskLevel: alert.riskLevel,
+        status: alert.status,
+        createdAt: alert.createdAt,
+        resolvedAt: alert.resolvedAt,
+        reasons: alert.reasons,
+        modelVersion: alert.modelVersion ?? "2026.10.1",
+        employeeName: allocation?.employeeName ?? null,
+        departmentName: allocation?.departmentName ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const primary = sort === "riskScore" ? a.riskScore - b.riskScore : a.createdAt.localeCompare(b.createdAt);
+      const compare = primary || a.id - b.id;
+      return order === "asc" ? compare : -compare;
+    });
+  return paged(items, page, pageSize);
+}
+
 /**
  * Server-side guard for /sims/[id]: ids outside the mock range are 404.
  * #20: replace with a GET /sims/{id} on the server.

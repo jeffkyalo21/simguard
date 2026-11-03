@@ -366,6 +366,36 @@ export const copy = {
     sharing: "Sharing",
     reselling: "Reselling",
     ghostUsage: "Ghost usage",
+    other: "Other",
+  },
+
+  alertStatus: { label: "Alert status", flagged: "Flagged", escalated: "Escalated", cleared: "Cleared" },
+  alerts: {
+    statusFilter: "Filter by status",
+    typeFilter: "Filter by type",
+    scoreFilter: "Minimum score",
+    minimumScore: "At least 80%",
+    sort: "Sort alerts",
+    newest: "Newest first",
+    highestRisk: "Highest risk",
+    noMatch: "No alerts match these filters",
+    employeeUnavailable: "No current employee",
+    departmentUnavailable: "No current department",
+    riskLevel: { high: "High risk", medium: "Medium risk", low: "Low risk" },
+  },
+
+  featureLabels: {
+    hotspot_session_ratio: "Share of sessions on hotspot",
+    hotspot_sum_7d: "Hotspot usage over 7 days",
+    hotspot_sessions: "Hotspot sessions",
+    offpeak_ratio: "Share of usage outside peak hours",
+    offpeak_mb: "Usage outside peak hours",
+    peak_mb: "Usage during peak hours",
+    total_mb: "Total data use",
+    bytes_per_session: "Data per session",
+    cohort_z_total_mb: "Data use versus similar SIMs",
+    billing_ratio: "Billed cost versus actual use",
+    mean_session_duration_s: "Average session duration",
   },
 
   units: {
@@ -434,6 +464,7 @@ export const copy = {
     time: "Time",
     action: "Action",
     actions: "Actions",
+    detected: "Detected",
   },
 
   sims: {

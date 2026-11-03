@@ -270,13 +270,38 @@ function buildAlerts(sims, random) {
   const assignedIds = sims.filter((s) => s.status === "assigned" && s.id > 8).map((s) => s.id);
 
   function add(simId, type, riskScore, status, createdMs) {
+    const featureSets = {
+      inactiveBilling: [
+        ["billing_ratio", 0.82, 0.36, "up"],
+        ["total_mb", 0.24, 0.27, "down"],
+        ["mean_session_duration_s", 0.31, 0.19, "down"],
+      ],
+      sharing: [
+        ["hotspot_session_ratio", 0.76, 0.36, "up"],
+        ["hotspot_sum_7d", 0.42, 0.27, "up"],
+        ["hotspot_sessions", 0.33, 0.19, "up"],
+      ],
+      reselling: [
+        ["offpeak_ratio", 0.79, 0.36, "up"],
+        ["offpeak_mb", 0.47, 0.27, "up"],
+        ["peak_mb", 0.28, 0.19, "down"],
+      ],
+      ghostUsage: [
+        ["total_mb", 0.84, 0.36, "up"],
+        ["bytes_per_session", 0.59, 0.27, "up"],
+        ["cohort_z_total_mb", 0.42, 0.19, "up"],
+      ],
+    };
     alerts.push({
       id: alerts.length + 1,
       simId,
       type,
       riskScore: Number(riskScore.toFixed(2)),
+      riskLevel: status === "flagged" ? "high" : status === "escalated" ? "medium" : undefined,
       status,
       createdAt: iso(createdMs),
+      modelVersion: "2026.10.1",
+      reasons: featureSets[type].map(([feature, value, contribution, direction]) => ({ feature, value, contribution, direction })),
       // Cleared alerts close two days after they open (never after "now").
       resolvedAt: status === "cleared" ? iso(Math.min(createdMs + 2 * DAY_MS, NOW_MS)) : null,
     });
