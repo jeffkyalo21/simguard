@@ -16,6 +16,7 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<Carrier> Carriers => Set<Carrier>();
     public DbSet<Sim> Sims => Set<Sim>();
     public DbSet<Allocation> Allocations => Set<Allocation>();
     public DbSet<Alert> Alerts => Set<Alert>();
@@ -93,6 +94,32 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
+        // Carriers
+        modelBuilder.Entity<Carrier>(entity =>
+        {
+            entity.ToTable("carriers");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .UseSerialColumn();
+
+            entity.Property(e => e.Name)
+                .HasColumnName("name")
+                .HasMaxLength(40)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("NOW()");
+
+            // Names are unique ignoring case. EF Core cannot model an index
+            // on lower(name), so the AddCarriers migration creates
+            // idx_carriers_name_lower with raw SQL.
+        });
+
         // SIMs
         modelBuilder.Entity<Sim>(entity =>
         {
@@ -119,10 +146,8 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasMaxLength(30)
                 .IsRequired();
 
-            entity.Property(e => e.Operator)
-                .HasColumnName("operator")
-                .HasMaxLength(50)
-                .IsRequired();
+            entity.Property(e => e.CarrierId)
+                .HasColumnName("carrier_id");
 
             entity.Property(e => e.PlanType)
                 .HasColumnName("plan_type")
@@ -153,6 +178,15 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
             entity.HasIndex(e => e.Status)
                 .HasDatabaseName("idx_sims_status");
+
+            entity.HasIndex(e => e.CarrierId)
+                .HasDatabaseName("idx_sims_carrier");
+
+            // A carrier with SIMs cannot be deleted.
+            entity.HasOne(e => e.Carrier)
+                .WithMany(c => c.Sims)
+                .HasForeignKey(e => e.CarrierId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // Allocations

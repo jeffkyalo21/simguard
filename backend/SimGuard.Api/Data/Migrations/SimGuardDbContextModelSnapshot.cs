@@ -559,6 +559,32 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("auth_events", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.Carrier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("carriers", (string)null);
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Department", b =>
                 {
                     b.Property<int>("Id")
@@ -706,6 +732,10 @@ namespace SimGuard.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CarrierId")
+                        .HasColumnType("integer")
+                        .HasColumnName("carrier_id");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -722,12 +752,6 @@ namespace SimGuard.Api.Data.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("monthly_cost");
-
-                    b.Property<string>("Operator")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("operator");
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
@@ -750,6 +774,9 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnName("status");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CarrierId")
+                        .HasDatabaseName("idx_sims_carrier");
 
                     b.HasIndex("Iccid")
                         .IsUnique();
@@ -926,6 +953,22 @@ namespace SimGuard.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Sim");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.Carrier", "Carrier")
+                        .WithMany("Sims")
+                        .HasForeignKey("CarrierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Carrier");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.Carrier", b =>
+                {
+                    b.Navigation("Sims");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.Department", b =>

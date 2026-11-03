@@ -256,7 +256,8 @@ Passwords, tokens and codes are never stored.
 | `POST /api/auth/mfa/enroll/*` | enrolment token | enrolment token | enrolment token | `MfaEnrollment` |
 | `GET /api/auth/me`, `POST /api/auth/change-password` | yes | yes | yes | `SignedIn` |
 | `GET /health/database` | yes | yes | yes | `CanRead` |
-| `GET` departments, employees, SIMs, allocations | yes | yes | yes | `CanRead` |
+| `GET` departments, employees, SIMs, allocations, carriers | yes | yes | yes | `CanRead` |
+| `POST/PUT/DELETE /api/carriers` | yes | no | no | `CanManageCarriers` |
 | `POST/PUT/DELETE /api/departments` | yes | no | no | `CanManageOrganisation` |
 | `POST/PUT/DELETE /api/employees` | yes | no | no | `CanManageOrganisation` |
 | `POST/PUT/DELETE /api/sims` | yes | no | no | `CanManageSims` |

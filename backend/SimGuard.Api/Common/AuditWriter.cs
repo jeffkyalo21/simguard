@@ -13,6 +13,9 @@ public static class AuditActions
     public const string SimUpdated = "sim.updated";
     public const string SimStatusChanged = "sim.status_changed";
     public const string SimDeleted = "sim.deleted";
+    public const string CarrierCreated = "carrier.created";
+    public const string CarrierRenamed = "carrier.renamed";
+    public const string CarrierDeleted = "carrier.deleted";
     public const string AllocationCreated = "allocation.created";
     public const string AllocationReturned = "allocation.returned";
     public const string DepartmentCreated = "department.created";

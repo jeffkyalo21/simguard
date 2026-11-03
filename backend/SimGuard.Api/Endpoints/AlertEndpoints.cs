@@ -262,7 +262,7 @@ public static class AlertEndpoints
                     a.Sim.Id,
                     a.Sim.PhoneNumber,
                     a.Sim.Iccid,
-                    a.Sim.Operator,
+                    a.Sim.Carrier.Name,
                     a.Sim.PlanType,
                     a.Sim.Status),
                 a.Sim.Allocations
