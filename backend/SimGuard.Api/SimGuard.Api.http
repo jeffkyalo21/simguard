@@ -1,6 +1,11 @@
 @SimGuard.Api_HostAddress = http://localhost:5275
 @api = {{SimGuard.Api_HostAddress}}/api
 
+# Every request except the status check needs an Admin access token.
+# Get one with backend/docs/auth-smoke.ps1 or the flow in backend/docs/auth.md
+# (login, then mfa/verify) and paste it here.
+@token = paste-an-admin-access-token-here
+
 # Run the requests top to bottom: later requests use ids returned by
 # earlier ones (named requests). Expected status codes are in the comments.
 
@@ -10,6 +15,7 @@ Accept: application/json
 
 ### Database health
 GET {{SimGuard.Api_HostAddress}}/health/database
+Authorization: Bearer {{token}}
 Accept: application/json
 
 
@@ -20,6 +26,7 @@ Accept: application/json
 ### 201 Create department
 # @name createDepartment
 POST {{api}}/departments
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "name": "Engineering" }
@@ -27,6 +34,7 @@ Content-Type: application/json
 ### 201 Create second department
 # @name createDepartment2
 POST {{api}}/departments
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "name": "Sales" }
@@ -36,36 +44,44 @@ Content-Type: application/json
 
 ### 409 Duplicate department name (case-insensitive)
 POST {{api}}/departments
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "name": "engineering" }
 
 ### 400 Missing name
 POST {{api}}/departments
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "name": "   " }
 
 ### 200 List departments (paged)
 GET {{api}}/departments?page=1&pageSize=20
+Authorization: Bearer {{token}}
 
 ### 400 Bad paging values
 GET {{api}}/departments?page=0&pageSize=0
+Authorization: Bearer {{token}}
 
 ### 200 Get department
 GET {{api}}/departments/{{departmentId}}
+Authorization: Bearer {{token}}
 
 ### 404 Unknown department
 GET {{api}}/departments/999999
+Authorization: Bearer {{token}}
 
 ### 200 Rename department
 PUT {{api}}/departments/{{departmentId2}}
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "name": "Sales EMEA" }
 
 ### 409 Rename to an existing name
 PUT {{api}}/departments/{{departmentId2}}
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "name": "Engineering" }
@@ -78,6 +94,7 @@ Content-Type: application/json
 ### 201 Create employee
 # @name createEmployee
 POST {{api}}/employees
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -90,6 +107,7 @@ Content-Type: application/json
 ### 201 Create manager (used as assignedBy)
 # @name createManager
 POST {{api}}/employees
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -104,6 +122,7 @@ Content-Type: application/json
 
 ### 409 Duplicate email
 POST {{api}}/employees
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -115,6 +134,7 @@ Content-Type: application/json
 
 ### 400 Invalid email and unknown department
 POST {{api}}/employees
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -126,18 +146,23 @@ Content-Type: application/json
 
 ### 200 List employees (filter, search, paging)
 GET {{api}}/employees?departmentId={{departmentId}}&search=ali&page=1&pageSize=20
+Authorization: Bearer {{token}}
 
 ### 400 Bad paging values
 GET {{api}}/employees?pageSize=-1
+Authorization: Bearer {{token}}
 
 ### 200 Get employee
 GET {{api}}/employees/{{employeeId}}
+Authorization: Bearer {{token}}
 
 ### 404 Unknown employee
 GET {{api}}/employees/999999
+Authorization: Bearer {{token}}
 
 ### 200 Update employee
 PUT {{api}}/employees/{{employeeId}}
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -149,9 +174,11 @@ Content-Type: application/json
 
 ### 200 Department employees (search, paging)
 GET {{api}}/departments/{{departmentId}}/employees?search=alice&page=1&pageSize=20
+Authorization: Bearer {{token}}
 
 ### 409 Delete department that still has employees
 DELETE {{api}}/departments/{{departmentId}}
+Authorization: Bearer {{token}}
 
 
 ###############################################################################
@@ -161,6 +188,7 @@ DELETE {{api}}/departments/{{departmentId}}
 ### 201 Create SIM (status in the body is ignored, starts "available")
 # @name createSim
 POST {{api}}/sims
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -175,6 +203,7 @@ Content-Type: application/json
 ### 201 Create second SIM
 # @name createSim2
 POST {{api}}/sims
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -190,6 +219,7 @@ Content-Type: application/json
 
 ### 409 Duplicate phone number
 POST {{api}}/sims
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -202,6 +232,7 @@ Content-Type: application/json
 
 ### 400 Negative cost and phone number too long
 POST {{api}}/sims
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -214,18 +245,23 @@ Content-Type: application/json
 
 ### 200 List SIMs (filters, search, paging)
 GET {{api}}/sims?status=available&operator=safaricom&planType=postpaid&search=2547&page=1&pageSize=20
+Authorization: Bearer {{token}}
 
 ### 400 Invalid status filter
 GET {{api}}/sims?status=lost
+Authorization: Bearer {{token}}
 
 ### 200 Get SIM (includes currentAllocation)
 GET {{api}}/sims/{{simId}}
+Authorization: Bearer {{token}}
 
 ### 404 Unknown SIM
 GET {{api}}/sims/999999
+Authorization: Bearer {{token}}
 
 ### 200 Update SIM (status cannot be changed here)
 PUT {{api}}/sims/{{simId}}
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -238,12 +274,14 @@ Content-Type: application/json
 
 ### 200 Set SIM 2 inactive
 PATCH {{api}}/sims/{{simId2}}/status
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "status": "inactive" }
 
 ### 400 "assigned" cannot be set through this route
 PATCH {{api}}/sims/{{simId2}}/status
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "status": "assigned" }
@@ -256,6 +294,7 @@ Content-Type: application/json
 ### 201 Assign SIM to employee
 # @name createAllocation
 POST {{api}}/allocations
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -268,6 +307,7 @@ Content-Type: application/json
 
 ### 409 Assign an already assigned SIM
 POST {{api}}/allocations
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -278,6 +318,7 @@ Content-Type: application/json
 
 ### 409 Assign an inactive SIM
 POST {{api}}/allocations
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -288,6 +329,7 @@ Content-Type: application/json
 
 ### 400 Unknown SIM and employees
 POST {{api}}/allocations
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -298,33 +340,42 @@ Content-Type: application/json
 
 ### 409 Set an assigned SIM inactive (return it first)
 PATCH {{api}}/sims/{{simId}}/status
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "status": "inactive" }
 
 ### 200 List allocations (filters, paging)
 GET {{api}}/allocations?simId={{simId}}&employeeId={{employeeId}}&active=true&page=1&pageSize=20
+Authorization: Bearer {{token}}
 
 ### 200 Get allocation
 GET {{api}}/allocations/{{allocationId}}
+Authorization: Bearer {{token}}
 
 ### 404 Unknown allocation
 GET {{api}}/allocations/999999
+Authorization: Bearer {{token}}
 
 ### 200 Employee allocations
 GET {{api}}/employees/{{employeeId}}/allocations?active=true
+Authorization: Bearer {{token}}
 
 ### 200 SIM allocations
 GET {{api}}/sims/{{simId}}/allocations?active=true
+Authorization: Bearer {{token}}
 
 ### 200 Return allocation (SIM goes back to "available")
 POST {{api}}/allocations/{{allocationId}}/return
+Authorization: Bearer {{token}}
 
 ### 409 Return twice
 POST {{api}}/allocations/{{allocationId}}/return
+Authorization: Bearer {{token}}
 
 ### 404 Return unknown allocation
 POST {{api}}/allocations/999999/return
+Authorization: Bearer {{token}}
 
 
 ###############################################################################
@@ -333,18 +384,24 @@ POST {{api}}/allocations/999999/return
 
 ### 409 Delete SIM with allocation history
 DELETE {{api}}/sims/{{simId}}
+Authorization: Bearer {{token}}
 
 ### 409 Delete employee with allocation history
 DELETE {{api}}/employees/{{employeeId}}
+Authorization: Bearer {{token}}
 
 ### 204 Delete SIM with no history
 DELETE {{api}}/sims/{{simId2}}
+Authorization: Bearer {{token}}
 
 ### 404 Delete unknown SIM
 DELETE {{api}}/sims/999999
+Authorization: Bearer {{token}}
 
 ### 404 Delete unknown employee
 DELETE {{api}}/employees/999999
+Authorization: Bearer {{token}}
 
 ### 404 Delete unknown department
 DELETE {{api}}/departments/999999
+Authorization: Bearer {{token}}
