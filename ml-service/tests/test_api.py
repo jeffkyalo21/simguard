@@ -262,9 +262,9 @@ def test_missing_artifact_fails_startup(partial_artifacts):
             pass
 
 
-def test_postgres_reader_is_a_stub():
-    app = create_app(Settings(artifact_dir=ARTIFACT_DIR, reader="postgres"))
-    with pytest.raises(NotImplementedError):
+def test_postgres_reader_needs_database_url():
+    app = create_app(Settings(artifact_dir=ARTIFACT_DIR, reader="postgres", database_url=""))
+    with pytest.raises(ValueError, match="ML_DATABASE_URL"):
         with TestClient(app):
             pass
 

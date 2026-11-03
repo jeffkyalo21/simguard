@@ -15,5 +15,5 @@ def make_reader(settings: Settings) -> UsageReader:
     if settings.reader == "postgres":
         from app.readers.postgres_reader import PostgresUsageReader
 
-        return PostgresUsageReader()
+        return PostgresUsageReader(settings.database_url)
     raise ValueError(f"Unknown READER {settings.reader!r}. Use one of: {', '.join(READERS)}")

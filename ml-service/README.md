@@ -20,7 +20,8 @@ venv/Scripts/python -m pip install -r requirements.txt
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `ML_ARTIFACT_DIR` | `ml-service/artifacts` | Folder with the model artifacts. The service will not start if one is missing. |
-| `READER` | `parquet` | Where daily usage comes from. `parquet` reads `data/synthetic_cdr_daily_agg.csv`. `postgres` is a stub and fails at startup. |
+| `READER` | `parquet` | Where daily usage comes from. `parquet` reads `data/synthetic_cdr_daily_agg.csv`. `postgres` reads the backend view `ml_daily_usage` (load it with `scripts/load_daily_usage.py`). |
+| `ML_DATABASE_URL` | none | Connection string for the postgres reader (libpq URI or key=value). Required when `READER=postgres`. Never commit it. |
 | `ML_DAILY_USAGE_PATH` | `data/synthetic_cdr_daily_agg.csv` | Daily usage file for the parquet reader (CSV or parquet). |
 | `ML_PROPHET_CHECKPOINTS` | `data/prophet_checkpoints.parquet` | Precomputed checkpoint forecasts, parquet reader only. |
 | `ML_USE_PRECOMPUTED_PROPHET` | `1` | `0` always fits Prophet instead of reading the precomputed forecasts. |
