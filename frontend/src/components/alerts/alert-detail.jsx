@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
 import { getAlert, getSimRisk, listSimActivity, setAlertStatus } from "@/lib/data";
-import { formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
+import { GATE_BANDS, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.alertDetail;
@@ -35,10 +35,10 @@ function activityLabel(entry) {
     const detail = entry.detail;
     return `${copy.alertTypes[detail.type] ?? detail.type} alert: ${copy.risk[detail.status] ?? detail.status}${detail.resolution ? ` (${copy.alertResolution[detail.resolution]})` : ""}`;
   }
-  if (entry.kind === "alert") return `Alert raised: ${copy.alertTypes[entry.detail] ?? entry.detail}`;
-  if (entry.kind === "allocated") return `Allocated to ${entry.detail}`;
-  if (entry.kind === "returned") return `Returned by ${entry.detail}`;
-  if (entry.kind === "created") return "SIM added";
+  if (entry.kind === "alert") return copy.simProfile.activity.alert(copy.alertTypes[entry.detail] ?? entry.detail);
+  if (entry.kind === "allocated") return copy.simProfile.activity.allocated(entry.detail);
+  if (entry.kind === "returned") return copy.simProfile.activity.returned(entry.detail);
+  if (entry.kind === "created") return copy.simProfile.activity.created;
   return copy.simProfile.activity[entry.kind] ?? entry.kind;
 }
 
@@ -103,7 +103,7 @@ function Investigation({ alert }) {
   }
 
   const riskHistory = risk.data?.history ?? [];
-  const showBands = riskHistory.some((point) => point.probability <= 0.1) && riskHistory.some((point) => point.probability >= 0.9);
+  const showBands = riskHistory.some((point) => point.probability <= GATE_BANDS.low) && riskHistory.some((point) => point.probability >= GATE_BANDS.high);
   const recentColumns = [
     { key: "date", header: copy.columns.date, cell: (item) => formatDateTime(item.createdAt) },
     { key: "type", header: copy.columns.type, cell: (item) => copy.alertTypes[item.type] ?? item.type },
@@ -158,7 +158,7 @@ function Investigation({ alert }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title={text.riskOverTime}>
           <DataState resource={risk} skeleton={<ChartSkeleton height={240} />}>
-            {(data) => data.history.length ? <LineChart data={data.history} xKey="date" yKey="probability" label={text.riskOverTime} formatX={formatShortDate} formatY={(value) => `${Math.round(value * 100)}%`} yDomain={[0, 1]} height={240} limits={showBands ? [{ y: 0.1, label: "10%" }, { y: 0.9, label: "90%" }] : []} /> : <p className="py-10 text-center text-sm text-muted-foreground">{text.noRisk}</p>}
+            {(data) => data.history.length ? <LineChart data={data.history} xKey="date" yKey="probability" label={text.riskOverTime} formatX={formatShortDate} formatY={(value) => `${Math.round(value * 100)}%`} yDomain={[0, 1]} height={240} limits={showBands ? [{ y: GATE_BANDS.low, label: `${GATE_BANDS.low * 100}%` }, { y: GATE_BANDS.high, label: `${GATE_BANDS.high * 100}%` }] : []} /> : <p className="py-10 text-center text-sm text-muted-foreground">{text.noRisk}</p>}
           </DataState>
         </SectionCard>
         <SectionCard title={text.recentAlerts}>

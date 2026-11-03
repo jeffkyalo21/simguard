@@ -4,6 +4,9 @@ import { copy } from "@/lib/copy";
 const TIME_ZONE = "Africa/Nairobi";
 const LOCALE = "en-KE";
 
+// These model gates change after a retrain and will come from the backend in #20.
+export const GATE_BANDS = { low: 0.1, high: 0.9 };
+
 const dateTimeFormat = new Intl.DateTimeFormat(LOCALE, {
   timeZone: TIME_ZONE,
   dateStyle: "medium",

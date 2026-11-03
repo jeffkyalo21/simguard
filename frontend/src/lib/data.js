@@ -22,6 +22,7 @@ import {
   fixtures,
 } from "@/lib/mock/fixtures";
 import { createRandom } from "@/lib/mock/random";
+import { GATE_BANDS } from "@/lib/format";
 import { createInitialState, readMockDb, writeMockDb } from "@/lib/mock/db";
 import { carrierNameError, normalizePhone, phoneSearchTerm, simFieldErrors } from "@/lib/validation";
 
@@ -205,15 +206,15 @@ export async function getSimRisk(simId, { days = 90 } = {}) {
   const history = Array.from({ length: Math.min(Number(days), 90) }, (_, index, all) => {
     const date = new Date(today.getTime() - (all.length - index - 1) * DAY_MS);
     const probability = Number(Math.max(0.02, Math.min(0.98, sim.riskScore * random.float(0.65, 1.08))).toFixed(4));
-    const bucket = probability >= 0.8 ? "flag" : probability >= 0.5 ? "escalated" : "clear";
+    const bucket = probability < GATE_BANDS.low ? "clear" : probability > GATE_BANDS.high ? "flag" : "escalated";
     return { date: date.toISOString().slice(0, 10), probability, bucket };
   });
   const newestAlert = alerts[0];
   const latestScore = {
     date: history.at(-1).date,
     probability: newestAlert.riskScore,
-    bucket: newestAlert.riskLevel === "high" ? "flag" : newestAlert.riskLevel === "medium" ? "escalated" : "clear",
-    riskLevel: newestAlert.riskLevel,
+    bucket: newestAlert.riskScore < GATE_BANDS.low ? "clear" : newestAlert.riskScore > GATE_BANDS.high ? "flag" : "escalated",
+    riskLevel: newestAlert.riskScore < GATE_BANDS.low ? "low" : newestAlert.riskScore > GATE_BANDS.high ? "high" : "medium",
     reasons: newestAlert.reasons,
     modelVersion: newestAlert.modelVersion ?? "2026.10.1",
     createdAt: newestAlert.createdAt,
