@@ -23,7 +23,7 @@ import {
   fixtures,
 } from "@/lib/mock/fixtures";
 import { createRandom } from "@/lib/mock/random";
-import { GATE_BANDS } from "@/lib/format";
+import { GATE_BANDS, dayToUtc, todayDay } from "@/lib/format";
 import { createInitialState, readMockDb, writeMockDb } from "@/lib/mock/db";
 import { carrierNameError, normalizePhone, phoneSearchTerm, simFieldErrors } from "@/lib/validation";
 
@@ -37,6 +37,8 @@ const MAX_PAGE_SIZE = 100;
  */
 export const referenceData = {
   departments: DEPARTMENTS.map((d) => d.name),
+  /** Departments with ids, for the employee filter of GET /employees. */
+  departmentItems: DEPARTMENTS.map(({ id, name }) => ({ id, name })),
   tiers: TIER_ORDER.map((name) => ({ name, ...TIERS[name] })),
   planTypes: PLAN_TYPES,
   statuses: ["assigned", "available", "inactive"],
@@ -653,6 +655,180 @@ export async function setSimTier(id, tier) {
   );
 }
 
+
+/* ----------------------------------------------------------- Allocations */
+
+/** The AllocationResponse shape, plus the employee's department. */
+function toAllocationResponse(allocation, db = readMockDb()) {
+  const sim = db.sims.find((item) => item.id === allocation.simId);
+  const assigner = db.employees.find((employee) => employee.id === allocation.assignedBy);
+  return {
+    id: allocation.id,
+    simId: allocation.simId,
+    simPhoneNumber: sim?.phoneNumber ?? "",
+    employeeId: allocation.employeeId,
+    employeeName: allocation.employeeName,
+    assignedBy: allocation.assignedBy,
+    assignedByName: assigner?.name ?? "",
+    assignmentDate: allocation.assignedAt,
+    returnDate: allocation.returnedAt,
+    isActive: !allocation.returnedAt,
+    // future field: the API's AllocationResponse has no department yet.
+    departmentName: allocation.departmentName,
+  };
+}
+
+/**
+ * GET /employees. #20: also returns email, jobRole and createdAt.
+ * @param {{ departmentId?: number | string, search?: string, page?: number,
+ *   pageSize?: number }} [query]
+ */
+export async function listEmployees({ departmentId, search, page, pageSize } = {}) {
+  await wait();
+  const text = search?.trim().toLowerCase();
+  const items = readMockDb()
+    .employees.filter((employee) => (!departmentId || employee.departmentId === Number(departmentId))
+      && (!text || employee.name.toLowerCase().includes(text)))
+    .map(({ id, name, departmentId: department, departmentName }) => ({ id, name, departmentId: department, departmentName }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return paged(items, page, pageSize);
+}
+
+/**
+ * GET /allocations, newest first. `status` is "active" or "ended" (the API's
+ * active=true or false); `q` matches the SIM number or the employee.
+ * future field: q and department are not API filters yet.
+ * @param {{ q?: string, status?: string, department?: string, page?: number,
+ *   pageSize?: number }} [query]
+ */
+export async function listAllocations({ q, status, department, page, pageSize } = {}) {
+  await wait();
+  if (status && !["active", "ended"].includes(status)) throw fieldError("status", "invalid");
+  const db = readMockDb();
+  const text = q?.trim().toLowerCase();
+  const phoneTerm = phoneSearchTerm(q);
+  const items = db.allocations
+    .filter((allocation) => (!status || (status === "active") === !allocation.returnedAt)
+      && (!department || allocation.departmentName === department))
+    .map((allocation) => toAllocationResponse(allocation, db))
+    .filter((item) => !text || item.simPhoneNumber.includes(phoneTerm) || item.employeeName.toLowerCase().includes(text))
+    .sort((a, b) => b.assignmentDate.localeCompare(a.assignmentDate) || b.id - a.id);
+  return paged(items, page, pageSize);
+}
+
+function conflict(detail) {
+  return new ApiError({ status: 409, title: "Conflict", detail });
+}
+
+/**
+ * POST /allocations. Same rules as the API: ids are required (400 per
+ * field), only an available SIM can be allocated and a SIM has one active
+ * allocation at most (409). assignedBy defaults to the signed-in user.
+ * future field: assignmentDate ("YYYY-MM-DD", not in the future); the API
+ * always uses the time of the request.
+ * @param {{ simId: number | string, employeeId: number | string,
+ *   assignedBy?: number | string, assignmentDate?: string }} body
+ */
+export async function createAllocation({ simId, employeeId, assignedBy = fixtures.assignerId, assignmentDate } = {}) {
+  await wait();
+  const db = readMockDb();
+  const errors = {};
+  const ids = { simId: Number(simId), employeeId: Number(employeeId), assignedBy: Number(assignedBy) };
+
+  for (const [field, value] of Object.entries(ids)) {
+    if (!Number.isInteger(value) || value <= 0) errors[field] = ["required"];
+  }
+
+  const now = new Date();
+  const today = dayToUtc(todayDay(now), "start");
+  const start = assignmentDate ? dayToUtc(assignmentDate, "start") : null;
+  if (assignmentDate !== undefined && !start) errors.assignmentDate = ["invalid"];
+  else if (start && start > today) errors.assignmentDate = ["future"];
+
+  const sim = db.sims.find((item) => item.id === ids.simId);
+  const employee = db.employees.find((item) => item.id === ids.employeeId);
+  if (!errors.simId && !sim) errors.simId = ["invalid"];
+  if (!errors.employeeId && !employee) errors.employeeId = ["invalid"];
+  if (!errors.assignedBy && !db.employees.some((item) => item.id === ids.assignedBy)) errors.assignedBy = ["invalid"];
+  if (Object.keys(errors).length) throw new ApiError({ status: 400, errors });
+
+  if (sim.status !== "available") {
+    throw conflict(`SIM ${sim.id} is '${sim.status}' and cannot be assigned. Only available SIMs can be assigned.`);
+  }
+  if (db.allocations.some((item) => item.simId === sim.id && !item.returnedAt)) {
+    throw conflict(`SIM ${sim.id} already has an active allocation.`);
+  }
+
+  // A start date of today uses the current time, like the API.
+  const assignedAt = !start || start === today ? now.toISOString() : new Date(Date.parse(start) + 9 * 3_600_000).toISOString();
+  const allocation = {
+    id: Math.max(0, ...db.allocations.map((item) => item.id)) + 1,
+    simId: sim.id,
+    employeeId: employee.id,
+    employeeName: employee.name,
+    departmentName: employee.departmentName,
+    assignedAt,
+    returnedAt: null,
+    assignedBy: ids.assignedBy,
+  };
+  const updatedSim = {
+    ...sim,
+    status: "assigned",
+    currentAllocation: {
+      allocationId: allocation.id,
+      employeeId: employee.id,
+      employeeName: employee.name,
+      departmentName: employee.departmentName,
+      assignedAt,
+    },
+  };
+
+  writeMockDb({
+    type: "allocation/saved",
+    allocation,
+    sim: updatedSim,
+    audit: auditRow(
+      "allocation.created",
+      sim,
+      { simStatus: sim.status },
+      { allocationId: allocation.id, employeeId: employee.id, assignedBy: ids.assignedBy, assignmentDate: assignedAt, simStatus: "assigned" }
+    ),
+  });
+  return toAllocationResponse(allocation);
+}
+
+/**
+ * POST /allocations/{id}/return. 404 when unknown, 409 when already ended.
+ * The SIM becomes available again unless it is inactive.
+ */
+export async function endAllocation(id) {
+  await wait();
+  const db = readMockDb();
+  const allocation = db.allocations.find((item) => item.id === Number(id));
+  if (!allocation) throw notFound();
+  if (allocation.returnedAt) {
+    throw conflict(`Allocation ${allocation.id} was already returned on ${allocation.returnedAt}.`);
+  }
+
+  const sim = db.sims.find((item) => item.id === allocation.simId);
+  const returnedAt = new Date().toISOString();
+  const ended = { ...allocation, returnedAt };
+  const status = sim.status === "inactive" ? "inactive" : "available";
+  const updatedSim = { ...sim, status, currentAllocation: null };
+
+  writeMockDb({
+    type: "allocation/saved",
+    allocation: ended,
+    sim: updatedSim,
+    audit: auditRow(
+      "allocation.returned",
+      sim,
+      { allocationId: allocation.id, returnDate: null, simStatus: sim.status },
+      { allocationId: allocation.id, returnDate: returnedAt, simStatus: status }
+    ),
+  });
+  return toAllocationResponse(ended);
+}
 
 /* -------------------------------------------------------------- Carriers */
 

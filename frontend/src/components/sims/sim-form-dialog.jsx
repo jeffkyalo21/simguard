@@ -59,7 +59,7 @@ function initialValues(sim) {
  *   onChange: (value: string) => void, placeholder?: string,
  *   disabled?: boolean, children?: React.ReactNode }} props
  */
-function SelectField({ id, label, value, options, error, onChange, placeholder = label, disabled, children }) {
+export function SelectField({ id, label, value, options, error, onChange, placeholder = label, disabled, children }) {
   return (
     <FormField id={id} label={label} error={error}>
       {(field) => (
