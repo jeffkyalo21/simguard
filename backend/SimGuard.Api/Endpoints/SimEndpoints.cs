@@ -346,6 +346,11 @@ public static class SimEndpoints
             return ApiProblems.Conflict($"SIM {id} has risk scores and cannot be deleted.");
         }
 
+        if (await db.DailyUsage.AnyAsync(u => u.SimId == id, cancellationToken))
+        {
+            return ApiProblems.Conflict($"SIM {id} has usage history and cannot be deleted.");
+        }
+
         // Earlier audit rows keep their history: the database sets their
         // affected_sim_id to null. The deletion row carries the SIM in
         // oldValues because the SIM no longer exists.

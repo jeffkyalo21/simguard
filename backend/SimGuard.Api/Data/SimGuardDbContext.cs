@@ -22,6 +22,7 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RiskScore> RiskScores => Set<RiskScore>();
+    public DbSet<DailyUsage> DailyUsage => Set<DailyUsage>();
     public DbSet<AuthEvent> AuthEvents => Set<AuthEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -416,6 +417,64 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
             entity.HasOne(e => e.Sim)
                 .WithMany(s => s.RiskScores)
+                .HasForeignKey(e => e.SimId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // Daily usage. Columns follow the ML contract
+        // (ml-service/docs/daily_usage_schema.md); none is nullable.
+        modelBuilder.Entity<DailyUsage>(entity =>
+        {
+            entity.ToTable("daily_usage", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_daily_usage_tier",
+                    "tier IN ('field', 'manager', 'professional', 'support')");
+            });
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .UseSerialColumn();
+
+            entity.Property(e => e.SimId).HasColumnName("sim_id");
+            entity.Property(e => e.Date).HasColumnName("date").HasColumnType("date");
+            entity.Property(e => e.TotalDownloadMb).HasColumnName("total_download_mb");
+            entity.Property(e => e.TotalUploadMb).HasColumnName("total_upload_mb");
+            entity.Property(e => e.DataSessionCount).HasColumnName("data_session_count");
+            entity.Property(e => e.DataDurationS).HasColumnName("data_duration_s");
+            entity.Property(e => e.HotspotSessions).HasColumnName("hotspot_sessions");
+            entity.Property(e => e.PublicApnSessions).HasColumnName("public_apn_sessions");
+            entity.Property(e => e.UniqueTowers).HasColumnName("unique_towers");
+            entity.Property(e => e.GeoFlagCount).HasColumnName("geo_flag_count");
+            entity.Property(e => e.PeakMb).HasColumnName("peak_mb");
+            entity.Property(e => e.OffpeakMb).HasColumnName("offpeak_mb");
+            entity.Property(e => e.TotalMb).HasColumnName("total_mb");
+            entity.Property(e => e.RoamingSessions).HasColumnName("roaming_sessions");
+            entity.Property(e => e.BilledMb).HasColumnName("billed_mb");
+
+            entity.Property(e => e.Tier)
+                .HasColumnName("tier")
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.VoiceMinutesUsed).HasColumnName("voice_minutes_used");
+            entity.Property(e => e.SmsCount).HasColumnName("sms_count");
+            entity.Property(e => e.VoiceMinutesRemaining).HasColumnName("voice_minutes_remaining");
+            entity.Property(e => e.SmsRemaining).HasColumnName("sms_remaining");
+
+            // One row per SIM per day: reloading a file updates rows in
+            // place (upsert on this index) instead of adding duplicates.
+            entity.HasIndex(e => new { e.SimId, e.Date })
+                .IsUnique()
+                .HasDatabaseName("idx_daily_usage_sim_date");
+
+            entity.HasIndex(e => e.Date)
+                .HasDatabaseName("idx_daily_usage_date");
+
+            entity.HasOne(e => e.Sim)
+                .WithMany(s => s.DailyUsage)
                 .HasForeignKey(e => e.SimId)
                 .OnDelete(DeleteBehavior.NoAction);
         });

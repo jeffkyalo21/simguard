@@ -24,4 +24,7 @@ public class Sim
 
     public ICollection<RiskScore> RiskScores { get; set; }
         = new List<RiskScore>();
+
+    public ICollection<DailyUsage> DailyUsage { get; set; }
+        = new List<DailyUsage>();
 }
