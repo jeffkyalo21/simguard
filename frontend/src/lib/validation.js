@@ -69,11 +69,12 @@ export function simFieldErrors(values) {
   return errors;
 }
 
+export const CARRIER_NAME_MIN_LENGTH = 2;
 export const CARRIER_NAME_MAX_LENGTH = 40;
 
 /**
- * Carrier name rules: required, at most 40 characters after trimming, and
- * unique ignoring case. Returns required, tooLong or taken, or null.
+ * Carrier name rules: required, 2 to 40 characters after trimming, and
+ * unique ignoring case. Returns required, tooShort, tooLong or taken, or null.
  * @param {string | null | undefined} name
  * @param {{ id: number, name: string }[]} carriers
  * @param {number} [excludeId] the carrier being renamed
@@ -81,6 +82,7 @@ export const CARRIER_NAME_MAX_LENGTH = 40;
 export function carrierNameError(name, carriers, excludeId) {
   const value = name?.trim() ?? "";
   if (!value) return "required";
+  if (value.length < CARRIER_NAME_MIN_LENGTH) return "tooShort";
   if (value.length > CARRIER_NAME_MAX_LENGTH) return "tooLong";
 
   const key = value.toLocaleLowerCase();

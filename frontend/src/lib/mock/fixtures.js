@@ -259,7 +259,120 @@ function buildFixtures() {
       : Number(random.float(0.04, 0.38).toFixed(2));
   }
 
-  return { employees, carriers: CARRIERS, sims, allocations, alerts };
+  // The signed-in user is also the employee who records allocations
+  // (the API's assignedBy). Added last so no other id moves.
+  const assigner = addEmployee(MOCK_USER.name, "IT");
+  for (const allocation of allocations) allocation.assignedBy = assigner.id;
+
+  const auditLogs = buildAuditLogs({ sims, allocations, alerts });
+
+  return { employees, assignerId: assigner.id, carriers: CARRIERS, sims, allocations, alerts, auditLogs };
+}
+
+/** The signed-in user in the mock world. #20: comes from the access token. */
+export const MOCK_USER = { id: 1, name: "Jeff", email: "jeff@simguard.local" };
+
+const AUDIT_ACTORS = [
+  { id: MOCK_USER.id, email: MOCK_USER.email },
+  { id: MOCK_USER.id, email: MOCK_USER.email },
+  { id: 2, email: "officer@simguard.local" },
+  { id: 3, email: "njeri.mwangi@simguard.local" },
+];
+const AUDIT_ACTIONS = ["sim.created", "sim.status_changed", "allocation.created", "allocation.returned", "alert.cleared", "alert.reopened"];
+const AUDIT_ROWS = 40;
+
+const carrierById = (id) => CARRIERS.find((carrier) => carrier.id === id)?.name ?? null;
+
+const simSnapshot = (sim, status) => ({
+  id: sim.id,
+  phoneNumber: sim.phoneNumber,
+  iccid: sim.iccid,
+  operator: carrierById(sim.carrierId),
+  planType: sim.planType,
+  monthlyCost: sim.monthlyCost,
+  status,
+});
+
+const alertSnapshot = (alert, status, resolution = null, resolvedAt = null, note = null) => ({
+  alertId: alert.id,
+  status,
+  resolution,
+  resolutionNote: note,
+  resolvedAt,
+  resolvedByUserId: resolution ? MOCK_USER.id : null,
+});
+
+// About 40 audit rows over the last 90 days, in the GET /audit-logs item
+// shape. A separate seed, so the other fixtures stay as they were.
+function buildAuditLogs({ sims, allocations, alerts }) {
+  const random = createRandom(19190);
+  const assigned = sims.filter((sim) => sim.currentAllocation);
+  const unassigned = sims.filter((sim) => !sim.currentAllocation);
+  const ended = allocations.filter((allocation) => allocation.returnedAt);
+  const cleared = alerts.filter((alert) => alert.status === "cleared");
+  const open = alerts.filter((alert) => alert.status !== "cleared");
+  const simById = new Map(sims.map((sim) => [sim.id, sim]));
+
+  const rows = Array.from({ length: AUDIT_ROWS }, (_, index) => {
+    const kind = AUDIT_ACTIONS[index % AUDIT_ACTIONS.length];
+    const timestamp = iso(Math.min(daysAgo(random.int(0, 89), random.int(0, 11)) - random.int(0, 59) * 60_000, NOW_MS));
+    let action = kind;
+    let sim;
+    let oldValues = null;
+    let newValues = null;
+
+    if (kind === "sim.created") {
+      sim = random.pick(unassigned);
+      newValues = simSnapshot(sim, "available");
+    } else if (kind === "sim.status_changed") {
+      sim = random.pick(unassigned);
+      const toInactive = random.next() < 0.5;
+      oldValues = { status: toInactive ? "available" : "inactive" };
+      newValues = { status: toInactive ? "inactive" : "available" };
+    } else if (kind === "allocation.created") {
+      sim = random.pick(assigned);
+      const allocation = sim.currentAllocation;
+      oldValues = { simStatus: "available" };
+      newValues = { allocationId: allocation.allocationId, employeeId: allocation.employeeId, assignedBy: allocations[0].assignedBy, assignmentDate: timestamp, simStatus: "assigned" };
+    } else if (kind === "allocation.returned") {
+      const allocation = random.pick(ended);
+      sim = simById.get(allocation.simId);
+      oldValues = { allocationId: allocation.id, returnDate: null, simStatus: "assigned" };
+      newValues = { allocationId: allocation.id, returnDate: timestamp, simStatus: "available" };
+    } else if (kind === "alert.cleared") {
+      const alert = random.pick(cleared);
+      const resolution = random.next() < 0.6 ? "falsePositive" : "confirmedMisuse";
+      sim = simById.get(alert.simId);
+      action = "alert.status_changed";
+      oldValues = alertSnapshot(alert, random.next() < 0.5 ? "flagged" : "escalated");
+      newValues = alertSnapshot(alert, "cleared", resolution, timestamp, resolution === "falsePositive" ? "Activity explained by the employee." : "Misuse confirmed with the line manager.");
+    } else {
+      const alert = random.pick(open);
+      sim = simById.get(alert.simId);
+      action = "alert.status_changed";
+      const clearedAt = iso(Date.parse(timestamp) - random.int(1, 3) * DAY_MS);
+      oldValues = alertSnapshot(alert, "cleared", "falsePositive", clearedAt, "Activity explained by the employee.");
+      newValues = alertSnapshot(alert, "escalated");
+    }
+
+    const actor = random.pick(AUDIT_ACTORS);
+
+    return {
+      timestamp,
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+      employeeId: null,
+      action,
+      affectedSimId: sim.id,
+      affectedSimPhoneNumber: sim.phoneNumber,
+      oldValues,
+      newValues,
+    };
+  });
+
+  return rows
+    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+    .map((row, index) => ({ id: index + 1, ...row }));
 }
 
 // Open alerts in the last 30 days total 62 (23, 18, 12, 9 by type), 14 of

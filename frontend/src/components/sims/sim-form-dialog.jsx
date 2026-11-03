@@ -59,7 +59,7 @@ function initialValues(sim) {
  *   onChange: (value: string) => void, placeholder?: string,
  *   disabled?: boolean, children?: React.ReactNode }} props
  */
-function SelectField({ id, label, value, options, error, onChange, placeholder = label, disabled, children }) {
+export function SelectField({ id, label, value, options, error, onChange, placeholder = label, disabled, children }) {
   return (
     <FormField id={id} label={label} error={error}>
       {(field) => (
@@ -180,7 +180,7 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
           {noCarriers && (
             <Link
               id={ADD_CARRIER_ID}
-              href="/settings"
+              href="/settings?tab=carriers"
               className="inline-flex min-h-6 w-fit items-center rounded-sm text-sm font-medium underline underline-offset-4 hover:text-foreground"
             >
               {text.addCarrier}
