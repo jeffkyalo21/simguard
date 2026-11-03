@@ -297,7 +297,7 @@ function buildAlerts(sims, random) {
       simId,
       type,
       riskScore: Number(riskScore.toFixed(2)),
-      riskLevel: status === "flagged" ? "high" : status === "escalated" ? "medium" : undefined,
+      riskLevel: status === "flagged" ? "high" : status === "escalated" ? "medium" : riskScore >= 0.9 ? "high" : "medium",
       status,
       createdAt: iso(createdMs),
       modelVersion: "2026.10.1",

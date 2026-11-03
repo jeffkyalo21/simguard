@@ -155,6 +155,106 @@ export async function listAlerts({ status, type, simId, minScore, sort = "create
   return paged(items, page, pageSize);
 }
 
+/** GET /alerts/{id}, including the SIM context used by investigation. */
+export async function getAlert(id) {
+  await wait();
+  const db = readMockDb();
+  const alert = db.alerts.find((item) => item.id === Number(id));
+  if (!alert) throw notFound();
+  const sim = db.sims.find((item) => item.id === alert.simId);
+  if (!sim) throw notFound();
+  const allocation = db.allocations
+    .filter((item) => item.simId === sim.id && !item.returnedAt)
+    .sort(byNewest("assignedAt"))[0] ?? null;
+  const recentAlerts = db.alerts
+    .filter((item) => item.simId === sim.id && item.id !== alert.id)
+    .sort(byNewest("createdAt"))
+    .slice(0, 5)
+    .map(({ id: alertId, type, riskScore, riskLevel, status, createdAt, resolvedAt }) => ({ id: alertId, type, riskScore, riskLevel, status, createdAt, resolvedAt }));
+  return {
+    ...alert,
+    modelVersion: alert.modelVersion ?? "2026.10.1",
+    resolution: alert.resolution ?? null,
+    resolutionNote: alert.resolutionNote ?? null,
+    resolvedBy: alert.resolvedBy ?? null,
+    sim: { id: sim.id, phoneNumber: sim.phoneNumber, iccid: sim.iccid, operator: readMockDb().carriers.find((carrier) => carrier.id === sim.carrierId)?.name ?? null, planType: sim.planType, status: sim.status },
+    currentAllocation: allocation ? { allocationId: allocation.id, employeeId: allocation.employeeId, employeeName: allocation.employeeName, departmentName: allocation.departmentName, assignedAt: allocation.assignedAt } : null,
+    recentAlerts,
+  };
+}
+
+/** Server route guard for alert detail so unknown ids return a real 404. */
+export function isPossibleAlertId(id) {
+  const value = Number(id);
+  return Number.isInteger(value) && value > 0 && fixtures.alerts.some((alert) => alert.id === value);
+}
+
+/** GET /sims/{id}/risk. Fixture-backed deterministic daily history. */
+export async function getSimRisk(simId, { days = 90 } = {}) {
+  await wait();
+  const db = readMockDb();
+  const sim = db.sims.find((item) => item.id === Number(simId));
+  if (!sim) throw notFound();
+  if (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 365) throw fieldError("days", "invalid");
+
+  const alerts = db.alerts.filter((item) => item.simId === sim.id).sort(byNewest("createdAt"));
+  if (!alerts.length) return { simId: sim.id, days: Number(days), latest: null, history: [] };
+
+  const random = createRandom(sim.id * 104729);
+  const today = new Date(`${new Date(NOW_MS).toISOString().slice(0, 10)}T00:00:00Z`);
+  const history = Array.from({ length: Math.min(Number(days), 90) }, (_, index, all) => {
+    const date = new Date(today.getTime() - (all.length - index - 1) * DAY_MS);
+    const probability = Number(Math.max(0.02, Math.min(0.98, sim.riskScore * random.float(0.65, 1.08))).toFixed(4));
+    const bucket = probability >= 0.8 ? "flag" : probability >= 0.5 ? "escalated" : "clear";
+    return { date: date.toISOString().slice(0, 10), probability, bucket };
+  });
+  const newestAlert = alerts[0];
+  const latestScore = {
+    date: history.at(-1).date,
+    probability: newestAlert.riskScore,
+    bucket: newestAlert.riskLevel === "high" ? "flag" : newestAlert.riskLevel === "medium" ? "escalated" : "clear",
+    riskLevel: newestAlert.riskLevel,
+    reasons: newestAlert.reasons,
+    modelVersion: newestAlert.modelVersion ?? "2026.10.1",
+    createdAt: newestAlert.createdAt,
+  };
+  history[history.length - 1] = { date: latestScore.date, probability: latestScore.probability, bucket: latestScore.bucket };
+  return { simId: sim.id, days: Number(days), latest: latestScore, history };
+}
+
+/** PATCH /alerts/{id}/status with contract transition and validation rules. */
+export async function setAlertStatus(id, { status, resolution, resolutionNote } = {}) {
+  await wait();
+  const alert = readMockDb().alerts.find((item) => item.id === Number(id));
+  if (!alert) throw notFound();
+  if (!["flagged", "escalated", "cleared"].includes(status)) throw fieldError("status", "invalid");
+  const closing = status === "cleared";
+  if (closing && !["confirmedMisuse", "falsePositive"].includes(resolution)) throw fieldError("resolution", resolution ? "invalid" : "required");
+  if (!closing && (resolution !== undefined || resolutionNote !== undefined)) throw fieldError(resolution !== undefined ? "resolution" : "resolutionNote", "invalid");
+  if (resolutionNote !== undefined && (typeof resolutionNote !== "string" || resolutionNote.length > 500)) throw fieldError("resolutionNote", "tooLong");
+
+  const allowed = (alert.status === "flagged" || alert.status === "escalated") && closing
+    || alert.status === "cleared" && status === "escalated"
+    || alert.status === "escalated" && status === "flagged";
+  if (!allowed) throw new ApiError({ status: 409, body: { currentStatus: alert.status } });
+
+  const at = new Date().toISOString();
+  const updated = {
+    ...alert,
+    status,
+    resolvedAt: closing ? at : null,
+    resolution: closing ? resolution : null,
+    resolutionNote: closing ? (resolutionNote?.trim() || null) : null,
+    resolvedBy: closing ? { id: 2, name: "Security Officer", email: "officer@simguard.local" } : null,
+  };
+  writeMockDb({
+    type: "alert/changed",
+    alert: updated,
+    activity: { id: `alert-${alert.id}-${at}`, simId: alert.simId, at, kind: "alertStatus", detail: { type: alert.type, status, resolution: updated.resolution } },
+  });
+  return getAlert(id);
+}
+
 /**
  * Server-side guard for /sims/[id]: ids outside the mock range are 404.
  * #20: replace with a GET /sims/{id} on the server.

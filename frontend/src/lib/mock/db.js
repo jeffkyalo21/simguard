@@ -40,6 +40,13 @@ export function mockReducer(state, action) {
         activity: [...state.activity, action.activity],
       };
     }
+    case "alert/changed":
+      return {
+        ...state,
+        version: state.version + 1,
+        alerts: state.alerts.map((alert) => alert.id === action.alert.id ? action.alert : alert),
+        activity: [...state.activity, action.activity],
+      };
     case "carrier/saved": {
       const exists = state.carriers.some((carrier) => carrier.id === action.carrier.id);
 
