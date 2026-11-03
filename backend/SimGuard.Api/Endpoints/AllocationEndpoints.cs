@@ -113,6 +113,7 @@ public static class AllocationEndpoints
     private static async Task<IResult> CreateAllocation(
         CreateAllocationRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -181,10 +182,26 @@ public static class AllocationEndpoints
                 AssignmentDate = Timestamps.UtcNow()
             };
 
+            var oldSimStatus = sim.Status;
             db.Allocations.Add(allocation);
             sim.Status = SimStatuses.Assigned;
 
             await db.SaveChangesAsync(cancellationToken);
+
+            await audit.WriteAsync(
+                AuditActions.AllocationCreated,
+                simId,
+                new { simStatus = oldSimStatus },
+                new
+                {
+                    allocationId = allocation.Id,
+                    employeeId,
+                    assignedBy,
+                    assignmentDate = allocation.AssignmentDate,
+                    simStatus = sim.Status
+                },
+                cancellationToken);
+
             await transaction.CommitAsync(cancellationToken);
 
             allocationId = allocation.Id;
@@ -198,6 +215,7 @@ public static class AllocationEndpoints
     private static async Task<IResult> ReturnAllocation(
         int id,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
@@ -222,6 +240,7 @@ public static class AllocationEndpoints
 
             var sim = await SimEndpoints.LockSimAsync(db, allocation.SimId, cancellationToken);
 
+            var oldSimStatus = sim?.Status;
             allocation.ReturnDate = Timestamps.UtcNow();
 
             // An inactive SIM stays inactive after its allocation is returned.
@@ -229,6 +248,12 @@ public static class AllocationEndpoints
             {
                 sim.Status = SimStatuses.Available;
             }
+
+            audit.Add(
+                AuditActions.AllocationReturned,
+                allocation.SimId,
+                new { allocationId = allocation.Id, returnDate = (DateTime?)null, simStatus = oldSimStatus },
+                new { allocationId = allocation.Id, returnDate = allocation.ReturnDate, simStatus = sim?.Status });
 
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);

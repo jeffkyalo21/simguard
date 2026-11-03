@@ -25,8 +25,14 @@ public static class AuthPolicies
     // /api/users.
     public const string CanManageUsers = nameof(CanManageUsers);
 
-    // GET /api/auth/events.
+    // GET /api/auth/events and GET /api/audit-logs.
     public const string CanReadAudit = nameof(CanReadAudit);
+
+    // PATCH /api/alerts/{id}/status.
+    public const string CanReviewAlerts = nameof(CanReviewAlerts);
+
+    // POST /api/dev/seed-demo. Only mapped in Development.
+    public const string CanUseDevTools = nameof(CanUseDevTools);
 
     // GET /api/auth/me and POST /api/auth/change-password. The only policy a
     // user with a pending forced password change can satisfy.
@@ -67,6 +73,12 @@ public static class AuthPolicies
                 .Build())
             .AddPolicy(CanReadAudit, FullAccess()
                 .RequireRole(AppRoles.Admin, AppRoles.Auditor)
+                .Build())
+            .AddPolicy(CanReviewAlerts, FullAccess()
+                .RequireRole(AppRoles.Admin, AppRoles.SecurityOfficer)
+                .Build())
+            .AddPolicy(CanUseDevTools, FullAccess()
+                .RequireRole(AppRoles.Admin)
                 .Build())
             .AddPolicy(SignedIn, new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()

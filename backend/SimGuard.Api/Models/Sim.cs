@@ -19,4 +19,7 @@ public class Sim
 
     public ICollection<AuditLog> AuditLogs { get; set; }
         = new List<AuditLog>();
+
+    public ICollection<RiskScore> RiskScores { get; set; }
+        = new List<RiskScore>();
 }

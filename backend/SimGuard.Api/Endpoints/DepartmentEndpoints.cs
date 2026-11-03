@@ -100,6 +100,7 @@ public static class DepartmentEndpoints
     private static async Task<IResult> CreateDepartment(
         DepartmentRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -117,8 +118,18 @@ public static class DepartmentEndpoints
 
         var department = new Department { Name = name };
 
-        db.Departments.Add(department);
-        await db.SaveChangesAsync(cancellationToken);
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            db.Departments.Add(department);
+            await db.SaveChangesAsync(cancellationToken);
+            await audit.WriteAsync(
+                AuditActions.DepartmentCreated,
+                null,
+                null,
+                new { id = department.Id, name = department.Name },
+                cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         return TypedResults.Created(
             $"/api/departments/{department.Id}",
@@ -129,6 +140,7 @@ public static class DepartmentEndpoints
         int id,
         DepartmentRequest request,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -152,7 +164,13 @@ public static class DepartmentEndpoints
             return ApiProblems.Conflict($"A department named '{name}' already exists.");
         }
 
+        var oldName = department.Name;
         department.Name = name;
+        audit.Add(
+            AuditActions.DepartmentUpdated,
+            null,
+            new { id = department.Id, name = oldName },
+            new { id = department.Id, name = department.Name });
         await db.SaveChangesAsync(cancellationToken);
 
         var employeeCount = await db.Employees
@@ -164,6 +182,7 @@ public static class DepartmentEndpoints
     private static async Task<IResult> DeleteDepartment(
         int id,
         SimGuardDbContext db,
+        AuditWriter audit,
         CancellationToken cancellationToken)
     {
         var department = await db.Departments
@@ -183,6 +202,7 @@ public static class DepartmentEndpoints
                 $"Department {id} still has {employeeCount} employee(s). Move or delete them first.");
         }
 
+        audit.Add(AuditActions.DepartmentDeleted, null, new { id = department.Id, name = department.Name }, null);
         db.Departments.Remove(department);
         await db.SaveChangesAsync(cancellationToken);
 

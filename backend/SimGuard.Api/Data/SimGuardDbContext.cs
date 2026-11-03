@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using SimGuard.Api.Common;
 using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Data;
@@ -19,6 +20,7 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
     public DbSet<Allocation> Allocations => Set<Allocation>();
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<RiskScore> RiskScores => Set<RiskScore>();
     public DbSet<AuthEvent> AuthEvents => Set<AuthEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -210,12 +212,24 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
             entity.ToTable("alerts", table =>
             {
                 table.HasCheckConstraint(
+                    "CK_alerts_type",
+                    "type IN ('inactiveBilling', 'sharing', 'reselling', 'ghostUsage', 'other')");
+
+                table.HasCheckConstraint(
                     "CK_alerts_risk_level",
-                    "risk_level IN ('low', 'medium', 'high', 'critical')");
+                    "risk_level IN ('high', 'medium', 'low')");
 
                 table.HasCheckConstraint(
                     "CK_alerts_status",
-                    "status IN ('open', 'investigating', 'resolved')");
+                    "status IN ('flagged', 'escalated', 'cleared')");
+
+                table.HasCheckConstraint(
+                    "CK_alerts_risk_score",
+                    "risk_score >= 0 AND risk_score <= 1");
+
+                table.HasCheckConstraint(
+                    "CK_alerts_resolution",
+                    "resolution IS NULL OR resolution IN ('confirmedMisuse', 'falsePositive')");
             });
 
             entity.HasKey(e => e.Id);
@@ -227,8 +241,8 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
             entity.Property(e => e.SimId)
                 .HasColumnName("sim_id");
 
-            entity.Property(e => e.AlertType)
-                .HasColumnName("alert_type")
+            entity.Property(e => e.Type)
+                .HasColumnName("type")
                 .HasMaxLength(50)
                 .IsRequired();
 
@@ -242,16 +256,41 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasMaxLength(20)
                 .IsRequired();
 
-            entity.Property(e => e.DetectedAt)
-                .HasColumnName("detected_at")
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
                 .HasColumnType("timestamp with time zone")
                 .HasDefaultValueSql("NOW()");
 
             entity.Property(e => e.Status)
                 .HasColumnName("status")
                 .HasMaxLength(20)
-                .HasDefaultValue("open")
+                .HasDefaultValue("flagged")
                 .IsRequired();
+
+            entity.Property(e => e.Reasons)
+                .HasColumnName("reasons")
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .IsRequired();
+
+            entity.Property(e => e.ModelVersion)
+                .HasColumnName("model_version")
+                .HasMaxLength(50);
+
+            entity.Property(e => e.ResolvedAt)
+                .HasColumnName("resolved_at")
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.Resolution)
+                .HasColumnName("resolution")
+                .HasMaxLength(20);
+
+            entity.Property(e => e.ResolutionNote)
+                .HasColumnName("resolution_note")
+                .HasMaxLength(AlertResolutions.MaxNoteLength);
+
+            entity.Property(e => e.ResolvedByUserId)
+                .HasColumnName("resolved_by_user_id");
 
             entity.HasIndex(e => e.SimId)
                 .HasDatabaseName("idx_alerts_sim");
@@ -259,8 +298,90 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
             entity.HasIndex(e => e.Status)
                 .HasDatabaseName("idx_alerts_status");
 
+            entity.HasIndex(e => e.CreatedAt)
+                .HasDatabaseName("idx_alerts_created_at");
+
+            entity.HasIndex(e => e.ModelVersion)
+                .HasDatabaseName("idx_alerts_model_version");
+
             entity.HasOne(e => e.Sim)
                 .WithMany(s => s.Alerts)
+                .HasForeignKey(e => e.SimId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(e => e.ResolvedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.ResolvedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Risk scores
+        modelBuilder.Entity<RiskScore>(entity =>
+        {
+            entity.ToTable("risk_scores", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_risk_scores_bucket",
+                    "bucket IN ('clear', 'escalated', 'flag')");
+
+                table.HasCheckConstraint(
+                    "CK_risk_scores_probability",
+                    "probability >= 0 AND probability <= 1");
+            });
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .UseSerialColumn();
+
+            entity.Property(e => e.SimId)
+                .HasColumnName("sim_id");
+
+            entity.Property(e => e.Date)
+                .HasColumnName("date")
+                .HasColumnType("date");
+
+            entity.Property(e => e.Probability)
+                .HasColumnName("probability")
+                .HasPrecision(5, 4)
+                .IsRequired();
+
+            entity.Property(e => e.Bucket)
+                .HasColumnName("bucket")
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.Reasons)
+                .HasColumnName("reasons")
+                .HasColumnType("jsonb")
+                .HasDefaultValueSql("'[]'::jsonb")
+                .IsRequired();
+
+            entity.Property(e => e.ModelVersion)
+                .HasColumnName("model_version")
+                .HasMaxLength(50);
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("NOW()");
+
+            // One score per SIM per day. Date is descending so the same
+            // index also serves the latest-first lookups for a SIM.
+            entity.HasIndex(e => new { e.SimId, e.Date })
+                .IsUnique()
+                .IsDescending(false, true)
+                .HasDatabaseName("idx_risk_scores_sim_date");
+
+            entity.HasIndex(e => e.Date)
+                .HasDatabaseName("idx_risk_scores_date");
+
+            entity.HasIndex(e => e.ModelVersion)
+                .HasDatabaseName("idx_risk_scores_model_version");
+
+            entity.HasOne(e => e.Sim)
+                .WithMany(s => s.RiskScores)
                 .HasForeignKey(e => e.SimId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
@@ -278,6 +399,13 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
             entity.Property(e => e.UserId)
                 .HasColumnName("user_id");
+
+            entity.Property(e => e.ActorUserId)
+                .HasColumnName("actor_user_id");
+
+            entity.Property(e => e.ActorEmail)
+                .HasColumnName("actor_email")
+                .HasMaxLength(256);
 
             entity.Property(e => e.Action)
                 .HasColumnName("action")
@@ -306,15 +434,30 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
             entity.HasIndex(e => e.UserId)
                 .HasDatabaseName("idx_audit_logs_user");
 
+            entity.HasIndex(e => e.ActorUserId)
+                .HasDatabaseName("idx_audit_logs_actor");
+
+            entity.HasIndex(e => e.AffectedSimId)
+                .HasDatabaseName("idx_audit_logs_sim");
+
+            entity.HasIndex(e => e.Action)
+                .HasDatabaseName("idx_audit_logs_action");
+
             entity.HasOne(e => e.User)
                 .WithMany(e => e.AuditLogs)
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.NoAction);
 
+            entity.HasOne(e => e.ActorUser)
+                .WithMany()
+                .HasForeignKey(e => e.ActorUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Audit history outlives the SIM it describes.
             entity.HasOne(e => e.AffectedSim)
                 .WithMany(s => s.AuditLogs)
                 .HasForeignKey(e => e.AffectedSimId)
-                .OnDelete(DeleteBehavior.NoAction);
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         ConfigureIdentity(modelBuilder);

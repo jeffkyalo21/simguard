@@ -264,6 +264,10 @@ Passwords, tokens and codes are never stored.
 | `POST /api/allocations`, `POST /api/allocations/{id}/return` | yes | yes | no | `CanManageAllocations` |
 | `/api/users/*` | yes | no | no | `CanManageUsers` |
 | `GET /api/auth/events` | yes | no | yes | `CanReadAudit` |
+| `GET` alerts, risk scores, SIM risk and activity, dashboard summary | yes | yes | yes | `CanRead` |
+| `PATCH /api/alerts/{id}/status` | yes | yes | no | `CanReviewAlerts` |
+| `GET /api/audit-logs` | yes | no | yes | `CanReadAudit` |
+| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `CanUseDevTools` |
 
 Policies are defined in `SimGuard.Api/Common/Authorization/AuthPolicies.cs`.
 A fallback policy requires a full access token for any endpoint that does
