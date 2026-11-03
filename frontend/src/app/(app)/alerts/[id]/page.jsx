@@ -1,5 +1,6 @@
-import { Bell } from "lucide-react";
-import { PlaceholderPage } from "@/components/shared/placeholder-page";
+import { notFound } from "next/navigation";
+import { AlertDetail } from "@/components/alerts/alert-detail";
+import { isPossibleAlertId } from "@/lib/data";
 import { copy } from "@/lib/copy";
 
 export const metadata = { title: copy.pages.alertDetail.title };
@@ -10,6 +11,7 @@ export const metadata = { title: copy.pages.alertDetail.title };
 export const instant = false;
 
 export default async function AlertDetailPage({ params }) {
-  await params;
-  return <PlaceholderPage {...copy.pages.alertDetail} icon={Bell} />;
+  const { id } = await params;
+  if (!isPossibleAlertId(id)) notFound();
+  return <AlertDetail id={Number(id)} />;
 }

@@ -22,6 +22,7 @@ import {
   fixtures,
 } from "@/lib/mock/fixtures";
 import { createRandom } from "@/lib/mock/random";
+import { GATE_BANDS } from "@/lib/format";
 import { createInitialState, readMockDb, writeMockDb } from "@/lib/mock/db";
 import { carrierNameError, normalizePhone, phoneSearchTerm, simFieldErrors } from "@/lib/validation";
 
@@ -116,6 +117,143 @@ export async function getSim(id) {
   const sim = findSim(id);
   if (!sim) throw notFound();
   return sim;
+}
+
+/** GET /alerts with the AlertListItem API shape. */
+export async function listAlerts({ status, type, simId, minScore, sort = "createdAt", order = "desc", page, pageSize } = {}) {
+  await wait();
+  const db = readMockDb();
+  const allocationBySim = new Map(db.allocations.filter((item) => !item.returnedAt).map((item) => [item.simId, item]));
+  const items = db.alerts
+    .filter((alert) => (!status || alert.status === status)
+      && (!type || alert.type === type)
+      && (!simId || alert.simId === Number(simId))
+      && (minScore === undefined || alert.riskScore >= Number(minScore)))
+    .map((alert) => {
+      const sim = db.sims.find((item) => item.id === alert.simId);
+      const allocation = allocationBySim.get(alert.simId);
+      return {
+        id: alert.id,
+        simId: alert.simId,
+        simPhoneNumber: sim?.phoneNumber ?? "",
+        type: alert.type,
+        riskScore: alert.riskScore,
+        riskLevel: alert.riskLevel,
+        status: alert.status,
+        createdAt: alert.createdAt,
+        resolvedAt: alert.resolvedAt,
+        reasons: alert.reasons,
+        modelVersion: alert.modelVersion ?? "2026.10.1",
+        employeeName: allocation?.employeeName ?? null,
+        departmentName: allocation?.departmentName ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const primary = sort === "riskScore" ? a.riskScore - b.riskScore : a.createdAt.localeCompare(b.createdAt);
+      const compare = primary || a.id - b.id;
+      return order === "asc" ? compare : -compare;
+    });
+  return paged(items, page, pageSize);
+}
+
+/** GET /alerts/{id}, including the SIM context used by investigation. */
+export async function getAlert(id) {
+  await wait();
+  const db = readMockDb();
+  const alert = db.alerts.find((item) => item.id === Number(id));
+  if (!alert) throw notFound();
+  const sim = db.sims.find((item) => item.id === alert.simId);
+  if (!sim) throw notFound();
+  const allocation = db.allocations
+    .filter((item) => item.simId === sim.id && !item.returnedAt)
+    .sort(byNewest("assignedAt"))[0] ?? null;
+  const recentAlerts = db.alerts
+    .filter((item) => item.simId === sim.id && item.id !== alert.id)
+    .sort(byNewest("createdAt"))
+    .slice(0, 5)
+    .map(({ id: alertId, type, riskScore, riskLevel, status, createdAt, resolvedAt }) => ({ id: alertId, type, riskScore, riskLevel, status, createdAt, resolvedAt }));
+  return {
+    ...alert,
+    modelVersion: alert.modelVersion ?? "2026.10.1",
+    resolution: alert.resolution ?? null,
+    resolutionNote: alert.resolutionNote ?? null,
+    resolvedBy: alert.resolvedBy ?? null,
+    sim: { id: sim.id, phoneNumber: sim.phoneNumber, iccid: sim.iccid, operator: readMockDb().carriers.find((carrier) => carrier.id === sim.carrierId)?.name ?? null, planType: sim.planType, status: sim.status },
+    currentAllocation: allocation ? { allocationId: allocation.id, employeeId: allocation.employeeId, employeeName: allocation.employeeName, departmentName: allocation.departmentName, assignedAt: allocation.assignedAt } : null,
+    recentAlerts,
+  };
+}
+
+/** Server route guard for alert detail so unknown ids return a real 404. */
+export function isPossibleAlertId(id) {
+  const value = Number(id);
+  return Number.isInteger(value) && value > 0 && fixtures.alerts.some((alert) => alert.id === value);
+}
+
+/** GET /sims/{id}/risk. Fixture-backed deterministic daily history. */
+export async function getSimRisk(simId, { days = 90 } = {}) {
+  await wait();
+  const db = readMockDb();
+  const sim = db.sims.find((item) => item.id === Number(simId));
+  if (!sim) throw notFound();
+  if (!Number.isInteger(Number(days)) || Number(days) < 1 || Number(days) > 365) throw fieldError("days", "invalid");
+
+  const alerts = db.alerts.filter((item) => item.simId === sim.id).sort(byNewest("createdAt"));
+  if (!alerts.length) return { simId: sim.id, days: Number(days), latest: null, history: [] };
+
+  const random = createRandom(sim.id * 104729);
+  const today = new Date(`${new Date(NOW_MS).toISOString().slice(0, 10)}T00:00:00Z`);
+  const history = Array.from({ length: Math.min(Number(days), 90) }, (_, index, all) => {
+    const date = new Date(today.getTime() - (all.length - index - 1) * DAY_MS);
+    const probability = Number(Math.max(0.02, Math.min(0.98, sim.riskScore * random.float(0.65, 1.08))).toFixed(4));
+    const bucket = probability < GATE_BANDS.low ? "clear" : probability > GATE_BANDS.high ? "flag" : "escalated";
+    return { date: date.toISOString().slice(0, 10), probability, bucket };
+  });
+  const newestAlert = alerts[0];
+  const latestScore = {
+    date: history.at(-1).date,
+    probability: newestAlert.riskScore,
+    bucket: newestAlert.riskScore < GATE_BANDS.low ? "clear" : newestAlert.riskScore > GATE_BANDS.high ? "flag" : "escalated",
+    riskLevel: newestAlert.riskScore < GATE_BANDS.low ? "low" : newestAlert.riskScore > GATE_BANDS.high ? "high" : "medium",
+    reasons: newestAlert.reasons,
+    modelVersion: newestAlert.modelVersion ?? "2026.10.1",
+    createdAt: newestAlert.createdAt,
+  };
+  history[history.length - 1] = { date: latestScore.date, probability: latestScore.probability, bucket: latestScore.bucket };
+  return { simId: sim.id, days: Number(days), latest: latestScore, history };
+}
+
+/** PATCH /alerts/{id}/status with contract transition and validation rules. */
+export async function setAlertStatus(id, { status, resolution, resolutionNote } = {}) {
+  await wait();
+  const alert = readMockDb().alerts.find((item) => item.id === Number(id));
+  if (!alert) throw notFound();
+  if (!["flagged", "escalated", "cleared"].includes(status)) throw fieldError("status", "invalid");
+  const closing = status === "cleared";
+  if (closing && !["confirmedMisuse", "falsePositive"].includes(resolution)) throw fieldError("resolution", resolution ? "invalid" : "required");
+  if (!closing && (resolution !== undefined || resolutionNote !== undefined)) throw fieldError(resolution !== undefined ? "resolution" : "resolutionNote", "invalid");
+  if (resolutionNote !== undefined && (typeof resolutionNote !== "string" || resolutionNote.length > 500)) throw fieldError("resolutionNote", "tooLong");
+
+  const allowed = (alert.status === "flagged" || alert.status === "escalated") && closing
+    || alert.status === "cleared" && status === "escalated"
+    || alert.status === "escalated" && status === "flagged";
+  if (!allowed) throw new ApiError({ status: 409, body: { currentStatus: alert.status } });
+
+  const at = new Date().toISOString();
+  const updated = {
+    ...alert,
+    status,
+    resolvedAt: closing ? at : null,
+    resolution: closing ? resolution : null,
+    resolutionNote: closing ? (resolutionNote?.trim() || null) : null,
+    resolvedBy: closing ? { id: 2, name: "Security Officer", email: "officer@simguard.local" } : null,
+  };
+  writeMockDb({
+    type: "alert/changed",
+    alert: updated,
+    activity: { id: `alert-${alert.id}-${at}`, simId: alert.simId, at, kind: "alertStatus", detail: { type: alert.type, status, resolution: updated.resolution } },
+  });
+  return getAlert(id);
 }
 
 /**
@@ -256,6 +394,73 @@ function dataWaste(db, days) {
 export async function getDashboard(days = 30) {
   await wait();
   return buildDashboard(readMockDb(), days, mockMode() === "empty");
+}
+
+/** Usage analytics from the same per-SIM usage series and waste estimate used by the dashboard. */
+export async function getUsageAnalytics({ days = 30, department, plan } = {}) {
+  await wait();
+  if (![7, 30, 90].includes(Number(days))) throw fieldError("days", "invalid");
+  const db = readMockDb();
+  const assigned = db.sims.filter((sim) => sim.status === "assigned");
+  const filtered = assigned.filter((sim) => (!department || sim.currentAllocation?.departmentName === department)
+    && (!plan || sim.planType === plan));
+  const filteredDb = { ...db, sims: filtered };
+  const waste = dataWaste(filteredDb, Number(days));
+  const simUsage = await Promise.all(filtered.map(async (sim) => ({ sim, usage: await getSimUsage(sim.id) })));
+  const rawUsed = simUsage.reduce((sum, item) => sum + item.usage.data.used, 0);
+  const usageScale = rawUsed > 0 ? waste.usedGb / rawUsed : 0;
+  const usageRows = simUsage.map(({ sim, usage }) => ({
+    id: sim.id,
+    phoneNumber: sim.phoneNumber,
+    employeeName: sim.currentAllocation?.employeeName ?? null,
+    departmentName: sim.currentAllocation?.departmentName ?? null,
+    planType: sim.planType,
+    dataUsedGb: usage.data.used * usageScale,
+    dataPaidGb: TIERS[sim.tier].bundleGb * Number(days) / CYCLE_LENGTH,
+  }));
+  const byGroup = (key, labelKey) => {
+    const groups = new Map();
+    for (const row of usageRows) {
+      const name = row[key] ?? "Unassigned";
+      const group = groups.get(name) ?? { [labelKey]: name, dataUsedGb: 0, dataPaidGb: 0 };
+      group.dataUsedGb += row.dataUsedGb;
+      group.dataPaidGb += row.dataPaidGb;
+      groups.set(name, group);
+    }
+    return [...groups.values()].sort((a, b) => b.dataUsedGb - a.dataUsedGb);
+  };
+
+  const cycleWeights = Array.from({ length: CYCLE_DAY }, (_, index) => simUsage.reduce((sum, item) => {
+    const current = item.usage.series[index]?.gb ?? 0;
+    const previous = item.usage.series[index - 1]?.gb ?? 0;
+    return sum + Math.max(current - previous, 0);
+  }, 0));
+  const dailyWeights = Array.from({ length: Number(days) }, (_, index) => cycleWeights[index % cycleWeights.length] ?? 0);
+  const totalWeight = dailyWeights.reduce((sum, value) => sum + value, 0);
+  const today = new Date(`${new Date(NOW_MS).toISOString().slice(0, 10)}T00:00:00Z`);
+  const daily = dailyWeights.map((weight, index) => ({
+    date: new Date(today.getTime() - (dailyWeights.length - index - 1) * DAY_MS).toISOString().slice(0, 10),
+    dataGb: totalWeight > 0 ? Number((waste.usedGb * weight / totalWeight).toFixed(2)) : 0,
+  }));
+
+  // Guard the unfiltered view against drifting from the dashboard waste card.
+  if (!department && !plan) {
+    const dashboardWaste = dataWaste(db, Number(days));
+    if (waste.paidGb !== dashboardWaste.paidGb || waste.usedGb !== dashboardWaste.usedGb || waste.unusedGb !== dashboardWaste.unusedGb) {
+      throw new Error("Usage analytics totals do not match dashboard data waste.");
+    }
+  }
+
+  const ranked = usageRows.map((row) => ({ ...row, utilisationPercent: row.dataPaidGb ? Math.round(row.dataUsedGb / row.dataPaidGb * 100) : 0 }));
+  return {
+    days: Number(days),
+    totals: { dataUsedGb: waste.usedGb, dataPaidGb: waste.paidGb, utilisationPercent: waste.paidGb ? Math.round(waste.usedGb / waste.paidGb * 100) : 0, unusedGb: waste.unusedGb },
+    daily,
+    byDepartment: byGroup("departmentName", "name"),
+    byPlan: byGroup("planType", "name"),
+    topSims: [...ranked].sort((a, b) => b.dataUsedGb - a.dataUsedGb).slice(0, 10),
+    leastUsedSims: [...ranked].sort((a, b) => a.utilisationPercent - b.utilisationPercent || a.dataUsedGb - b.dataUsedGb).slice(0, 10),
+  };
 }
 
 /**
