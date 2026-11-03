@@ -33,7 +33,7 @@ function ChartTooltip({ active, payload, label, formatLabel, formatValue }) {
  *   xTicks?: (string | number)[], xType?: "category" | "number",
  *   xDomain?: [number, number], formatX?: (v: any) => string,
  *   formatY?: (v: number) => string, yDomain?: [number | string, number | string],
- *   limit?: { y: number, label: string }, peak?: { x: any, y: number, label: string },
+ *   limit?: { y: number, label: string }, limits?: { y: number, label: string }[], peak?: { x: any, y: number, label: string },
  *   height?: number }} props
  */
 export function LineChart({
@@ -48,6 +48,7 @@ export function LineChart({
   formatY = String,
   yDomain = [0, "auto"],
   limit,
+  limits = [],
   peak,
   height = 220,
 }) {
@@ -94,6 +95,15 @@ export function LineChart({
               label={{ value: limit.label, position: "insideTopRight", fill: "var(--chart-axis)", fontSize: 12 }}
             />
           )}
+          {limits.map((item) => (
+            <ReferenceLine
+              key={`${item.y}-${item.label}`}
+              y={item.y}
+              stroke="var(--chart-axis)"
+              strokeDasharray="4 4"
+              label={{ value: item.label, position: "insideTopRight", fill: "var(--chart-axis)", fontSize: 12 }}
+            />
+          ))}
           <Line
             type="monotone"
             dataKey={yKey}
