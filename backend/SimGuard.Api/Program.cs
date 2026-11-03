@@ -73,12 +73,14 @@ var api = app.MapGroup("/api");
 
 api.MapDepartmentEndpoints();
 api.MapEmployeeEndpoints();
+api.MapCarrierEndpoints();
 api.MapSimEndpoints();
 api.MapAllocationEndpoints();
 api.MapAuthEndpoints();
 api.MapUserEndpoints();
 api.MapAlertEndpoints();
 api.MapRiskEndpoints();
+api.MapUsageEndpoints();
 api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
 

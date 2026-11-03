@@ -6,9 +6,14 @@ namespace SimGuard.Api.Dtos;
 // Used by POST and PUT. Status is deliberately absent: new SIMs start as
 // "available" and status only changes through PATCH /sims/{id}/status or
 // the allocation workflow.
+//
+// The carrier is given by CarrierId (what the frontend SIM form sends) or,
+// for older clients, by Operator, the carrier name (case-insensitive).
+// CarrierId wins when both are set. Unknown carriers are a 400.
 public record SimRequest(
     string? PhoneNumber,
     string? Iccid,
+    int? CarrierId,
     string? Operator,
     string? PlanType,
     decimal? MonthlyCost);
@@ -22,10 +27,12 @@ public record CurrentAllocationResponse(
     string DepartmentName,
     DateTime AssignedAt);
 
+// Operator is the carrier's name, kept so existing screens keep working.
 public record SimResponse(
     int Id,
     string PhoneNumber,
     string Iccid,
+    int CarrierId,
     string Operator,
     string PlanType,
     decimal MonthlyCost,
@@ -40,7 +47,8 @@ public record SimResponse(
             s.Id,
             s.PhoneNumber,
             s.Iccid,
-            s.Operator,
+            s.CarrierId,
+            s.Carrier.Name,
             s.PlanType,
             s.MonthlyCost,
             s.Status,

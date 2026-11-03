@@ -559,6 +559,138 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("auth_events", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.Carrier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("carriers", (string)null);
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.DailyUsage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<long>("Id"));
+
+                    b.Property<double>("BilledMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("billed_mb");
+
+                    b.Property<long>("DataDurationS")
+                        .HasColumnType("bigint")
+                        .HasColumnName("data_duration_s");
+
+                    b.Property<long>("DataSessionCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("data_session_count");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<long>("GeoFlagCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("geo_flag_count");
+
+                    b.Property<long>("HotspotSessions")
+                        .HasColumnType("bigint")
+                        .HasColumnName("hotspot_sessions");
+
+                    b.Property<double>("OffpeakMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("offpeak_mb");
+
+                    b.Property<double>("PeakMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("peak_mb");
+
+                    b.Property<long>("PublicApnSessions")
+                        .HasColumnType("bigint")
+                        .HasColumnName("public_apn_sessions");
+
+                    b.Property<long>("RoamingSessions")
+                        .HasColumnType("bigint")
+                        .HasColumnName("roaming_sessions");
+
+                    b.Property<int>("SimId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_id");
+
+                    b.Property<long>("SmsCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sms_count");
+
+                    b.Property<long>("SmsRemaining")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sms_remaining");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tier");
+
+                    b.Property<double>("TotalDownloadMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("total_download_mb");
+
+                    b.Property<double>("TotalMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("total_mb");
+
+                    b.Property<double>("TotalUploadMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("total_upload_mb");
+
+                    b.Property<long>("UniqueTowers")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unique_towers");
+
+                    b.Property<double>("VoiceMinutesRemaining")
+                        .HasColumnType("double precision")
+                        .HasColumnName("voice_minutes_remaining");
+
+                    b.Property<double>("VoiceMinutesUsed")
+                        .HasColumnType("double precision")
+                        .HasColumnName("voice_minutes_used");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .HasDatabaseName("idx_daily_usage_date");
+
+                    b.HasIndex("SimId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("idx_daily_usage_sim_date");
+
+                    b.ToTable("daily_usage", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_daily_usage_tier", "tier IN ('field', 'manager', 'professional', 'support')");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Department", b =>
                 {
                     b.Property<int>("Id")
@@ -706,6 +838,10 @@ namespace SimGuard.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("CarrierId")
+                        .HasColumnType("integer")
+                        .HasColumnName("carrier_id");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -722,12 +858,6 @@ namespace SimGuard.Api.Data.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("monthly_cost");
-
-                    b.Property<string>("Operator")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("operator");
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
@@ -750,6 +880,9 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnName("status");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CarrierId")
+                        .HasDatabaseName("idx_sims_carrier");
 
                     b.HasIndex("Iccid")
                         .IsUnique();
@@ -906,6 +1039,17 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.DailyUsage", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.Sim", "Sim")
+                        .WithMany("DailyUsage")
+                        .HasForeignKey("SimId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Sim");
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Employee", b =>
                 {
                     b.HasOne("SimGuard.Api.Models.Department", "Department")
@@ -926,6 +1070,22 @@ namespace SimGuard.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Sim");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.Carrier", "Carrier")
+                        .WithMany("Sims")
+                        .HasForeignKey("CarrierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Carrier");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.Carrier", b =>
+                {
+                    b.Navigation("Sims");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.Department", b =>
@@ -949,6 +1109,8 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("Allocations");
 
                     b.Navigation("AuditLogs");
+
+                    b.Navigation("DailyUsage");
 
                     b.Navigation("RiskScores");
                 });

@@ -24,13 +24,27 @@ CREATE TABLE employees (
 CREATE INDEX idx_employees_department ON employees(department_id);
 
 -- ============================
+-- carriers
+-- ============================
+-- Mobile network operators. Names are unique ignoring case.
+CREATE TABLE carriers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(40) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_carriers_name_lower ON carriers (lower(name));
+
+INSERT INTO carriers (name) VALUES ('Safaricom'), ('Airtel'), ('Telkom');
+
+-- ============================
 -- sims
 -- ============================
 CREATE TABLE sims (
     id SERIAL PRIMARY KEY,
     phone_number VARCHAR(20) NOT NULL UNIQUE,
     iccid VARCHAR(30) NOT NULL UNIQUE,
-    operator VARCHAR(50) NOT NULL,
+    carrier_id INTEGER NOT NULL REFERENCES carriers(id) ON DELETE RESTRICT,
     plan_type VARCHAR(50) NOT NULL,
     monthly_cost DECIMAL(10, 2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'available'
@@ -39,6 +53,7 @@ CREATE TABLE sims (
 );
 
 CREATE INDEX idx_sims_status ON sims(status);
+CREATE INDEX idx_sims_carrier ON sims(carrier_id);
 
 -- ============================
 -- allocations
@@ -107,6 +122,53 @@ CREATE TABLE risk_scores (
 CREATE UNIQUE INDEX idx_risk_scores_sim_date ON risk_scores(sim_id, date DESC);
 CREATE INDEX idx_risk_scores_date ON risk_scores(date);
 CREATE INDEX idx_risk_scores_model_version ON risk_scores(model_version);
+
+-- ============================
+-- daily_usage
+-- ============================
+-- One row per SIM per day. Columns follow the ML daily usage contract
+-- (ml-service/docs/daily_usage_schema.md). Loaded by
+-- ml-service/scripts/load_daily_usage.py with upsert on (sim_id, date).
+CREATE TABLE daily_usage (
+    id BIGSERIAL PRIMARY KEY,
+    sim_id INTEGER NOT NULL REFERENCES sims(id),
+    date DATE NOT NULL,
+    total_download_mb DOUBLE PRECISION NOT NULL,
+    total_upload_mb DOUBLE PRECISION NOT NULL,
+    data_session_count BIGINT NOT NULL,
+    data_duration_s BIGINT NOT NULL,
+    hotspot_sessions BIGINT NOT NULL,
+    public_apn_sessions BIGINT NOT NULL,
+    unique_towers BIGINT NOT NULL,
+    geo_flag_count BIGINT NOT NULL,
+    peak_mb DOUBLE PRECISION NOT NULL,
+    offpeak_mb DOUBLE PRECISION NOT NULL,
+    total_mb DOUBLE PRECISION NOT NULL,
+    roaming_sessions BIGINT NOT NULL,
+    billed_mb DOUBLE PRECISION NOT NULL,
+    tier VARCHAR(20) NOT NULL
+        CHECK (tier IN ('field', 'manager', 'professional', 'support')),
+    voice_minutes_used DOUBLE PRECISION NOT NULL,
+    sms_count BIGINT NOT NULL,
+    voice_minutes_remaining DOUBLE PRECISION NOT NULL,
+    sms_remaining BIGINT NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_daily_usage_sim_date ON daily_usage(sim_id, date);
+CREATE INDEX idx_daily_usage_date ON daily_usage(date);
+
+-- What the ML Postgres reader selects from: the contract columns only.
+CREATE VIEW ml_daily_usage AS
+SELECT sim_id, date,
+       total_download_mb, total_upload_mb,
+       data_session_count, data_duration_s,
+       hotspot_sessions, public_apn_sessions,
+       unique_towers, geo_flag_count,
+       peak_mb, offpeak_mb, total_mb,
+       roaming_sessions, billed_mb, tier,
+       voice_minutes_used, sms_count,
+       voice_minutes_remaining, sms_remaining
+FROM daily_usage;
 
 -- ============================
 -- audit_logs

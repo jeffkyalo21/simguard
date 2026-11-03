@@ -16,6 +16,9 @@ public static class AuthPolicies
     // SIMs: create, update, delete.
     public const string CanManageSims = nameof(CanManageSims);
 
+    // Carriers: create, rename, delete.
+    public const string CanManageCarriers = nameof(CanManageCarriers);
+
     // SIMs: PATCH /sims/{id}/status.
     public const string CanChangeSimStatus = nameof(CanChangeSimStatus);
 
@@ -60,6 +63,9 @@ public static class AuthPolicies
                 .RequireRole(AppRoles.Admin)
                 .Build())
             .AddPolicy(CanManageSims, FullAccess()
+                .RequireRole(AppRoles.Admin)
+                .Build())
+            .AddPolicy(CanManageCarriers, FullAccess()
                 .RequireRole(AppRoles.Admin)
                 .Build())
             .AddPolicy(CanChangeSimStatus, FullAccess()

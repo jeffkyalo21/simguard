@@ -10,7 +10,6 @@ namespace SimGuard.Api.Endpoints;
 public static class SimEndpoints
 {
     private const int IccidMaxLength = 30;
-    private const int OperatorMaxLength = 50;
     private const int PlanTypeMaxLength = 50;
 
     // numeric(10, 2)
@@ -88,6 +87,7 @@ public static class SimEndpoints
     private static async Task<IResult> GetSims(
         string? status,
         string? @operator,
+        int? carrierId,
         string? planType,
         string? search,
         int? page,
@@ -121,7 +121,12 @@ public static class SimEndpoints
         if (operatorPattern is not null)
         {
             query = query.Where(s =>
-                EF.Functions.ILike(s.Operator, operatorPattern, SearchPattern.EscapeCharacter));
+                EF.Functions.ILike(s.Carrier.Name, operatorPattern, SearchPattern.EscapeCharacter));
+        }
+
+        if (carrierId is not null)
+        {
+            query = query.Where(s => s.CarrierId == carrierId);
         }
 
         var planTypePattern = SearchPattern.Exact(planType);
@@ -172,8 +177,9 @@ public static class SimEndpoints
     {
         var errors = new ValidationErrors();
         var values = Validate(request, errors);
+        var carrier = await ResolveCarrierAsync(db, request, errors, cancellationToken);
 
-        if (errors.HasErrors)
+        if (errors.HasErrors || carrier is null)
         {
             return errors.ToProblem();
         }
@@ -189,7 +195,8 @@ public static class SimEndpoints
         {
             PhoneNumber = values.PhoneNumber,
             Iccid = values.Iccid,
-            Operator = values.Operator,
+            CarrierId = carrier.Id,
+            Carrier = carrier,
             PlanType = values.PlanType,
             MonthlyCost = values.MonthlyCost,
             Status = SimStatuses.Available,
@@ -216,13 +223,16 @@ public static class SimEndpoints
     {
         var errors = new ValidationErrors();
         var values = Validate(request, errors);
+        var carrier = await ResolveCarrierAsync(db, request, errors, cancellationToken);
 
-        if (errors.HasErrors)
+        if (errors.HasErrors || carrier is null)
         {
             return errors.ToProblem();
         }
 
-        var sim = await db.Sims.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+        var sim = await db.Sims
+            .Include(s => s.Carrier)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
         if (sim is null)
         {
@@ -240,7 +250,8 @@ public static class SimEndpoints
 
         sim.PhoneNumber = values.PhoneNumber;
         sim.Iccid = values.Iccid;
-        sim.Operator = values.Operator;
+        sim.CarrierId = carrier.Id;
+        sim.Carrier = carrier;
         sim.PlanType = values.PlanType;
         sim.MonthlyCost = values.MonthlyCost;
 
@@ -311,7 +322,9 @@ public static class SimEndpoints
         AuditWriter audit,
         CancellationToken cancellationToken)
     {
-        var sim = await db.Sims.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+        var sim = await db.Sims
+            .Include(s => s.Carrier)
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
         if (sim is null)
         {
@@ -331,6 +344,11 @@ public static class SimEndpoints
         if (await db.RiskScores.AnyAsync(r => r.SimId == id, cancellationToken))
         {
             return ApiProblems.Conflict($"SIM {id} has risk scores and cannot be deleted.");
+        }
+
+        if (await db.DailyUsage.AnyAsync(u => u.SimId == id, cancellationToken))
+        {
+            return ApiProblems.Conflict($"SIM {id} has usage history and cannot be deleted.");
         }
 
         // Earlier audit rows keep their history: the database sets their
@@ -385,7 +403,6 @@ public static class SimEndpoints
     {
         var phoneNumber = errors.RequiredPhoneNumber("phoneNumber", request.PhoneNumber);
         var iccid = errors.RequiredString("iccid", request.Iccid, IccidMaxLength);
-        var simOperator = errors.RequiredString("operator", request.Operator, OperatorMaxLength);
         var planType = errors.RequiredString("planType", request.PlanType, PlanTypeMaxLength);
 
         if (request.MonthlyCost is null)
@@ -401,7 +418,53 @@ public static class SimEndpoints
             errors.Add("monthlyCost", $"monthlyCost must be at most {MonthlyCostMax}.");
         }
 
-        return new ValidatedSim(phoneNumber, iccid, simOperator, planType, request.MonthlyCost ?? 0);
+        return new ValidatedSim(phoneNumber, iccid, planType, request.MonthlyCost ?? 0);
+    }
+
+    // The carrier by carrierId, or else by operator (the carrier name,
+    // case-insensitive). Adds a 400 error and returns null when neither is
+    // given or the carrier does not exist. The result is tracked.
+    private static async Task<Carrier?> ResolveCarrierAsync(
+        SimGuardDbContext db,
+        SimRequest request,
+        ValidationErrors errors,
+        CancellationToken cancellationToken)
+    {
+        if (request.CarrierId is { } carrierId)
+        {
+            if (carrierId <= 0)
+            {
+                errors.Add("carrierId", "carrierId must be a positive integer.");
+                return null;
+            }
+
+            var byId = await db.Carriers.FirstOrDefaultAsync(c => c.Id == carrierId, cancellationToken);
+
+            if (byId is null)
+            {
+                errors.Add("carrierId", $"Carrier {carrierId} does not exist.");
+            }
+
+            return byId;
+        }
+
+        var name = request.Operator?.Trim();
+
+        if (string.IsNullOrEmpty(name))
+        {
+            errors.Add("carrierId", "carrierId is required (or operator, the carrier name).");
+            return null;
+        }
+
+        var key = name.ToLowerInvariant();
+        var byName = await db.Carriers.FirstOrDefaultAsync(c => c.Name.ToLower() == key, cancellationToken);
+
+        if (byName is null)
+        {
+            errors.Add("operator", $"There is no carrier named '{name}'. Add it with POST /api/carriers first.");
+        }
+
+        return byName;
     }
 
     private static async Task<string?> FindUniquenessConflictAsync(
@@ -439,7 +502,8 @@ public static class SimEndpoints
         id = sim.Id,
         phoneNumber = sim.PhoneNumber,
         iccid = sim.Iccid,
-        @operator = sim.Operator,
+        carrierId = sim.CarrierId,
+        @operator = sim.Carrier.Name,
         planType = sim.PlanType,
         monthlyCost = sim.MonthlyCost,
         status = sim.Status
@@ -450,7 +514,8 @@ public static class SimEndpoints
             sim.Id,
             sim.PhoneNumber,
             sim.Iccid,
-            sim.Operator,
+            sim.CarrierId,
+            sim.Carrier.Name,
             sim.PlanType,
             sim.MonthlyCost,
             sim.Status,
@@ -460,7 +525,6 @@ public static class SimEndpoints
     private sealed record ValidatedSim(
         string PhoneNumber,
         string Iccid,
-        string Operator,
         string PlanType,
         decimal MonthlyCost);
 }

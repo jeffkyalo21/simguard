@@ -19,6 +19,9 @@ joblib==1.5.3
 # Tracking
 mlflow==3.16.1
 
+# Database (scripts/load_daily_usage.py and the Postgres reader)
+psycopg[binary]==3.3.7
+
 # Service
 fastapi==0.132.0
 uvicorn==0.41.0

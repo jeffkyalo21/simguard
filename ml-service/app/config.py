@@ -2,6 +2,8 @@
 
 ML_ARTIFACT_DIR          model artifacts folder (default: ml-service/artifacts)
 READER                   usage reader: "parquet" (default) or "postgres"
+ML_DATABASE_URL          connection string for the postgres reader (libpq URI
+                         or key=value; never committed)
 ML_DAILY_USAGE_PATH      daily usage file for the parquet reader
                          (default: ml-service/data/synthetic_cdr_daily_agg.csv)
 ML_PROPHET_CHECKPOINTS   precomputed checkpoint forecasts for the parquet reader
@@ -54,6 +56,7 @@ class Settings:
         default_factory=lambda: _env_path("ML_ARTIFACT_DIR", ML_SERVICE_ROOT / "artifacts")
     )
     reader: str = field(default_factory=lambda: os.environ.get("READER", "parquet").strip().lower())
+    database_url: str = field(default_factory=lambda: os.environ.get("ML_DATABASE_URL", ""), repr=False)
     daily_usage_path: Path = field(
         default_factory=lambda: _env_path(
             "ML_DAILY_USAGE_PATH", ML_SERVICE_ROOT / "data" / "synthetic_cdr_daily_agg.csv"
