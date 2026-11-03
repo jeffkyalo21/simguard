@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
+using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
 using SimGuard.Api.Models;
@@ -13,7 +14,8 @@ public static class AllocationEndpoints
     public static IEndpointRouteBuilder MapAllocationEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/allocations")
-            .WithTags("Allocations");
+            .WithTags("Allocations")
+            .RequireAuthorization(AuthPolicies.CanRead);
 
         group.MapGet("/", GetAllocations)
             .WithName("GetAllocations")
@@ -27,12 +29,14 @@ public static class AllocationEndpoints
 
         group.MapPost("/", CreateAllocation)
             .WithName("CreateAllocation")
+            .RequireAuthorization(AuthPolicies.CanManageAllocations)
             .Produces<AllocationResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPost("/{id:int}/return", ReturnAllocation)
             .WithName("ReturnAllocation")
+            .RequireAuthorization(AuthPolicies.CanManageAllocations)
             .Produces<AllocationResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

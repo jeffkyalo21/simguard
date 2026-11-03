@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
+using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
 using SimGuard.Api.Models;
@@ -13,7 +14,8 @@ public static class DepartmentEndpoints
     public static IEndpointRouteBuilder MapDepartmentEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/departments")
-            .WithTags("Departments");
+            .WithTags("Departments")
+            .RequireAuthorization(AuthPolicies.CanRead);
 
         group.MapGet("/", GetDepartments)
             .WithName("GetDepartments")
@@ -27,12 +29,14 @@ public static class DepartmentEndpoints
 
         group.MapPost("/", CreateDepartment)
             .WithName("CreateDepartment")
+            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
             .Produces<DepartmentResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateDepartment)
             .WithName("UpdateDepartment")
+            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
             .Produces<DepartmentResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -40,6 +44,7 @@ public static class DepartmentEndpoints
 
         group.MapDelete("/{id:int}", DeleteDepartment)
             .WithName("DeleteDepartment")
+            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
