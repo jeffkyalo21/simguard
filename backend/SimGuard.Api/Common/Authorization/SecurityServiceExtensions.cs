@@ -25,6 +25,7 @@ public static class SecurityServiceExtensions
         services.AddSingleton<TokenService>();
         services.AddHttpContextAccessor();
         services.AddScoped<AuthEventLogger>();
+        services.AddScoped<AuditWriter>();
 
         AddIdentity(services);
         AddJwtBearer(services, jwtSettings);

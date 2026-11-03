@@ -77,5 +77,7 @@ api.MapSimEndpoints();
 api.MapAllocationEndpoints();
 api.MapAuthEndpoints();
 api.MapUserEndpoints();
+api.MapAlertEndpoints();
+api.MapRiskEndpoints();
 
 app.Run();
