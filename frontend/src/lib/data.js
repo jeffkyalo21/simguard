@@ -396,6 +396,73 @@ export async function getDashboard(days = 30) {
   return buildDashboard(readMockDb(), days, mockMode() === "empty");
 }
 
+/** Usage analytics from the same per-SIM usage series and waste estimate used by the dashboard. */
+export async function getUsageAnalytics({ days = 30, department, plan } = {}) {
+  await wait();
+  if (![7, 30, 90].includes(Number(days))) throw fieldError("days", "invalid");
+  const db = readMockDb();
+  const assigned = db.sims.filter((sim) => sim.status === "assigned");
+  const filtered = assigned.filter((sim) => (!department || sim.currentAllocation?.departmentName === department)
+    && (!plan || sim.planType === plan));
+  const filteredDb = { ...db, sims: filtered };
+  const waste = dataWaste(filteredDb, Number(days));
+  const simUsage = await Promise.all(filtered.map(async (sim) => ({ sim, usage: await getSimUsage(sim.id) })));
+  const rawUsed = simUsage.reduce((sum, item) => sum + item.usage.data.used, 0);
+  const usageScale = rawUsed > 0 ? waste.usedGb / rawUsed : 0;
+  const usageRows = simUsage.map(({ sim, usage }) => ({
+    id: sim.id,
+    phoneNumber: sim.phoneNumber,
+    employeeName: sim.currentAllocation?.employeeName ?? null,
+    departmentName: sim.currentAllocation?.departmentName ?? null,
+    planType: sim.planType,
+    dataUsedGb: usage.data.used * usageScale,
+    dataPaidGb: TIERS[sim.tier].bundleGb * Number(days) / CYCLE_LENGTH,
+  }));
+  const byGroup = (key, labelKey) => {
+    const groups = new Map();
+    for (const row of usageRows) {
+      const name = row[key] ?? "Unassigned";
+      const group = groups.get(name) ?? { [labelKey]: name, dataUsedGb: 0, dataPaidGb: 0 };
+      group.dataUsedGb += row.dataUsedGb;
+      group.dataPaidGb += row.dataPaidGb;
+      groups.set(name, group);
+    }
+    return [...groups.values()].sort((a, b) => b.dataUsedGb - a.dataUsedGb);
+  };
+
+  const cycleWeights = Array.from({ length: CYCLE_DAY }, (_, index) => simUsage.reduce((sum, item) => {
+    const current = item.usage.series[index]?.gb ?? 0;
+    const previous = item.usage.series[index - 1]?.gb ?? 0;
+    return sum + Math.max(current - previous, 0);
+  }, 0));
+  const dailyWeights = Array.from({ length: Number(days) }, (_, index) => cycleWeights[index % cycleWeights.length] ?? 0);
+  const totalWeight = dailyWeights.reduce((sum, value) => sum + value, 0);
+  const today = new Date(`${new Date(NOW_MS).toISOString().slice(0, 10)}T00:00:00Z`);
+  const daily = dailyWeights.map((weight, index) => ({
+    date: new Date(today.getTime() - (dailyWeights.length - index - 1) * DAY_MS).toISOString().slice(0, 10),
+    dataGb: totalWeight > 0 ? Number((waste.usedGb * weight / totalWeight).toFixed(2)) : 0,
+  }));
+
+  // Guard the unfiltered view against drifting from the dashboard waste card.
+  if (!department && !plan) {
+    const dashboardWaste = dataWaste(db, Number(days));
+    if (waste.paidGb !== dashboardWaste.paidGb || waste.usedGb !== dashboardWaste.usedGb || waste.unusedGb !== dashboardWaste.unusedGb) {
+      throw new Error("Usage analytics totals do not match dashboard data waste.");
+    }
+  }
+
+  const ranked = usageRows.map((row) => ({ ...row, utilisationPercent: row.dataPaidGb ? Math.round(row.dataUsedGb / row.dataPaidGb * 100) : 0 }));
+  return {
+    days: Number(days),
+    totals: { dataUsedGb: waste.usedGb, dataPaidGb: waste.paidGb, utilisationPercent: waste.paidGb ? Math.round(waste.usedGb / waste.paidGb * 100) : 0, unusedGb: waste.unusedGb },
+    daily,
+    byDepartment: byGroup("departmentName", "name"),
+    byPlan: byGroup("planType", "name"),
+    topSims: [...ranked].sort((a, b) => b.dataUsedGb - a.dataUsedGb).slice(0, 10),
+    leastUsedSims: [...ranked].sort((a, b) => a.utilisationPercent - b.utilisationPercent || a.dataUsedGb - b.dataUsedGb).slice(0, 10),
+  };
+}
+
 /**
  * The dashboard as it first loads, before any edits, built on the server
  * with no delay. The landing page preview uses it so its numbers match
