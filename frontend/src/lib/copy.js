@@ -492,6 +492,26 @@ export const copy = {
     emptyTiers: "No tier changes.",
   },
 
+  usageAnalytics: {
+    period: "Period",
+    department: "Department",
+    plan: "Plan",
+    dataUsed: "Data used",
+    dataPaid: "Data paid",
+    utilisation: "Utilisation",
+    unused: "Unused data",
+    daily: "Daily data use",
+    byDepartment: "By department",
+    byPlan: "By plan",
+    topSims: "Top SIMs by data use",
+    leastUsedSims: "Least-used paid SIMs",
+    noUsage: "No usage data for these filters.",
+    noSims: "No paid SIMs match these filters.",
+    noDepartment: "No department usage to show.",
+    noPlan: "No plan usage to show.",
+    dataUsedOn: (date, value) => `${date}: ${value} used`,
+  },
+
   columns: {
     sim: "SIM",
     number: "Number",

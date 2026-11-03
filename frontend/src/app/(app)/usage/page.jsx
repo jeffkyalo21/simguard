@@ -1,9 +1,8 @@
-import { BarChart3 } from "lucide-react";
-import { PlaceholderPage } from "@/components/shared/placeholder-page";
+import { UsageView } from "@/components/usage/usage-view";
 import { copy } from "@/lib/copy";
 
 export const metadata = { title: copy.pages.usage.title };
 
 export default function UsagePage() {
-  return <PlaceholderPage {...copy.pages.usage} icon={BarChart3} />;
+  return <UsageView />;
 }
