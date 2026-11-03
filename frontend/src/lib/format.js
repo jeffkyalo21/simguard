@@ -3,6 +3,8 @@ import { copy } from "@/lib/copy";
 // The API sends UTC; the UI always shows Nairobi time, never the browser's zone.
 const TIME_ZONE = "Africa/Nairobi";
 const LOCALE = "en-KE";
+// Nairobi has no daylight saving, so its offset is fixed.
+const NAIROBI_OFFSET = "+03:00";
 
 // These model gates change after a retrain and will come from the backend in #20.
 export const GATE_BANDS = { low: 0.1, high: 0.9 };
@@ -113,4 +115,18 @@ export function formatBytes(bytes) {
   }).format(Math.sign(value) * size);
 
   return `${formatted} ${BYTE_UNITS[unit]}`;
+}
+
+/**
+ * A "YYYY-MM-DD" day picked in the UI, as the UTC timestamp of its first or
+ * last moment in Nairobi, for inclusive from and to filters.
+ * @param {string} day
+ * @param {"start" | "end"} edge
+ * @returns {string | undefined}
+ */
+export function dayToUtc(day, edge) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day ?? "")) return undefined;
+  const time = edge === "end" ? "23:59:59.999" : "00:00:00.000";
+  const date = new Date(`${day}T${time}${NAIROBI_OFFSET}`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }

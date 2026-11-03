@@ -15,6 +15,7 @@ import {
   DEPARTMENTS,
   DISPLAY_FLEET_SIZE,
   MAX_MOCK_SIM_ID,
+  MOCK_USER,
   NOW_MS,
   PLAN_TYPES,
   TIER_ORDER,
@@ -246,12 +247,13 @@ export async function setAlertStatus(id, { status, resolution, resolutionNote } 
     resolvedAt: closing ? at : null,
     resolution: closing ? resolution : null,
     resolutionNote: closing ? (resolutionNote?.trim() || null) : null,
-    resolvedBy: closing ? { id: 2, name: "Security Officer", email: "officer@simguard.local" } : null,
+    resolvedBy: closing ? { id: MOCK_USER.id, name: MOCK_USER.name, email: MOCK_USER.email } : null,
   };
   writeMockDb({
     type: "alert/changed",
     alert: updated,
     activity: { id: `alert-${alert.id}-${at}`, simId: alert.simId, at, kind: "alertStatus", detail: { type: alert.type, status, resolution: updated.resolution } },
+    audit: auditRow("alert.status_changed", findSim(alert.simId), alertSnapshot(alert), alertSnapshot(updated), at),
   });
   return getAlert(id);
 }
@@ -568,12 +570,17 @@ function validateSim(body, excludeId) {
   };
 }
 
-function save(sim, kind, detail) {
+/**
+ * Saves a SIM, logs it in the SIM's activity and, when `audit` is given as
+ * { action, oldValues, newValues }, in the audit log.
+ */
+function save(sim, kind, detail, audit) {
   const at = new Date().toISOString();
   writeMockDb({
     type: "sim/saved",
     sim,
     activity: { id: `e${sim.id}-${at}-${kind}`, simId: sim.id, at, kind, detail },
+    audit: audit && auditRow(audit.action, sim, audit.oldValues, audit.newValues, at),
   });
   return sim;
 }
@@ -585,24 +592,22 @@ export async function createSim(body) {
   const db = readMockDb();
   const tier = TIERS.Support;
 
-  return save(
-    {
-      id: Math.max(...db.sims.map((s) => s.id)) + 1,
-      ...values,
-      status: "available",
-      createdAt: new Date().toISOString(),
-      currentAllocation: null,
-      // future field
-      tier: "Support",
-      dataUsedGb: 0,
-      voiceUsed: 0,
-      voiceLimit: tier.voiceMin,
-      smsUsed: 0,
-      smsLimit: tier.sms,
-      riskScore: 0,
-    },
-    "created"
-  );
+  const sim = {
+    id: Math.max(...db.sims.map((s) => s.id)) + 1,
+    ...values,
+    status: "available",
+    createdAt: new Date().toISOString(),
+    currentAllocation: null,
+    // future field
+    tier: "Support",
+    dataUsedGb: 0,
+    voiceUsed: 0,
+    voiceLimit: tier.voiceMin,
+    smsUsed: 0,
+    smsLimit: tier.sms,
+    riskScore: 0,
+  };
+  return save(sim, "created", undefined, { action: "sim.created", oldValues: null, newValues: simSnapshot(sim) });
 }
 
 /** PUT /sims/{id}. */
@@ -610,7 +615,8 @@ export async function updateSim(id, body) {
   await wait();
   const sim = findSim(id);
   if (!sim) throw notFound();
-  return save({ ...sim, ...validateSim(body, sim.id) }, "edited");
+  const updated = { ...sim, ...validateSim(body, sim.id) };
+  return save(updated, "edited", undefined, { action: "sim.updated", oldValues: simSnapshot(sim), newValues: simSnapshot(updated) });
 }
 
 /** PATCH /sims/{id}/status with "available" or "inactive". */
@@ -621,7 +627,7 @@ export async function setSimStatus(id, status) {
   if (!["available", "inactive"].includes(status)) throw fieldError("status", "invalid");
   // Same rule as the API: an allocated SIM must be returned first.
   if (sim.currentAllocation) throw new ApiError({ status: 409 });
-  return save({ ...sim, status }, status);
+  return save({ ...sim, status }, status, undefined, { action: "sim.status_changed", oldValues: { status: sim.status }, newValues: { status } });
 }
 
 // future field: tier changes have no endpoint yet.
@@ -633,10 +639,17 @@ export async function setSimTier(id, tier) {
   const limits = TIERS[tier];
   if (!limits) throw fieldError("tier", "invalid");
 
+  // future field: the API has no tier yet, so the audit row records it as a
+  // SIM edit with the tier and the cost it sets.
   return save(
     { ...sim, tier, voiceLimit: limits.voiceMin, smsLimit: limits.sms, monthlyCost: limits.monthlyCost },
     "tier",
-    tier
+    tier,
+    {
+      action: "sim.updated",
+      oldValues: { tier: sim.tier, monthlyCost: sim.monthlyCost },
+      newValues: { tier, monthlyCost: limits.monthlyCost },
+    }
   );
 }
 
@@ -699,4 +712,81 @@ export async function removeCarrier(id) {
   if (simCount > 0) return { removed: false, simCount };
   writeMockDb({ type: "carrier/removed", id: carrier.id });
   return { removed: true, simCount: 0 };
+}
+
+/* ------------------------------------------------------------- Audit log */
+
+/** The SIM fields the API records for sim.* actions. */
+function simSnapshot(sim) {
+  return {
+    id: sim.id,
+    phoneNumber: sim.phoneNumber,
+    iccid: sim.iccid,
+    operator: readMockDb().carriers.find((carrier) => carrier.id === sim.carrierId)?.name ?? null,
+    planType: sim.planType,
+    monthlyCost: sim.monthlyCost,
+    status: sim.status,
+  };
+}
+
+/** The alert fields the API records for alert.status_changed. */
+function alertSnapshot(alert) {
+  return {
+    alertId: alert.id,
+    status: alert.status,
+    resolution: alert.resolution ?? null,
+    resolutionNote: alert.resolutionNote ?? null,
+    resolvedAt: alert.resolvedAt ?? null,
+    resolvedByUserId: alert.resolvedBy?.id ?? null,
+  };
+}
+
+/** One GET /audit-logs item written by the signed-in user. */
+function auditRow(action, sim, oldValues, newValues, timestamp = new Date().toISOString()) {
+  const rows = readMockDb().audit;
+  return {
+    id: Math.max(0, ...rows.map((row) => row.id)) + 1,
+    timestamp,
+    actorUserId: MOCK_USER.id,
+    actorEmail: MOCK_USER.email,
+    employeeId: null,
+    action,
+    affectedSimId: sim?.id ?? null,
+    affectedSimPhoneNumber: sim?.phoneNumber ?? null,
+    oldValues,
+    newValues,
+  };
+}
+
+/**
+ * GET /audit-logs, newest first. Admin and Auditor only (#20 enforces it).
+ * `from` and `to` are UTC timestamps, inclusive; `action` is exact.
+ * The API matches `actorEmail` exactly (ignoring case); the mock also
+ * matches part of an address so the search box filters while typing.
+ * Items: { id, timestamp, actorUserId, actorEmail, employeeId, action,
+ *   affectedSimId, affectedSimPhoneNumber, oldValues, newValues }.
+ * @param {{ simId?: number | string, actorEmail?: string, action?: string,
+ *   from?: string, to?: string, page?: number, pageSize?: number }} [query]
+ */
+export async function listAuditLogs({ simId, actorEmail, action, from, to, page, pageSize } = {}) {
+  await wait();
+  const fromMs = from ? Date.parse(from) : null;
+  const toMs = to ? Date.parse(to) : null;
+  if (Number.isNaN(fromMs)) throw fieldError("from", "invalid");
+  if (Number.isNaN(toMs)) throw fieldError("to", "invalid");
+  if (fromMs !== null && toMs !== null && fromMs > toMs) throw fieldError("from", "afterTo");
+
+  const email = actorEmail?.trim().toLowerCase();
+  const items = readMockDb()
+    .audit.filter((row) => {
+      const at = Date.parse(row.timestamp);
+      return (!simId || row.affectedSimId === Number(simId))
+        && (!email || row.actorEmail.toLowerCase().includes(email))
+        && (!action || row.action === action)
+        && (fromMs === null || at >= fromMs)
+        && (toMs === null || at <= toMs);
+    })
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp) || b.id - a.id);
+
+  return paged(items, page, pageSize);
 }

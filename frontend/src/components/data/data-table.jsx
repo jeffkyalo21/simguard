@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -30,7 +31,10 @@ const INTERACTIVE = "a, button, input, select, [role='menuitem'], [role='checkbo
  *   getRowKey: (row: any) => React.Key, getRowHref?: (row: any) => string,
  *   error?: unknown, onRetry?: () => void, busy?: boolean,
  *   emptyMessage: string, emptyAction?: React.ReactNode,
+ *   renderExpanded?: (row: any) => React.ReactNode,
  *   skeletonRows?: number, className?: string }} props
+ * `renderExpanded` returns the detail shown in a full-width row under a
+ * row, or null to show none; the row's own control toggles it.
  */
 export function DataTable({
   caption,
@@ -43,6 +47,7 @@ export function DataTable({
   busy = false,
   emptyMessage,
   emptyAction,
+  renderExpanded,
   skeletonRows = 5,
   className,
 }) {
@@ -83,34 +88,44 @@ export function DataTable({
 
     return rows.map((row) => {
       const href = getRowHref?.(row);
+      const expanded = renderExpanded?.(row);
 
       return (
-        <tr
-          key={getRowKey(row)}
-          onClick={
-            href
-              ? (event) => {
-                  if (!event.target.closest(INTERACTIVE)) router.push(href);
-                }
-              : undefined
-          }
-          className={cn(
-            "row-hover border-b border-border last:border-0",
-            href && "cursor-pointer"
+        <Fragment key={getRowKey(row)}>
+          <tr
+            onClick={
+              href
+                ? (event) => {
+                    if (!event.target.closest(INTERACTIVE)) router.push(href);
+                  }
+                : undefined
+            }
+            className={cn(
+              "row-hover border-b border-border last:border-0",
+              href && "cursor-pointer",
+              expanded && "border-b-0"
+            )}
+          >
+            {columns.map((column) => (
+              <td key={column.key} className={cn("h-[52px] px-5 whitespace-nowrap", column.className)}>
+                {column.link && href ? (
+                  <Link href={href} className="rounded-sm font-medium hover:underline underline-offset-4">
+                    {column.cell(row)}
+                  </Link>
+                ) : (
+                  column.cell(row)
+                )}
+              </td>
+            ))}
+          </tr>
+          {expanded && (
+            <tr className="border-b border-border last:border-0">
+              <td colSpan={columns.length} className="px-5 pb-4">
+                {expanded}
+              </td>
+            </tr>
           )}
-        >
-          {columns.map((column) => (
-            <td key={column.key} className={cn("h-[52px] px-5 whitespace-nowrap", column.className)}>
-              {column.link && href ? (
-                <Link href={href} className="rounded-sm font-medium hover:underline underline-offset-4">
-                  {column.cell(row)}
-                </Link>
-              ) : (
-                column.cell(row)
-              )}
-            </td>
-          ))}
-        </tr>
+        </Fragment>
       );
     });
   }

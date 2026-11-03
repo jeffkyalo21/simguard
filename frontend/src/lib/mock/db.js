@@ -15,19 +15,42 @@ export function createInitialState() {
     sims: fixtures.sims,
     allocations: fixtures.allocations,
     alerts: fixtures.alerts,
+    employees: fixtures.employees,
     /** Activity added by edits in this session: { id, simId, at, kind, detail } */
     activity: [],
+    /** GET /audit-logs rows: the seeded history plus every write in this session. */
+    audit: fixtures.auditLogs,
   };
+}
+
+/** Any action may carry an `audit` row; it is appended after the change. */
+export function mockReducer(state, action) {
+  const next = applyChange(state, action);
+  return action.audit && next !== state ? { ...next, audit: [...next.audit, action.audit] } : next;
 }
 
 /**
  * Actions: "sim/saved" inserts or replaces a SIM and logs what happened;
+ * "allocation/saved" inserts or replaces an allocation and its SIM;
  * "carrier/saved" inserts or replaces a carrier; "carrier/removed" drops
  * one. Pure: ids and timestamps arrive in the action, and the rules
- * (unique names, carriers in use) are checked in src/lib/data.js.
+ * (unique names, carriers in use, one active allocation) are checked in
+ * src/lib/data.js.
  */
-export function mockReducer(state, action) {
+function applyChange(state, action) {
   switch (action.type) {
+    case "allocation/saved": {
+      const exists = state.allocations.some((item) => item.id === action.allocation.id);
+
+      return {
+        ...state,
+        version: state.version + 1,
+        allocations: exists
+          ? state.allocations.map((item) => (item.id === action.allocation.id ? action.allocation : item))
+          : [...state.allocations, action.allocation],
+        sims: state.sims.map((sim) => (sim.id === action.sim.id ? action.sim : sim)),
+      };
+    }
     case "sim/saved": {
       const exists = state.sims.some((sim) => sim.id === action.sim.id);
 
