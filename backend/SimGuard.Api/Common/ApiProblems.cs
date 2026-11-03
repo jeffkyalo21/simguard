@@ -8,6 +8,12 @@ public static class ApiProblems
             detail: detail,
             statusCode: StatusCodes.Status404NotFound);
 
+    public static IResult Unauthorized(string detail) =>
+        TypedResults.Problem(
+            title: "Unauthorized",
+            detail: detail,
+            statusCode: StatusCodes.Status401Unauthorized);
+
     public static IResult Conflict(string detail) =>
         TypedResults.Problem(
             title: "Conflict",

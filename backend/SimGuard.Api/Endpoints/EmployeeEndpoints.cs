@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
+using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
 using SimGuard.Api.Models;
@@ -15,7 +16,8 @@ public static class EmployeeEndpoints
     public static IEndpointRouteBuilder MapEmployeeEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/employees")
-            .WithTags("Employees");
+            .WithTags("Employees")
+            .RequireAuthorization(AuthPolicies.CanRead);
 
         group.MapGet("/", GetEmployees)
             .WithName("GetEmployees")
@@ -29,12 +31,14 @@ public static class EmployeeEndpoints
 
         group.MapPost("/", CreateEmployee)
             .WithName("CreateEmployee")
+            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
             .Produces<EmployeeResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateEmployee)
             .WithName("UpdateEmployee")
+            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
             .Produces<EmployeeResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -42,6 +46,7 @@ public static class EmployeeEndpoints
 
         group.MapDelete("/{id:int}", DeleteEmployee)
             .WithName("DeleteEmployee")
+            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

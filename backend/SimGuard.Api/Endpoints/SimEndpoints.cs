@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
+using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
 using SimGuard.Api.Models;
@@ -18,7 +19,8 @@ public static class SimEndpoints
     public static IEndpointRouteBuilder MapSimEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/sims")
-            .WithTags("SIMs");
+            .WithTags("SIMs")
+            .RequireAuthorization(AuthPolicies.CanRead);
 
         group.MapGet("/", GetSims)
             .WithName("GetSims")
@@ -32,12 +34,14 @@ public static class SimEndpoints
 
         group.MapPost("/", CreateSim)
             .WithName("CreateSim")
+            .RequireAuthorization(AuthPolicies.CanManageSims)
             .Produces<SimResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateSim)
             .WithName("UpdateSim")
+            .RequireAuthorization(AuthPolicies.CanManageSims)
             .Produces<SimResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -45,6 +49,7 @@ public static class SimEndpoints
 
         group.MapPatch("/{id:int}/status", UpdateSimStatus)
             .WithName("UpdateSimStatus")
+            .RequireAuthorization(AuthPolicies.CanChangeSimStatus)
             .Produces<SimResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -52,6 +57,7 @@ public static class SimEndpoints
 
         group.MapDelete("/{id:int}", DeleteSim)
             .WithName("DeleteSim")
+            .RequireAuthorization(AuthPolicies.CanManageSims)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Data;
 
-public class SimGuardDbContext : DbContext
+public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, int>
 {
     public SimGuardDbContext(
         DbContextOptions<SimGuardDbContext> options)
@@ -17,6 +19,7 @@ public class SimGuardDbContext : DbContext
     public DbSet<Allocation> Allocations => Set<Allocation>();
     public DbSet<Alert> Alerts => Set<Alert>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<AuthEvent> AuthEvents => Set<AuthEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -313,5 +316,151 @@ public class SimGuardDbContext : DbContext
                 .HasForeignKey(e => e.AffectedSimId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
+
+        ConfigureIdentity(modelBuilder);
+
+        // Auth events
+        modelBuilder.Entity<AuthEvent>(entity =>
+        {
+            entity.ToTable("auth_events");
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .UseSerialColumn();
+
+            entity.Property(e => e.UserId)
+                .HasColumnName("user_id");
+
+            entity.Property(e => e.EmailAttempted)
+                .HasColumnName("email_attempted")
+                .HasMaxLength(256);
+
+            entity.Property(e => e.EventType)
+                .HasColumnName("event_type")
+                .HasMaxLength(50)
+                .IsRequired();
+
+            entity.Property(e => e.Success)
+                .HasColumnName("success");
+
+            entity.Property(e => e.IpAddress)
+                .HasColumnName("ip_address")
+                .HasMaxLength(64);
+
+            entity.Property(e => e.UserAgent)
+                .HasColumnName("user_agent")
+                .HasMaxLength(512);
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at")
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("NOW()");
+
+            entity.HasIndex(e => e.CreatedAt)
+                .HasDatabaseName("idx_auth_events_created_at");
+
+            entity.HasIndex(e => e.EventType)
+                .HasDatabaseName("idx_auth_events_event_type");
+
+            entity.HasIndex(e => e.UserId)
+                .HasDatabaseName("idx_auth_events_user");
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+    }
+
+    // ASP.NET Core Identity tables. Renamed to app_* with snake_case columns
+    // to match the rest of the schema.
+    private static void ConfigureIdentity(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AppUser>(entity =>
+        {
+            entity.ToTable("app_users");
+
+            entity.Property(e => e.Id)
+                .UseSerialColumn();
+
+            entity.Property(e => e.Name)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp with time zone")
+                .HasDefaultValueSql("NOW()");
+
+            // One account per employee; PostgreSQL allows many NULLs in a unique index.
+            entity.HasIndex(e => e.EmployeeId)
+                .IsUnique()
+                .HasDatabaseName("idx_app_users_employee");
+
+            entity.HasOne(e => e.Employee)
+                .WithMany()
+                .HasForeignKey(e => e.EmployeeId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<IdentityRole<int>>(entity =>
+        {
+            entity.ToTable("app_roles");
+
+            entity.Property(e => e.Id)
+                .UseSerialColumn();
+        });
+
+        modelBuilder.Entity<IdentityUserRole<int>>().ToTable("app_user_roles");
+        modelBuilder.Entity<IdentityUserClaim<int>>().ToTable("app_user_claims");
+        modelBuilder.Entity<IdentityUserLogin<int>>().ToTable("app_user_logins");
+        modelBuilder.Entity<IdentityUserToken<int>>().ToTable("app_user_tokens");
+        modelBuilder.Entity<IdentityRoleClaim<int>>().ToTable("app_role_claims");
+
+        var identityTypes = new[]
+        {
+            typeof(AppUser),
+            typeof(IdentityRole<int>),
+            typeof(IdentityUserRole<int>),
+            typeof(IdentityUserClaim<int>),
+            typeof(IdentityUserLogin<int>),
+            typeof(IdentityUserToken<int>),
+            typeof(IdentityRoleClaim<int>)
+        };
+
+        foreach (var clrType in identityTypes)
+        {
+            var entityType = modelBuilder.Model.FindEntityType(clrType);
+
+            if (entityType is null)
+            {
+                continue;
+            }
+
+            foreach (var property in entityType.GetProperties())
+            {
+                property.SetColumnName(ToSnakeCase(property.Name));
+            }
+        }
+    }
+
+    private static string ToSnakeCase(string name)
+    {
+        var builder = new System.Text.StringBuilder(name.Length + 8);
+
+        for (var i = 0; i < name.Length; i++)
+        {
+            var c = name[i];
+
+            if (char.IsUpper(c) && i > 0)
+            {
+                builder.Append('_');
+            }
+
+            builder.Append(char.ToLowerInvariant(c));
+        }
+
+        return builder.ToString();
     }
 }

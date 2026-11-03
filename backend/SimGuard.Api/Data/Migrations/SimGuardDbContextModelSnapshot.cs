@@ -23,6 +23,160 @@ namespace SimGuard.Api.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<int>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("text")
+                        .HasColumnName("concurrency_stamp");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("normalized_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("RoleNameIndex");
+
+                    b.ToTable("app_roles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("text")
+                        .HasColumnName("claim_type");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("text")
+                        .HasColumnName("claim_value");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("integer")
+                        .HasColumnName("role_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("app_role_claims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<int>", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClaimType")
+                        .HasColumnType("text")
+                        .HasColumnName("claim_type");
+
+                    b.Property<string>("ClaimValue")
+                        .HasColumnType("text")
+                        .HasColumnName("claim_value");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("app_user_claims", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<int>", b =>
+                {
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("text")
+                        .HasColumnName("login_provider");
+
+                    b.Property<string>("ProviderKey")
+                        .HasColumnType("text")
+                        .HasColumnName("provider_key");
+
+                    b.Property<string>("ProviderDisplayName")
+                        .HasColumnType("text")
+                        .HasColumnName("provider_display_name");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("LoginProvider", "ProviderKey");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("app_user_logins", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<int>", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("integer")
+                        .HasColumnName("role_id");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("app_user_roles", (string)null);
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<int>", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("LoginProvider")
+                        .HasColumnType("text")
+                        .HasColumnName("login_provider");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("UserId", "LoginProvider", "Name");
+
+                    b.ToTable("app_user_tokens", (string)null);
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Alert", b =>
                 {
                     b.Property<int>("Id")
@@ -127,6 +281,116 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("allocations", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.AppUser", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccessFailedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("access_failed_count");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .HasColumnType("text")
+                        .HasColumnName("concurrency_stamp");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("email");
+
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("email_confirmed");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("integer")
+                        .HasColumnName("employee_id");
+
+                    b.Property<bool>("IsDisabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_disabled");
+
+                    b.Property<bool>("LockoutEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("lockout_enabled");
+
+                    b.Property<DateTimeOffset?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lockout_end");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean")
+                        .HasColumnName("must_change_password");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("normalized_email");
+
+                    b.Property<string>("NormalizedUserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("normalized_user_name");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("text")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("phone_number");
+
+                    b.Property<bool>("PhoneNumberConfirmed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("phone_number_confirmed");
+
+                    b.Property<string>("SecurityStamp")
+                        .HasColumnType("text")
+                        .HasColumnName("security_stamp");
+
+                    b.Property<bool>("TwoFactorEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("two_factor_enabled");
+
+                    b.Property<string>("UserName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("user_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_app_users_employee");
+
+                    b.HasIndex("NormalizedEmail")
+                        .HasDatabaseName("EmailIndex");
+
+                    b.HasIndex("NormalizedUserName")
+                        .IsUnique()
+                        .HasDatabaseName("UserNameIndex");
+
+                    b.ToTable("app_users", (string)null);
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.AuditLog", b =>
                 {
                     b.Property<int>("Id")
@@ -175,6 +439,64 @@ namespace SimGuard.Api.Data.Migrations
                         .HasDatabaseName("idx_audit_logs_user");
 
                     b.ToTable("audit_logs", (string)null);
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.AuthEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("EmailAttempted")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("email_attempted");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ip_address");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean")
+                        .HasColumnName("success");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("user_agent");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("idx_auth_events_created_at");
+
+                    b.HasIndex("EventType")
+                        .HasDatabaseName("idx_auth_events_event_type");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_auth_events_user");
+
+                    b.ToTable("auth_events", (string)null);
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.Department", b =>
@@ -317,6 +639,57 @@ namespace SimGuard.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<int>", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<int>", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<int>", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<int>", b =>
+                {
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<int>", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SimGuard.Api.Models.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<int>", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Alert", b =>
                 {
                     b.HasOne("SimGuard.Api.Models.Sim", "Sim")
@@ -355,6 +728,16 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("Sim");
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.AppUser", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.AuditLog", b =>
                 {
                     b.HasOne("SimGuard.Api.Models.Sim", "AffectedSim")
@@ -369,6 +752,16 @@ namespace SimGuard.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("AffectedSim");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.AuthEvent", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("User");
                 });
