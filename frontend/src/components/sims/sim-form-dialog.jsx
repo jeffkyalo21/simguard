@@ -180,7 +180,7 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
           {noCarriers && (
             <Link
               id={ADD_CARRIER_ID}
-              href="/settings"
+              href="/settings?tab=carriers"
               className="inline-flex min-h-6 w-fit items-center rounded-sm text-sm font-medium underline underline-offset-4 hover:text-foreground"
             >
               {text.addCarrier}

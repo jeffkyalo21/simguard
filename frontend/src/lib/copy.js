@@ -742,6 +742,64 @@ export const copy = {
     text: "Check the address or go home.",
   },
 
+  settings: {
+    tabsLabel: "Settings sections",
+    tabs: {
+      carriers: "Carriers",
+      departments: "Departments",
+      plans: "Plans and tiers",
+      profile: "Profile",
+    },
+    comingSoon: "Coming soon",
+    soon: {
+      departments: "Add, rename and remove the departments employees belong to.",
+      plans: "Set plan types and the data, voice and SMS limits of each tier.",
+      profile: "Change your name, email and password.",
+    },
+    carriers: {
+      add: "Add carrier",
+      count: (total) => `${total.toLocaleString("en-KE")} ${total === 1 ? "carrier" : "carriers"}`,
+      empty: "No carriers yet. Add one so SIMs can use it.",
+      sims: "SIMs",
+      created: "Added",
+      connection: {
+        connected: "Connected",
+        "not connected": "Not connected",
+      },
+      rename: "Rename",
+      remove: "Remove",
+      rowContext: (name) => ` ${name}`,
+      form: {
+        addTitle: "Add carrier",
+        renameTitle: "Rename carrier",
+        name: "Name",
+        placeholder: "Safaricom",
+        save: "Save",
+        errors: {
+          required: "Enter a name.",
+          tooShort: "Use 2 characters or more.",
+          tooLong: "Use 40 characters or fewer.",
+          taken: "A carrier with this name already exists.",
+        },
+      },
+      confirm: {
+        title: "Remove carrier?",
+        text: (name) => `${name} is removed from the list. This cannot be undone.`,
+        action: "Remove carrier",
+      },
+      blocked: {
+        title: "Carrier in use",
+        text: (name, count) =>
+          `${count.toLocaleString("en-KE")} ${count === 1 ? "SIM uses" : "SIMs use"} ${name}. Move ${count === 1 ? "it" : "them"} to another carrier before removing it.`,
+      },
+      toasts: {
+        added: (name) => `${name} added.`,
+        renamed: (name) => `Renamed to ${name}.`,
+        removed: (name) => `${name} removed.`,
+      },
+    },
+  },
+
   errors: {
     generic: "Something went wrong. Try again.",
     load: "Could not load data. Try again.",

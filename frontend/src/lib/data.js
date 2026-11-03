@@ -833,11 +833,15 @@ export async function endAllocation(id) {
 /* -------------------------------------------------------------- Carriers */
 
 // future endpoints: carriers are not in the backend yet. Names follow
-// carrierNameError: required, trimmed, up to 40 characters, unique
-// ignoring case. Errors are ApiError 400 with errors.name = [code].
+// carrierNameError: required, trimmed, 2 to 40 characters, unique ignoring
+// case. Errors are ApiError 400 with errors.name = [code]; a duplicate is
+// a 409 with errors.name = ["taken"].
 
 function carrierName(name, excludeId) {
   const code = carrierNameError(name, readMockDb().carriers, excludeId);
+  if (code === "taken") {
+    throw new ApiError({ status: 409, title: "Conflict", errors: { name: ["taken"] } });
+  }
   if (code) throw fieldError("name", code);
   return name.trim();
 }
@@ -849,6 +853,20 @@ function findCarrier(id) {
 /** Number of SIMs on a carrier. */
 function simsUsing(id) {
   return readMockDb().sims.filter((sim) => sim.carrierId === Number(id)).length;
+}
+
+/**
+ * GET /carriers, oldest first, with the number of SIMs on each.
+ * future field: simCount.
+ */
+export async function listCarriers() {
+  await wait();
+  const { carriers, sims } = readMockDb();
+  const items = mockMode() === "empty" ? [] : carriers;
+  return items.map((carrier) => ({
+    ...carrier,
+    simCount: sims.filter((sim) => sim.carrierId === carrier.id).length,
+  }));
 }
 
 /** POST /carriers. New carriers start as "not connected". */
