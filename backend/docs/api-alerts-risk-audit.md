@@ -421,6 +421,23 @@ any other environment the route does not exist (404). No body.
 
 409: there are no SIMs yet (create some first).
 
+Repeatable: every run deletes the previous demo rows first, so the totals
+stay the same. Probabilities in the demo scores are invented: the seeder
+picks a bucket per day from a per-SIM profile and then a probability that
+fits it. They are not model output.
+
+## Smoke test
+
+`backend/docs/alerts-smoke.ps1` checks every endpoint above with each role
+against a running Development API. It signs in as the Development Admin
+(from the file written by `auth-smoke.ps1`, or `SIMGUARD_SMOKE_ADMIN_EMAIL`,
+`SIMGUARD_SMOKE_ADMIN_PASSWORD` and `SIMGUARD_SMOKE_ADMIN_TOTP_SECRET`),
+creates its own Security Officer, Auditor, department, employee and SIMs,
+and never prints secrets. Start the API with
+`RateLimiting__Auth__PermitLimit=1000`. Pass `-ProductionBaseUrl` to also
+check that a second instance started with `ASPNETCORE_ENVIRONMENT=Production`
+returns 404 for `POST /api/dev/seed-demo`.
+
 ## Database
 
 Migration `AddAlertsRiskAndAudit`:

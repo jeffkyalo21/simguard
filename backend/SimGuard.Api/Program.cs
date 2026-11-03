@@ -82,4 +82,11 @@ api.MapRiskEndpoints();
 api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
 
+// Demo data tools exist only in Development; elsewhere the routes are not
+// mapped at all, so they return 404.
+if (app.Environment.IsDevelopment())
+{
+    api.MapDevEndpoints();
+}
+
 app.Run();
