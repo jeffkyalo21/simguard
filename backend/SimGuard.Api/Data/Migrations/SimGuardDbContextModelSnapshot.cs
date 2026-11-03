@@ -186,17 +186,41 @@ namespace SimGuard.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AlertType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("alert_type");
-
-                    b.Property<DateTime>("DetectedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("detected_at")
+                        .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("model_version");
+
+                    b.Property<JsonDocument>("Reasons")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("reasons")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("resolution");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<int?>("ResolvedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("resolved_by_user_id");
 
                     b.Property<string>("RiskLevel")
                         .IsRequired()
@@ -218,10 +242,24 @@ namespace SimGuard.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
-                        .HasDefaultValue("open")
+                        .HasDefaultValue("flagged")
                         .HasColumnName("status");
 
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("type");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("idx_alerts_created_at");
+
+                    b.HasIndex("ModelVersion")
+                        .HasDatabaseName("idx_alerts_model_version");
+
+                    b.HasIndex("ResolvedByUserId");
 
                     b.HasIndex("SimId")
                         .HasDatabaseName("idx_alerts_sim");
@@ -231,9 +269,15 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.ToTable("alerts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_alerts_risk_level", "risk_level IN ('low', 'medium', 'high', 'critical')");
+                            t.HasCheckConstraint("CK_alerts_resolution", "resolution IS NULL OR resolution IN ('confirmedMisuse', 'falsePositive')");
 
-                            t.HasCheckConstraint("CK_alerts_status", "status IN ('open', 'investigating', 'resolved')");
+                            t.HasCheckConstraint("CK_alerts_risk_level", "risk_level IN ('high', 'medium', 'low')");
+
+                            t.HasCheckConstraint("CK_alerts_risk_score", "risk_score >= 0 AND risk_score <= 1");
+
+                            t.HasCheckConstraint("CK_alerts_status", "status IN ('flagged', 'escalated', 'cleared')");
+
+                            t.HasCheckConstraint("CK_alerts_type", "type IN ('inactiveBilling', 'sharing', 'reselling', 'ghostUsage', 'other')");
                         });
                 });
 
@@ -406,6 +450,15 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("action");
 
+                    b.Property<string>("ActorEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("actor_email");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("actor_user_id");
+
                     b.Property<int?>("AffectedSimId")
                         .HasColumnType("integer")
                         .HasColumnName("affected_sim_id");
@@ -424,13 +477,20 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnName("timestamp")
                         .HasDefaultValueSql("NOW()");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AffectedSimId");
+                    b.HasIndex("Action")
+                        .HasDatabaseName("idx_audit_logs_action");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("idx_audit_logs_actor");
+
+                    b.HasIndex("AffectedSimId")
+                        .HasDatabaseName("idx_audit_logs_sim");
 
                     b.HasIndex("Timestamp")
                         .HasDatabaseName("idx_audit_logs_timestamp");
@@ -570,6 +630,73 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("employees", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Bucket")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("bucket");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("model_version");
+
+                    b.Property<decimal>("Probability")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("probability");
+
+                    b.Property<JsonDocument>("Reasons")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("reasons")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
+                    b.Property<int>("SimId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date")
+                        .HasDatabaseName("idx_risk_scores_date");
+
+                    b.HasIndex("ModelVersion")
+                        .HasDatabaseName("idx_risk_scores_model_version");
+
+                    b.HasIndex("SimId", "Date")
+                        .IsUnique()
+                        .IsDescending(false, true)
+                        .HasDatabaseName("idx_risk_scores_sim_date");
+
+                    b.ToTable("risk_scores", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_risk_scores_bucket", "bucket IN ('clear', 'escalated', 'flag')");
+
+                            t.HasCheckConstraint("CK_risk_scores_probability", "probability >= 0 AND probability <= 1");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>
                 {
                     b.Property<int>("Id")
@@ -692,11 +819,18 @@ namespace SimGuard.Api.Data.Migrations
 
             modelBuilder.Entity("SimGuard.Api.Models.Alert", b =>
                 {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "ResolvedByUser")
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SimGuard.Api.Models.Sim", "Sim")
                         .WithMany("Alerts")
                         .HasForeignKey("SimId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
+
+                    b.Navigation("ResolvedByUser");
 
                     b.Navigation("Sim");
                 });
@@ -740,16 +874,22 @@ namespace SimGuard.Api.Data.Migrations
 
             modelBuilder.Entity("SimGuard.Api.Models.AuditLog", b =>
                 {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SimGuard.Api.Models.Sim", "AffectedSim")
                         .WithMany("AuditLogs")
                         .HasForeignKey("AffectedSimId")
-                        .OnDelete(DeleteBehavior.NoAction);
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("SimGuard.Api.Models.Employee", "User")
                         .WithMany("AuditLogs")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("ActorUser");
 
                     b.Navigation("AffectedSim");
 
@@ -777,6 +917,17 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("Department");
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.Sim", "Sim")
+                        .WithMany("RiskScores")
+                        .HasForeignKey("SimId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Sim");
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Department", b =>
                 {
                     b.Navigation("Employees");
@@ -798,6 +949,8 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("Allocations");
 
                     b.Navigation("AuditLogs");
+
+                    b.Navigation("RiskScores");
                 });
 #pragma warning restore 612, 618
         }
