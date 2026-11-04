@@ -15,7 +15,7 @@ public static class AlertEndpoints
     {
         var group = routes.MapGroup("/alerts")
             .WithTags("Alerts")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetAlerts)
             .WithName("GetAlerts")
@@ -29,7 +29,7 @@ public static class AlertEndpoints
 
         group.MapPatch("/{id:int}/status", UpdateAlertStatus)
             .WithName("UpdateAlertStatus")
-            .RequireAuthorization(AuthPolicies.CanReviewAlerts)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<AlertDetailResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)

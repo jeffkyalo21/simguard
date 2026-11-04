@@ -19,7 +19,7 @@ public static class SimEndpoints
     {
         var group = routes.MapGroup("/sims")
             .WithTags("SIMs")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetSims)
             .WithName("GetSims")
@@ -33,14 +33,14 @@ public static class SimEndpoints
 
         group.MapPost("/", CreateSim)
             .WithName("CreateSim")
-            .RequireAuthorization(AuthPolicies.CanManageSims)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<SimResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateSim)
             .WithName("UpdateSim")
-            .RequireAuthorization(AuthPolicies.CanManageSims)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<SimResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -48,7 +48,7 @@ public static class SimEndpoints
 
         group.MapPatch("/{id:int}/status", UpdateSimStatus)
             .WithName("UpdateSimStatus")
-            .RequireAuthorization(AuthPolicies.CanChangeSimStatus)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<SimResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -56,7 +56,7 @@ public static class SimEndpoints
 
         group.MapDelete("/{id:int}", DeleteSim)
             .WithName("DeleteSim")
-            .RequireAuthorization(AuthPolicies.CanManageSims)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

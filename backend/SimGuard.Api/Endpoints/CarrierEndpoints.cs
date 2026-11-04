@@ -22,7 +22,7 @@ public static class CarrierEndpoints
     {
         var group = routes.MapGroup("/carriers")
             .WithTags("Carriers")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetCarriers)
             .WithName("GetCarriers")
@@ -30,14 +30,14 @@ public static class CarrierEndpoints
 
         group.MapPost("/", CreateCarrier)
             .WithName("CreateCarrier")
-            .RequireAuthorization(AuthPolicies.CanManageCarriers)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<CarrierResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", RenameCarrier)
             .WithName("RenameCarrier")
-            .RequireAuthorization(AuthPolicies.CanManageCarriers)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<CarrierResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -45,7 +45,7 @@ public static class CarrierEndpoints
 
         group.MapDelete("/{id:int}", DeleteCarrier)
             .WithName("DeleteCarrier")
-            .RequireAuthorization(AuthPolicies.CanManageCarriers)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

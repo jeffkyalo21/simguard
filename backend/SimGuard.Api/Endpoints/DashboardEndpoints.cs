@@ -16,7 +16,7 @@ public static class DashboardEndpoints
         routes.MapGet("/dashboard/summary", GetSummary)
             .WithTags("Dashboard")
             .WithName("GetDashboardSummary")
-            .RequireAuthorization(AuthPolicies.CanRead)
+            .RequireAuthorization(AuthPolicies.OrgRead)
             .Produces<DashboardSummaryResponse>()
             .ProducesValidationProblem();
 

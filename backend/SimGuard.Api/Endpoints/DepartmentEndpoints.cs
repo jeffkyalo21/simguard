@@ -15,7 +15,7 @@ public static class DepartmentEndpoints
     {
         var group = routes.MapGroup("/departments")
             .WithTags("Departments")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetDepartments)
             .WithName("GetDepartments")
@@ -29,14 +29,14 @@ public static class DepartmentEndpoints
 
         group.MapPost("/", CreateDepartment)
             .WithName("CreateDepartment")
-            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<DepartmentResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateDepartment)
             .WithName("UpdateDepartment")
-            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<DepartmentResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -44,7 +44,7 @@ public static class DepartmentEndpoints
 
         group.MapDelete("/{id:int}", DeleteDepartment)
             .WithName("DeleteDepartment")
-            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

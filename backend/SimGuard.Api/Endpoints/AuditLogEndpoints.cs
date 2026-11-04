@@ -13,7 +13,7 @@ public static class AuditLogEndpoints
         routes.MapGet("/audit-logs", GetAuditLogs)
             .WithTags("Audit")
             .WithName("GetAuditLogs")
-            .RequireAuthorization(AuthPolicies.CanReadAudit)
+            .RequireAuthorization(AuthPolicies.AuditRead)
             .Produces<PagedResult<AuditLogItem>>()
             .ProducesValidationProblem();
 

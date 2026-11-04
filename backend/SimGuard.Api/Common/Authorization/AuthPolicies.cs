@@ -5,37 +5,37 @@ namespace SimGuard.Api.Common.Authorization;
 
 // All authorization policies are defined here. The role matrix is documented
 // in backend/docs/auth.md; keep the two in sync.
+//
+// The roles split the system in two:
+//   Admin           operates SimGuard (accounts, system audit). Sees no
+//                   organisation data.
+//   SecurityOfficer manages the organisation's data.
+//   Auditor         reads the organisation's data and the full audit log;
+//                   never writes.
 public static class AuthPolicies
 {
-    // Any signed-in user (Admin, SecurityOfficer, Auditor).
-    public const string CanRead = nameof(CanRead);
+    // Organisation data, read: departments, employees, SIMs, allocations,
+    // alerts, carriers, risk scores, usage, dashboard. SecurityOfficer and
+    // Auditor.
+    public const string OrgRead = nameof(OrgRead);
 
-    // Departments and employees: create, update, delete.
-    public const string CanManageOrganisation = nameof(CanManageOrganisation);
+    // Organisation data, every write (create, update, delete, SIM status and
+    // tier, allocations and returns, alert review). SecurityOfficer only.
+    public const string OrgWrite = nameof(OrgWrite);
 
-    // SIMs: create, update, delete.
-    public const string CanManageSims = nameof(CanManageSims);
+    // SimGuard operation: /api/users. Admin only.
+    public const string AdminOnly = nameof(AdminOnly);
 
-    // Carriers: create, rename, delete.
-    public const string CanManageCarriers = nameof(CanManageCarriers);
+    // GET /api/audit-logs and GET /api/auth/events. Admin and Auditor. The
+    // audit log endpoint narrows Admin to system entries.
+    public const string AuditRead = nameof(AuditRead);
 
-    // SIMs: PATCH /sims/{id}/status.
-    public const string CanChangeSimStatus = nameof(CanChangeSimStatus);
+    // POST /api/dev/seed-demo, mapped only in Development. Admin. The one
+    // exception to "Admin sees no organisation data": it is a dev tool.
+    public const string DevTools = nameof(DevTools);
 
-    // Allocations: create and return.
-    public const string CanManageAllocations = nameof(CanManageAllocations);
-
-    // /api/users.
-    public const string CanManageUsers = nameof(CanManageUsers);
-
-    // GET /api/auth/events and GET /api/audit-logs.
-    public const string CanReadAudit = nameof(CanReadAudit);
-
-    // PATCH /api/alerts/{id}/status.
-    public const string CanReviewAlerts = nameof(CanReviewAlerts);
-
-    // POST /api/dev/seed-demo. Only mapped in Development.
-    public const string CanUseDevTools = nameof(CanUseDevTools);
+    // Any role with a full access token. GET /health/database.
+    public const string AnyRole = nameof(AnyRole);
 
     // GET /api/auth/me and POST /api/auth/change-password. The only policy a
     // user with a pending forced password change can satisfy.
@@ -53,38 +53,27 @@ public static class AuthPolicies
     {
         services.AddAuthorizationBuilder()
             // Every endpoint without its own policy requires a full access
-            // token and a completed password change.
+            // token and a completed password change. Every mapped endpoint
+            // still names its policy explicitly.
             .SetFallbackPolicy(FullAccess().Build())
             .SetDefaultPolicy(FullAccess().Build())
-            .AddPolicy(CanRead, FullAccess()
-                .RequireRole(AppRoles.Admin, AppRoles.SecurityOfficer, AppRoles.Auditor)
+            .AddPolicy(OrgRead, FullAccess()
+                .RequireRole(AppRoles.SecurityOfficer, AppRoles.Auditor)
                 .Build())
-            .AddPolicy(CanManageOrganisation, FullAccess()
+            .AddPolicy(OrgWrite, FullAccess()
+                .RequireRole(AppRoles.SecurityOfficer)
+                .Build())
+            .AddPolicy(AdminOnly, FullAccess()
                 .RequireRole(AppRoles.Admin)
                 .Build())
-            .AddPolicy(CanManageSims, FullAccess()
-                .RequireRole(AppRoles.Admin)
-                .Build())
-            .AddPolicy(CanManageCarriers, FullAccess()
-                .RequireRole(AppRoles.Admin)
-                .Build())
-            .AddPolicy(CanChangeSimStatus, FullAccess()
-                .RequireRole(AppRoles.Admin, AppRoles.SecurityOfficer)
-                .Build())
-            .AddPolicy(CanManageAllocations, FullAccess()
-                .RequireRole(AppRoles.Admin, AppRoles.SecurityOfficer)
-                .Build())
-            .AddPolicy(CanManageUsers, FullAccess()
-                .RequireRole(AppRoles.Admin)
-                .Build())
-            .AddPolicy(CanReadAudit, FullAccess()
+            .AddPolicy(AuditRead, FullAccess()
                 .RequireRole(AppRoles.Admin, AppRoles.Auditor)
                 .Build())
-            .AddPolicy(CanReviewAlerts, FullAccess()
-                .RequireRole(AppRoles.Admin, AppRoles.SecurityOfficer)
-                .Build())
-            .AddPolicy(CanUseDevTools, FullAccess()
+            .AddPolicy(DevTools, FullAccess()
                 .RequireRole(AppRoles.Admin)
+                .Build())
+            .AddPolicy(AnyRole, FullAccess()
+                .RequireRole(AppRoles.Admin, AppRoles.SecurityOfficer, AppRoles.Auditor)
                 .Build())
             .AddPolicy(SignedIn, new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser()

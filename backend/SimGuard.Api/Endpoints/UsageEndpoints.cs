@@ -17,7 +17,7 @@ public static class UsageEndpoints
     {
         var sims = routes.MapGroup("/sims")
             .WithTags("Usage")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         sims.MapGet("/{id:int}/usage", GetSimUsage)
             .WithName("GetSimUsage")

@@ -16,7 +16,7 @@ public static class RiskEndpoints
     {
         var sims = routes.MapGroup("/sims")
             .WithTags("Risk")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         sims.MapGet("/{id:int}/risk", GetSimRisk)
             .WithName("GetSimRisk")
@@ -33,7 +33,7 @@ public static class RiskEndpoints
         routes.MapGet("/risk-scores", GetRiskScores)
             .WithTags("Risk")
             .WithName("GetRiskScores")
-            .RequireAuthorization(AuthPolicies.CanRead)
+            .RequireAuthorization(AuthPolicies.OrgRead)
             .Produces<PagedResult<RiskScoreItem>>()
             .ProducesValidationProblem();
 

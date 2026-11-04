@@ -17,7 +17,7 @@ public static class EmployeeEndpoints
     {
         var group = routes.MapGroup("/employees")
             .WithTags("Employees")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetEmployees)
             .WithName("GetEmployees")
@@ -31,14 +31,14 @@ public static class EmployeeEndpoints
 
         group.MapPost("/", CreateEmployee)
             .WithName("CreateEmployee")
-            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<EmployeeResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateEmployee)
             .WithName("UpdateEmployee")
-            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<EmployeeResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -46,7 +46,7 @@ public static class EmployeeEndpoints
 
         group.MapDelete("/{id:int}", DeleteEmployee)
             .WithName("DeleteEmployee")
-            .RequireAuthorization(AuthPolicies.CanManageOrganisation)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

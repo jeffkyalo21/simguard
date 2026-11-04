@@ -15,7 +15,7 @@ public static class AllocationEndpoints
     {
         var group = routes.MapGroup("/allocations")
             .WithTags("Allocations")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetAllocations)
             .WithName("GetAllocations")
@@ -29,14 +29,14 @@ public static class AllocationEndpoints
 
         group.MapPost("/", CreateAllocation)
             .WithName("CreateAllocation")
-            .RequireAuthorization(AuthPolicies.CanManageAllocations)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<AllocationResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPost("/{id:int}/return", ReturnAllocation)
             .WithName("ReturnAllocation")
-            .RequireAuthorization(AuthPolicies.CanManageAllocations)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<AllocationResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);

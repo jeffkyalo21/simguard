@@ -25,7 +25,7 @@ public static class UserEndpoints
     {
         var group = routes.MapGroup("/users")
             .WithTags("Users")
-            .RequireAuthorization(AuthPolicies.CanManageUsers);
+            .RequireAuthorization(AuthPolicies.AdminOnly);
 
         group.MapGet("/", GetUsers)
             .WithName("GetUsers")

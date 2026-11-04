@@ -67,7 +67,7 @@ app.MapGet("/health/database", async (
         : Results.Problem("Database connection failed.", statusCode: StatusCodes.Status503ServiceUnavailable);
 })
 .WithName("CheckDatabaseHealth")
-.RequireAuthorization(AuthPolicies.CanRead);
+.RequireAuthorization(AuthPolicies.AnyRole);
 
 var api = app.MapGroup("/api");
 
