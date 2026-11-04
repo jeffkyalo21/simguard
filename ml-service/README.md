@@ -26,12 +26,18 @@ venv/Scripts/python -m pip install -r requirements.txt
 | `ML_PROPHET_CHECKPOINTS` | `data/prophet_checkpoints.parquet` | Precomputed checkpoint forecasts, parquet reader only. |
 | `ML_USE_PRECOMPUTED_PROPHET` | `1` | `0` always fits Prophet instead of reading the precomputed forecasts. |
 | `ML_PROPHET_N_JOBS` | `-1` | joblib workers for Prophet fits (`-1` is all cores). |
+| `ML_SHARED_SECRET` | none | Secret the backend sends in the `X-SimGuard-ML-Secret` header (`MlService:SharedSecret` in the backend). Every route except `/health` returns `401` without it. Never commit it. |
+| `ML_ENVIRONMENT` | `Production` | `Development` lets the service start without `ML_SHARED_SECRET`: the check is then off and a warning is logged. In any other environment the service refuses to start without it. |
 
 ### Run
 
 ```bash
-venv/Scripts/python -m uvicorn app.main:app --port 8001
+ML_ENVIRONMENT=Development venv/Scripts/python -m uvicorn app.main:app --port 8001
 ```
+
+For the backend scoring pipeline run it against the backend database with
+`READER=postgres`, `ML_DATABASE_URL` and `ML_SHARED_SECRET` set (see
+`backend/docs/scoring-pipeline.md`).
 
 Interactive docs are at `http://localhost:8001/docs`.
 
@@ -52,6 +58,10 @@ JSON field names are camelCase. Errors are JSON with `title`, `status` and
 | `POST /v1/recommend-tier` | `{simIds, billingCycle}`, 1 to 200 SIMs | Raw Prophet result of the latest checkpoint (day 10, 20 or 25) the data reaches: `recommendation`, `recommendedTier`, `projectedOverageMb`, `daysToDepletion`, `checkpointDay`. No sustained pattern or cooldown rule; the backend applies those. Unknown SIMs go in `notFound`. |
 | `GET /health` | | `200` with `status: ok` when artifacts and data are loaded, `503` otherwise. |
 | `GET /version` | | Model file names, sizes and sha256, and library versions. |
+
+Every route except `/health` (including `/docs`) needs the
+`X-SimGuard-ML-Secret` header when `ML_SHARED_SECRET` is set; a missing or
+wrong value is `401`.
 
 Status codes: `422` for bad input (empty list, too many SIMs, bad date,
 unknown field), `503` when artifacts are missing.

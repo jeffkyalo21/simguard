@@ -12,11 +12,18 @@ Routes:
 Errors are JSON {title, status, detail}. 422 for bad input, 503 when
 artifacts are missing. The service refuses to start if a required artifact
 is missing or the reader cannot load its data.
+
+Every route except /health needs the X-SimGuard-ML-Secret header equal to
+ML_SHARED_SECRET (401 otherwise). Without ML_SHARED_SECRET the service
+starts only when ML_ENVIRONMENT is Development; the check is then off and a
+warning is logged.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
+import logging
 import platform
 import time
 from contextlib import asynccontextmanager
@@ -30,7 +37,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.config import API_VERSION, REQUIRED_ARTIFACTS, SCORE_LOOKBACK_DAYS, Settings
+from app.config import (
+    API_VERSION,
+    OPEN_PATHS,
+    REQUIRED_ARTIFACTS,
+    SCORE_LOOKBACK_DAYS,
+    SECRET_HEADER,
+    Settings,
+)
 from app.readers import make_reader
 from app.schemas import (
     HealthResponse,
@@ -45,6 +59,9 @@ from app.tiering import cycle_bounds, load_precomputed, recommend
 
 LIBRARIES = ("fastapi", "pydantic", "pandas", "numpy", "scikit-learn", "xgboost", "shap", "prophet", "joblib")
 PROBLEM_JSON = "application/problem+json"
+MISSING_SECRET = "ML_SHARED_SECRET is not set. It is required unless ML_ENVIRONMENT is Development."
+
+logger = logging.getLogger("simguard.ml")
 
 
 def _problem(status: int, detail: str, errors: Optional[list] = None) -> JSONResponse:
@@ -96,6 +113,10 @@ def create_app(settings: Optional[Settings] = None, fail_fast: bool = True) -> F
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        if not settings.shared_secret:
+            if not settings.is_development:
+                raise RuntimeError(MISSING_SECRET)
+            logger.warning("ML_SHARED_SECRET is not set: the shared secret check is off (Development only).")
         state = app.state
         state.settings = settings
         state.reader = None
@@ -124,6 +145,16 @@ def create_app(settings: Optional[Settings] = None, fail_fast: bool = True) -> F
         yield
 
     app = FastAPI(title="SimGuard ML service", version=API_VERSION, lifespan=lifespan)
+    expected_secret = settings.shared_secret.encode("utf-8")
+
+    @app.middleware("http")
+    async def _require_secret(request: Request, call_next):
+        # Off only when no secret is configured (allowed in Development only).
+        if expected_secret and request.url.path not in OPEN_PATHS:
+            given = request.headers.get(SECRET_HEADER, "").encode("utf-8")
+            if not hmac.compare_digest(given, expected_secret):
+                return _problem(401, f"Missing or wrong {SECRET_HEADER} header.")
+        return await call_next(request)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError):

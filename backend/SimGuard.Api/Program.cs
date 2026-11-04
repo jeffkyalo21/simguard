@@ -4,6 +4,7 @@ using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Endpoints;
+using SimGuard.Api.Ml;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddEndpointsApiExplorer();
+
+// Typed client for the ML service. See backend/docs/scoring-pipeline.md.
+builder.Services.AddMlServiceClient(builder.Configuration);
 
 // Identity, JWT bearer, authorization policies, CORS, rate limiting and
 // Swagger with a Bearer scheme. See backend/docs/auth.md.
