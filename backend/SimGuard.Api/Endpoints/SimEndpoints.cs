@@ -54,6 +54,13 @@ public static class SimEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapPatch("/{id:int}/tier", UpdateSimTier)
+            .WithName("UpdateSimTier")
+            .RequireAuthorization(AuthPolicies.OrgWrite)
+            .Produces<SimTierResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         group.MapDelete("/{id:int}", DeleteSim)
             .WithName("DeleteSim")
             .RequireAuthorization(AuthPolicies.OrgWrite)
@@ -314,6 +321,53 @@ public static class SimEndpoints
         }
 
         return TypedResults.Ok(await FindSimResponseAsync(db, id, cancellationToken));
+    }
+
+    // The tier picks the ML cohort the SIM is compared with, so a change
+    // affects every score computed after it (see ml_daily_usage).
+    private static async Task<IResult> UpdateSimTier(
+        int id,
+        SimTierRequest request,
+        SimGuardDbContext db,
+        AuditWriter audit,
+        CancellationToken cancellationToken)
+    {
+        var tier = request.Tier?.Trim().ToLowerInvariant();
+
+        if (string.IsNullOrEmpty(tier))
+        {
+            return Invalid("tier", "tier is required.");
+        }
+
+        if (!SimTiers.All.Contains(tier))
+        {
+            return Invalid("tier", $"tier must be one of: {string.Join(", ", SimTiers.All)}.");
+        }
+
+        string? oldTier;
+
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            var sim = await LockSimAsync(db, id, cancellationToken);
+
+            if (sim is null)
+            {
+                return ApiProblems.NotFound($"SIM {id} was not found.");
+            }
+
+            oldTier = sim.Tier;
+
+            if (oldTier != tier)
+            {
+                sim.Tier = tier;
+                audit.Add(AuditActions.SimTierChanged, sim.Id, new { tier = oldTier }, new { tier });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return TypedResults.Ok(new SimTierResponse(id, tier, oldTier));
     }
 
     private static async Task<IResult> DeleteSim(

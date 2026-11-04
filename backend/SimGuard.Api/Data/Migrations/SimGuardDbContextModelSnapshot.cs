@@ -879,6 +879,11 @@ namespace SimGuard.Api.Data.Migrations
                         .HasDefaultValue("available")
                         .HasColumnName("status");
 
+                    b.Property<string>("Tier")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CarrierId")
@@ -896,6 +901,8 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("sims", null, t =>
                         {
                             t.HasCheckConstraint("CK_sims_status", "status IN ('available', 'assigned', 'inactive')");
+
+                            t.HasCheckConstraint("CK_sims_tier", "tier IS NULL OR tier IN ('field', 'manager', 'professional', 'support')");
                         });
                 });
 

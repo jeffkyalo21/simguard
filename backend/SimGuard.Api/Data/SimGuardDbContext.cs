@@ -129,6 +129,10 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 table.HasCheckConstraint(
                     "CK_sims_status",
                     "status IN ('available', 'assigned', 'inactive')");
+
+                table.HasCheckConstraint(
+                    "CK_sims_tier",
+                    "tier IS NULL OR tier IN ('field', 'manager', 'professional', 'support')");
             });
 
             entity.HasKey(e => e.Id);
@@ -165,6 +169,11 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasMaxLength(20)
                 .HasDefaultValue("available")
                 .IsRequired();
+
+            // ML plan tier (cohort). Null until set or loaded.
+            entity.Property(e => e.Tier)
+                .HasColumnName("tier")
+                .HasMaxLength(20);
 
             entity.Property(e => e.CreatedAt)
                 .HasColumnName("created_at")

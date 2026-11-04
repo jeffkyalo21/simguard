@@ -49,6 +49,9 @@ CREATE TABLE sims (
     monthly_cost DECIMAL(10, 2) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'available'
         CHECK (status IN ('available', 'assigned', 'inactive')),
+    -- ML plan tier; picks the ML cohort. Set by PATCH /api/sims/{id}/tier.
+    tier VARCHAR(20)
+        CHECK (tier IS NULL OR tier IN ('field', 'manager', 'professional', 'support')),
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -158,17 +161,21 @@ CREATE UNIQUE INDEX idx_daily_usage_sim_date ON daily_usage(sim_id, date);
 CREATE INDEX idx_daily_usage_date ON daily_usage(date);
 
 -- What the ML Postgres reader selects from: the contract columns only.
+-- sims.tier, when set, overrides the tier on each usage row, so a tier
+-- change moves the SIM to its new ML cohort for future scores.
 CREATE VIEW ml_daily_usage AS
-SELECT sim_id, date,
-       total_download_mb, total_upload_mb,
-       data_session_count, data_duration_s,
-       hotspot_sessions, public_apn_sessions,
-       unique_towers, geo_flag_count,
-       peak_mb, offpeak_mb, total_mb,
-       roaming_sessions, billed_mb, tier,
-       voice_minutes_used, sms_count,
-       voice_minutes_remaining, sms_remaining
-FROM daily_usage;
+SELECT u.sim_id, u.date,
+       u.total_download_mb, u.total_upload_mb,
+       u.data_session_count, u.data_duration_s,
+       u.hotspot_sessions, u.public_apn_sessions,
+       u.unique_towers, u.geo_flag_count,
+       u.peak_mb, u.offpeak_mb, u.total_mb,
+       u.roaming_sessions, u.billed_mb,
+       COALESCE(s.tier, u.tier) AS tier,
+       u.voice_minutes_used, u.sms_count,
+       u.voice_minutes_remaining, u.sms_remaining
+FROM daily_usage u
+JOIN sims s ON s.id = u.sim_id;
 
 -- ============================
 -- audit_logs

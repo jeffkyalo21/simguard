@@ -352,7 +352,7 @@ passwords, password hashes, tokens or MFA secrets are ever stored.
 | ------ | -------- | --------------- |
 | `department.created`, `department.updated`, `department.deleted` | `/api/departments` | null |
 | `employee.created`, `employee.updated`, `employee.deleted` | `/api/employees` | null |
-| `sim.created`, `sim.updated`, `sim.status_changed` | `/api/sims` | the SIM |
+| `sim.created`, `sim.updated`, `sim.status_changed`, `sim.tier_changed` | `/api/sims` | the SIM |
 | `sim.deleted` | `DELETE /api/sims/{id}` | null (the SIM is gone; its id is in `oldValues`) |
 | `allocation.created`, `allocation.returned` | `/api/allocations` | the SIM |
 | `alert.status_changed` | `PATCH /api/alerts/{id}/status` | the alert's SIM |

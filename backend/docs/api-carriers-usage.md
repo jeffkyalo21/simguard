@@ -168,6 +168,42 @@ with `gb` cumulative. This endpoint returns raw days instead:
 The carrier items have no `status` ("connected" / "not connected") field;
 the backend has nothing to base it on.
 
+## SIM tier
+
+`sims.tier` is the SIM's ML plan tier: `field`, `manager`, `professional` or
+`support` (the tiers in the ML contract and the cohort keys in
+`ml-service/artifacts/cohort_stats.json`). The tier decides which ML cohort
+the SIM is compared with. The view `ml_daily_usage` returns `sims.tier` in
+place of the tier stored on each usage row when it is set, so a change
+affects every score computed after it (and any rescoring of past days); it
+does not change scores already stored. `GET /api/sims/{id}/usage` still shows
+the tier stored on each usage row.
+
+The AddSimTier migration set the tier of every SIM with usage from its most
+recent usage row. SIMs without usage have no tier (`null`) until one is set.
+`SimResponse` does not include the tier.
+
+### PATCH /api/sims/{id}/tier
+
+SecurityOfficer only (`OrgWrite`). Request: `{ "tier": "manager" }`, trimmed
+and compared ignoring case.
+
+```json
+{ "simId": 125, "tier": "manager", "previousTier": "professional" }
+```
+
+`previousTier` is `null` when the SIM had no tier. Sending the current tier
+returns 200 and writes no audit entry. A change writes `sim.tier_changed`
+with `oldValues {tier}` and `newValues {tier}`.
+
+| Status | When |
+| ------ | ---- |
+| 400 | tier missing (`errors.tier` "tier is required.") or not one of the four tiers |
+| 404 | unknown SIM |
+
+The frontend mock `setSimTier` also changes plan limits and cost; this
+endpoint only changes the tier.
+
 ## Smoke test
 
 [carriers-smoke.ps1](carriers-smoke.ps1) checks every endpoint here against a

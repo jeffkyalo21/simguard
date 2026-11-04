@@ -20,6 +20,11 @@ public record SimRequest(
 
 public record SimStatusRequest(string? Status);
 
+public record SimTierRequest(string? Tier);
+
+// PATCH /sims/{id}/tier. PreviousTier is null when the SIM had none.
+public record SimTierResponse(int SimId, string Tier, string? PreviousTier);
+
 public record CurrentAllocationResponse(
     int AllocationId,
     int EmployeeId,
