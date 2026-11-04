@@ -188,6 +188,10 @@ CREATE TABLE audit_logs (
     actor_user_id INTEGER, -- app_users(id), ON DELETE SET NULL
     actor_email VARCHAR(256),
     action VARCHAR(100) NOT NULL,
+    -- system: user management, auth, roles; organisation: everything else.
+    category VARCHAR(20) NOT NULL
+        CHECK (category IN ('system', 'organisation')),
+    actor_role VARCHAR(20),
     affected_sim_id INTEGER REFERENCES sims(id) ON DELETE SET NULL,
     old_values JSONB,
     new_values JSONB,
@@ -199,3 +203,4 @@ CREATE INDEX idx_audit_logs_user ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_user_id);
 CREATE INDEX idx_audit_logs_sim ON audit_logs(affected_sim_id);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX idx_audit_logs_category ON audit_logs(category);

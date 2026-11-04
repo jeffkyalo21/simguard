@@ -491,7 +491,12 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
         // Audit logs
         modelBuilder.Entity<AuditLog>(entity =>
         {
-            entity.ToTable("audit_logs");
+            entity.ToTable("audit_logs", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_audit_logs_category",
+                    "category IN ('system', 'organisation')");
+            });
 
             entity.HasKey(e => e.Id);
 
@@ -513,6 +518,15 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasColumnName("action")
                 .HasMaxLength(100)
                 .IsRequired();
+
+            entity.Property(e => e.Category)
+                .HasColumnName("category")
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.ActorRole)
+                .HasColumnName("actor_role")
+                .HasMaxLength(20);
 
             entity.Property(e => e.AffectedSimId)
                 .HasColumnName("affected_sim_id");
@@ -544,6 +558,9 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
             entity.HasIndex(e => e.Action)
                 .HasDatabaseName("idx_audit_logs_action");
+
+            entity.HasIndex(e => e.Category)
+                .HasDatabaseName("idx_audit_logs_category");
 
             entity.HasOne(e => e.User)
                 .WithMany(e => e.AuditLogs)

@@ -43,14 +43,16 @@ A reason explains one feature's share of a score:
 
 | Endpoint | Admin | SecurityOfficer | Auditor | Policy |
 | -------- | :---: | :-------------: | :-----: | ------ |
-| `GET /api/alerts`, `GET /api/alerts/{id}` | yes | yes | yes | `CanRead` |
-| `PATCH /api/alerts/{id}/status` | yes | yes | no | `CanReviewAlerts` |
-| `GET /api/sims/{id}/risk` | yes | yes | yes | `CanRead` |
-| `GET /api/risk-scores` | yes | yes | yes | `CanRead` |
-| `GET /api/sims/{id}/activity` | yes | yes | yes | `CanRead` |
-| `GET /api/dashboard/summary` | yes | yes | yes | `CanRead` |
-| `GET /api/audit-logs` | yes | no | yes | `CanReadAudit` |
-| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `CanUseDevTools` |
+| `GET /api/alerts`, `GET /api/alerts/{id}` | no | yes | yes | `OrgRead` |
+| `PATCH /api/alerts/{id}/status` | no | yes | no | `OrgWrite` |
+| `GET /api/sims/{id}/risk` | no | yes | yes | `OrgRead` |
+| `GET /api/risk-scores` | no | yes | yes | `OrgRead` |
+| `GET /api/sims/{id}/activity` | no | yes | yes | `OrgRead` |
+| `GET /api/dashboard/summary` | no | yes | yes | `OrgRead` |
+| `GET /api/audit-logs` | system entries only | no | yes | `AuditRead` |
+| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `DevTools` |
+
+The full matrix is in [auth.md](auth.md).
 
 ## Alerts
 
@@ -348,6 +350,12 @@ stays readable if the account is later changed. `oldValues` and `newValues`
 are the relevant fields before and after (null for create or delete). No
 passwords, password hashes, tokens or MFA secrets are ever stored.
 
+Every row also has a `category` and an `actorRole`. `category` is `system`
+for actions that start with `user`, `auth` or `role` (user management) and
+`organisation` for everything else, including `dev.demo_seeded`.
+`actorRole` is the caller's role from the access token when the row was
+written (`Admin`, `SecurityOfficer` or `Auditor`).
+
 | Action | Endpoint | `affectedSimId` |
 | ------ | -------- | --------------- |
 | `department.created`, `department.updated`, `department.deleted` | `/api/departments` | null |
@@ -364,7 +372,9 @@ auth event log (`GET /api/auth/events`), not here.
 
 ### GET /api/audit-logs
 
-Admin or Auditor (SecurityOfficer gets 403). Query: `simId`, `actorEmail`
+Admin or Auditor (SecurityOfficer gets 403). Auditor sees every row. Admin,
+the SimGuard operator, sees only rows with `category` `system`; the other
+filters apply on top of that. Query: `simId`, `actorEmail`
 (case-insensitive, exact), `action` (exact), `from`, `to` (timestamps,
 inclusive), `page`, `pageSize`. Newest first.
 
@@ -378,8 +388,10 @@ inclusive), `page`, `pageSize`. Newest first.
       "timestamp": "2026-11-03T08:30:00Z",
       "actorUserId": 2,
       "actorEmail": "officer@simguard.local",
+      "actorRole": "SecurityOfficer",
       "employeeId": null,
       "action": "alert.status_changed",
+      "category": "organisation",
       "affectedSimId": 4,
       "affectedSimPhoneNumber": "+254712345678",
       "oldValues": { "alertId": 17, "status": "flagged", "resolution": null, "resolutionNote": null, "resolvedAt": null, "resolvedByUserId": null },
@@ -394,7 +406,9 @@ inclusive), `page`, `pageSize`. Newest first.
 
 `employeeId` is the legacy `audit_logs.user_id` column (an Employee id). It is
 kept for older rows and is null on rows written by the API.
-`affectedSimPhoneNumber` is null when the row has no SIM. 400: `from` after
+`affectedSimPhoneNumber` is null when the row has no SIM. `actorRole` is
+null on rows written before the AddAuditCategory migration (the role at the
+time was not recorded) and when the token had no role claim. 400: `from` after
 `to`, bad paging.
 
 ## Demo data (Development only)
@@ -456,3 +470,9 @@ Migration `AddAlertsRiskAndAudit`:
   `app_users`, set to null if the user is deleted) and `actor_email`;
   `affected_sim_id` is set to null when its SIM is deleted, so audit history
   survives a SIM deletion.
+
+Migration `AddAuditCategory`: `audit_logs` gets `category` (varchar 20, not
+null, check `system` or `organisation`, indexed) and `actor_role` (varchar
+20, nullable). Existing rows are backfilled: `system` when `action` starts
+with `user`, `auth` or `role`, `organisation` otherwise; `actor_role` stays
+null.

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
@@ -28,6 +29,7 @@ public static class AuditLogEndpoints
         DateTimeOffset? to,
         int? page,
         int? pageSize,
+        ClaimsPrincipal user,
         SimGuardDbContext db,
         CancellationToken cancellationToken)
     {
@@ -42,6 +44,13 @@ public static class AuditLogEndpoints
         }
 
         var query = db.AuditLogs.AsNoTracking();
+
+        // Admin is the SimGuard operator and sees only system entries.
+        // Auditor sees everything. The policy keeps everyone else out.
+        if (!user.IsInRole(AppRoles.Auditor))
+        {
+            query = query.Where(l => l.Category == AuditCategories.System);
+        }
 
         if (simId is not null)
         {
@@ -84,8 +93,10 @@ public static class AuditLogEndpoints
                 l.Timestamp,
                 l.ActorUserId,
                 l.ActorEmail,
+                l.ActorRole,
                 l.UserId,
                 l.Action,
+                l.Category,
                 l.AffectedSimId,
                 l.AffectedSim == null ? null : l.AffectedSim.PhoneNumber,
                 l.OldValues,

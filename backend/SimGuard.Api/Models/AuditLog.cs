@@ -16,6 +16,15 @@ public class AuditLog
     public string? ActorEmail { get; set; }
 
     public string Action { get; set; } = string.Empty;
+
+    // "system" for operator actions (user management, auth, roles),
+    // "organisation" for the rest. See AuditCategories.
+    public string Category { get; set; } = "organisation";
+
+    // The actor's role when the row was written. Null for rows written
+    // before the column existed and for callers without a role claim.
+    public string? ActorRole { get; set; }
+
     public int? AffectedSimId { get; set; }
     public JsonDocument? OldValues { get; set; }
     public JsonDocument? NewValues { get; set; }

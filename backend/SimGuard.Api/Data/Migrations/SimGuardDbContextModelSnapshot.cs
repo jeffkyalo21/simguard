@@ -455,6 +455,11 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("actor_email");
 
+                    b.Property<string>("ActorRole")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("actor_role");
+
                     b.Property<int?>("ActorUserId")
                         .HasColumnType("integer")
                         .HasColumnName("actor_user_id");
@@ -462,6 +467,12 @@ namespace SimGuard.Api.Data.Migrations
                     b.Property<int?>("AffectedSimId")
                         .HasColumnType("integer")
                         .HasColumnName("affected_sim_id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("category");
 
                     b.Property<JsonDocument>("NewValues")
                         .HasColumnType("jsonb")
@@ -492,13 +503,19 @@ namespace SimGuard.Api.Data.Migrations
                     b.HasIndex("AffectedSimId")
                         .HasDatabaseName("idx_audit_logs_sim");
 
+                    b.HasIndex("Category")
+                        .HasDatabaseName("idx_audit_logs_category");
+
                     b.HasIndex("Timestamp")
                         .HasDatabaseName("idx_audit_logs_timestamp");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("idx_audit_logs_user");
 
-                    b.ToTable("audit_logs", (string)null);
+                    b.ToTable("audit_logs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_audit_logs_category", "category IN ('system', 'organisation')");
+                        });
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.AuthEvent", b =>

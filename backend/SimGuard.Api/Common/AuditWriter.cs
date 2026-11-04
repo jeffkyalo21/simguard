@@ -35,6 +35,22 @@ public static class AuditActions
     public const string DemoSeeded = "dev.demo_seeded";
 }
 
+// Audit categories. Admin (the SimGuard operator) reads only "system" rows.
+public static class AuditCategories
+{
+    public const string System = "system";
+    public const string Organisation = "organisation";
+
+    // Same rule as the AddAuditCategory backfill: actions starting with
+    // user, auth or role are system, everything else is organisation.
+    public static string For(string action) =>
+        action.StartsWith("user", StringComparison.Ordinal)
+        || action.StartsWith("auth", StringComparison.Ordinal)
+        || action.StartsWith("role", StringComparison.Ordinal)
+            ? System
+            : Organisation;
+}
+
 // Writes audit_logs rows for the signed-in caller. Call it inside the same
 // transaction as the change it records, before the commit, so the change
 // and its audit row are saved together. Never pass passwords, hashes,
@@ -42,6 +58,7 @@ public static class AuditActions
 public sealed class AuditWriter(SimGuardDbContext db, IHttpContextAccessor httpContextAccessor)
 {
     private const int EmailMaxLength = 256;
+    private const int RoleMaxLength = 20;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -50,6 +67,7 @@ public sealed class AuditWriter(SimGuardDbContext db, IHttpContextAccessor httpC
     {
         var principal = httpContextAccessor.HttpContext?.User;
         var email = principal?.FindFirst(TokenService.EmailClaim)?.Value?.Trim();
+        var role = principal?.FindFirst(TokenService.RoleClaim)?.Value?.Trim();
 
         var row = new AuditLog
         {
@@ -58,6 +76,10 @@ public sealed class AuditWriter(SimGuardDbContext db, IHttpContextAccessor httpC
                 ? null
                 : email.Length > EmailMaxLength ? email[..EmailMaxLength] : email,
             Action = action,
+            Category = AuditCategories.For(action),
+            ActorRole = string.IsNullOrEmpty(role)
+                ? null
+                : role.Length > RoleMaxLength ? role[..RoleMaxLength] : role,
             AffectedSimId = affectedSimId,
             OldValues = ToJson(oldValues),
             NewValues = ToJson(newValues),
