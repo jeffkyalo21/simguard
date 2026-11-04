@@ -295,6 +295,8 @@ The roles split operator from organisation:
 | `PATCH /api/alerts/{id}/status` | no | yes | no | `OrgWrite` |
 | `GET /api/risk-scores` | no | yes | yes | `OrgRead` |
 | `GET /api/dashboard/summary` | no | yes | yes | `OrgRead` |
+| `GET /api/tier-recommendations`, `/settings`, `/status` | no | yes | yes | `OrgRead` |
+| `PUT /api/tier-recommendations/settings`, `POST /api/tier-recommendations/run`, `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
 | `/api/users/*` (list, get, create, role, disable, enable, MFA reset, password reset) | yes | no | no | `AdminOnly` |
 | `GET /api/audit-logs` | `system` rows only | no | all rows | `AuditRead` |
 | `GET /api/auth/events` | yes | no | yes | `AuditRead` |

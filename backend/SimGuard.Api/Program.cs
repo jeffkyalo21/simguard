@@ -6,6 +6,7 @@ using SimGuard.Api.Data;
 using SimGuard.Api.Endpoints;
 using SimGuard.Api.Ml;
 using SimGuard.Api.Scoring;
+using SimGuard.Api.TierRecommendations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,7 @@ builder.Services.AddMlServiceClient(builder.Configuration);
 
 // Scoring runs: queue, runner and the background worker.
 builder.Services.AddScoringPipeline(builder.Configuration);
+builder.Services.AddTierRecommendations(builder.Configuration);
 
 // Identity, JWT bearer, authorization policies, CORS, rate limiting and
 // Swagger with a Bearer scheme. See backend/docs/auth.md.
@@ -92,6 +94,7 @@ api.MapUsageEndpoints();
 api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
 api.MapImportEndpoints();
+api.MapTierRecommendationEndpoints();
 
 // Demo data tools exist only in Development; elsewhere the routes are not
 // mapped at all, so they return 404.

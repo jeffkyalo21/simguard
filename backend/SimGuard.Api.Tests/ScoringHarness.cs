@@ -9,7 +9,9 @@ using Microsoft.Extensions.Logging;
 using SimGuard.Api.Common;
 using SimGuard.Api.Data;
 using SimGuard.Api.Ml;
+using Microsoft.Extensions.Hosting;
 using SimGuard.Api.Scoring;
+using SimGuard.Api.TierRecommendations;
 
 namespace SimGuard.Api.Tests;
 
@@ -36,6 +38,13 @@ public sealed class ScoringHarness : IAsyncDisposable
     public bool VersionDown { get; set; }
 
     public List<(DateOnly Date, int[] Sims)> ScoreCalls { get; } = [];
+
+    // Tier result per SIM: (recommendation, recommendedTier). Default no_change.
+    public Func<int, (string Recommendation, string? Tier)> Recommender { get; set; } = _ => ("no_change", null);
+
+    public bool RecommendDown { get; set; }
+
+    public List<(int Cycle, int[] Sims)> RecommendCalls { get; } = [];
 
     private ScoringHarness(TestDatabase db, FakeMlServer ml, ServiceProvider services)
     {
@@ -72,6 +81,8 @@ public sealed class ScoringHarness : IAsyncDisposable
         services.AddSingleton(TimeProvider.System);
         services.AddMlServiceClient(configuration);
         services.AddScoringPipeline(configuration);
+        services.AddTierRecommendations(configuration);
+        services.AddSingleton<IHostApplicationLifetime, TestLifetime>();
 
         var harness = new ScoringHarness(db, ml, services.BuildServiceProvider());
         ml.Handler = harness.HandleAsync;
@@ -140,7 +151,60 @@ public sealed class ScoringHarness : IAsyncDisposable
             return;
         }
 
+        if (ctx.Request.Path == "/v1/recommend-tier")
+        {
+            using var doc = JsonDocument.Parse(body);
+            var cycle = doc.RootElement.GetProperty("billingCycle").GetInt32();
+            var sims = doc.RootElement.GetProperty("simIds").EnumerateArray().Select(e => e.GetInt32()).ToArray();
+
+            lock (RecommendCalls)
+            {
+                RecommendCalls.Add((cycle, sims));
+            }
+
+            if (RecommendDown)
+            {
+                await FakeMlServer.Json(ctx, 503, """{"title":"Service Unavailable","status":503,"detail":"down"}""");
+                return;
+            }
+
+            var results = sims.Select(sim =>
+            {
+                var (rec, tier) = Recommender(sim);
+                return new
+                {
+                    simId = sim,
+                    billingCycle = cycle,
+                    currentTier = "field",
+                    recommendation = rec,
+                    recommendedTier = tier ?? "field",
+                    projectedOverageMb = rec == "upgrade" ? 900.5 : -4000.0,
+                    daysToDepletion = rec == "upgrade" ? (int?)5 : null,
+                    checkpointDay = 25,
+                    source = "fitted"
+                };
+            });
+
+            await FakeMlServer.Json(ctx, 200, JsonSerializer.Serialize(new
+            {
+                billingCycle = cycle,
+                results,
+                notFound = Array.Empty<int>(),
+                failed = Array.Empty<object>(),
+                timings = new { readMs = 1.0, fitMs = 1.0, totalMs = 2.0, fitted = sims.Length, precomputed = 0 }
+            }));
+            return;
+        }
+
         ctx.Response.StatusCode = 404;
+    }
+
+    private sealed class TestLifetime : IHostApplicationLifetime
+    {
+        public CancellationToken ApplicationStarted => CancellationToken.None;
+        public CancellationToken ApplicationStopping => CancellationToken.None;
+        public CancellationToken ApplicationStopped => CancellationToken.None;
+        public void StopApplication() { }
     }
 
     // Adds a carrier (once) and one SIM with usage on the given days,
@@ -212,12 +276,15 @@ public sealed class ScoringHarness : IAsyncDisposable
     public async Task ResetAsync()
     {
         await Db.ExecuteAsync("""
-            TRUNCATE alerts, risk_scores, daily_usage, scoring_runs, audit_logs RESTART IDENTITY CASCADE;
+            TRUNCATE alerts, risk_scores, daily_usage, scoring_runs, audit_logs, tier_recommendations,
+                tier_recommendation_runs RESTART IDENTITY CASCADE;
             DELETE FROM sims;
             """);
         ScoreCalls.Clear();
         FailOn.Clear();
         VersionDown = false;
+        RecommendCalls.Clear();
+        RecommendDown = false;
     }
 
     public async ValueTask DisposeAsync()

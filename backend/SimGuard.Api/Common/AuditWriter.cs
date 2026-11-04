@@ -36,6 +36,9 @@ public static class AuditActions
     public const string DemoSeeded = "dev.demo_seeded";
     public const string ScoringRunRequested = "scoring.run_requested";
     public const string ScoringRunFailed = "scoring.run_failed";
+    public const string TierRecommendationRunStarted = "tier_recommendation.run_started";
+    public const string TierRecommendationSettingsChanged = "tier_recommendation.settings_changed";
+    public const string TierRecommendationDismissed = "tier_recommendation.dismissed";
 }
 
 // Audit categories. Admin (the SimGuard operator) reads only "system" rows.

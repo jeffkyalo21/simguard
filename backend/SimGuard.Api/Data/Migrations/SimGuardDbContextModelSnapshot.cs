@@ -1165,6 +1165,219 @@ namespace SimGuard.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BillingCycle")
+                        .HasColumnType("integer")
+                        .HasColumnName("billing_cycle");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CurrentTier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("current_tier");
+
+                    b.Property<int?>("DaysToDepletion")
+                        .HasColumnType("integer")
+                        .HasColumnName("days_to_depletion");
+
+                    b.Property<DateTime?>("DismissedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dismissed_at");
+
+                    b.Property<int?>("DismissedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("dismissed_by_user_id");
+
+                    b.Property<double?>("ProjectedOverageMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("projected_overage_mb");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Recommendation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("recommendation");
+
+                    b.Property<string>("RecommendedTier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("recommended_tier");
+
+                    b.Property<int>("RunId")
+                        .HasColumnType("integer")
+                        .HasColumnName("run_id");
+
+                    b.Property<int>("SimId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DismissedByUserId");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("SimId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_tier_recs_one_open_per_sim")
+                        .HasFilter("status = 'open'");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_tier_recs_status");
+
+                    b.HasIndex("SimId", "Status")
+                        .HasDatabaseName("idx_tier_recs_sim_status");
+
+                    b.ToTable("tier_recommendations", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_tier_recs_current_tier", "current_tier IN ('field', 'manager', 'professional', 'support')");
+
+                            t.HasCheckConstraint("chk_tier_recs_recommendation", "recommendation IN ('upgrade', 'downgrade')");
+
+                            t.HasCheckConstraint("chk_tier_recs_recommended_tier", "recommended_tier IN ('field', 'manager', 'professional', 'support')");
+
+                            t.HasCheckConstraint("chk_tier_recs_status", "status IN ('open', 'dismissed')");
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BillingCycle")
+                        .HasColumnType("integer")
+                        .HasColumnName("billing_cycle");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("error_summary");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("RecommendationsCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("recommendations_created");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("requested_by");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<int>("SimsEvaluated")
+                        .HasColumnType("integer")
+                        .HasColumnName("sims_evaluated");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("trigger");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("idx_tier_rec_runs_started_at");
+
+                    b.ToTable("tier_recommendation_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_tier_rec_runs_status", "status IN ('running', 'succeeded', 'partial', 'failed')");
+
+                            t.HasCheckConstraint("chk_tier_rec_runs_trigger", "trigger IN ('manual', 'automatic')");
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<int>("IntervalDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("interval_days");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("tier_recommendation_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_tier_rec_settings_interval", "interval_days BETWEEN 90 AND 365");
+
+                            t.HasCheckConstraint("chk_tier_rec_settings_single_row", "id = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            IntervalDays = 90
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<int>", null)
@@ -1367,6 +1580,52 @@ namespace SimGuard.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Carrier");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendation", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "DismissedByUser")
+                        .WithMany()
+                        .HasForeignKey("DismissedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SimGuard.Api.Models.TierRecommendationRun", "Run")
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SimGuard.Api.Models.Sim", "Sim")
+                        .WithMany()
+                        .HasForeignKey("SimId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DismissedByUser");
+
+                    b.Navigation("Run");
+
+                    b.Navigation("Sim");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationRun", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RequestedByUser");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationSettings", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.Carrier", b =>
