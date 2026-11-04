@@ -165,6 +165,46 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
         Assert.Equal(ScoringHarness.Day(18), alert.LastDetectedOn);   // day 19 window is 15 to 19, no flag
     }
 
+    private Task NoUsageAsync(int sim, int from, int to) => database.ExecuteAsync(
+        $"UPDATE daily_usage SET total_mb = 0.5 WHERE sim_id = {sim} AND date BETWEEN '{ScoringHarness.Day(from):yyyy-MM-dd}' AND '{ScoringHarness.Day(to):yyyy-MM-dd}'");
+
+    [DbFact]
+    public async Task Billed_days_without_usage_type_the_alert_inactive_billing()
+    {
+        var sim = await _h.AddSimAsync("field", Days(0, 25));
+        var other = await _h.AddSimAsync("support", Days(0, 25));
+        await NoUsageAsync(sim, 16, 17);
+        await NoUsageAsync(other, 17, 17);
+        Pattern("ecfce");
+
+        await _h.RunAsync();
+
+        var alerts = await AlertsAsync();
+        Assert.Equal(AlertTypes.InactiveBilling, alerts.Single(a => a.SimId == sim).Type);
+        Assert.Equal(AlertTypes.Sharing, alerts.Single(a => a.SimId == other).Type);   // one day is not enough
+    }
+
+    [DbFact]
+    public async Task An_inactive_billing_type_is_kept_when_a_riskier_day_follows()
+    {
+        var sim = await _h.AddSimAsync("field", Days(0, 30));
+        await NoUsageAsync(sim, 14, 16);
+        // escalated 14, 15, 17 to 19; flag 0.9 on day 16 and 0.99 on day 20
+        _h.Scorer = (_, date) => DayOf(date) switch
+        {
+            14 or 15 or 17 or 18 or 19 => new ScoringHarness.FakeScore(0.4, "escalated", Sharing),
+            16 => new ScoringHarness.FakeScore(0.9, "flag", Sharing),
+            20 => new ScoringHarness.FakeScore(0.99, "flag", Sharing),
+            _ => new ScoringHarness.FakeScore(0.03, "clear", [("peak_mb", 0.1, -1)])
+        };
+
+        await _h.RunAsync();
+
+        var alert = Assert.Single(await AlertsAsync());
+        Assert.Equal(0.99m, alert.RiskScore);
+        Assert.Equal(AlertTypes.InactiveBilling, alert.Type);   // day 20 window 16 to 20 has one such day only
+    }
+
     [DbFact]
     public async Task A_backfill_leaves_one_open_alert_per_sustained_sim()
     {

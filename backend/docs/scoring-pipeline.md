@@ -105,6 +105,9 @@ They are in configuration:
 | ... among the last M scored days up to D | `Scoring:SustainedWindowDays` | 5 |
 | ... of which at least K are `flag` | `Alerts:MinFlaggedDaysInWindow` | 1 |
 | No new alert after a false positive for | `Scoring:FalsePositiveCooldownDays` | 7 days |
+| Inactive billing day: usage at most | `Alerts:InactiveBillingMaxUsageMb` | 1 MB |
+| ... and billed at least | `Alerts:InactiveBillingMinBilledMb` | 100 MB |
+| Type `inactiveBilling` from this many such window days (0 = off) | `Alerts:InactiveBillingMinDays` | 2 |
 
 For each scored date D and each SIM whose score on D is `flag` or
 `escalated`:
@@ -138,8 +141,23 @@ data.
 
 ### Alert type
 
-`Scoring/AlertTypeMap.cs`. Only reasons with direction `up` count. Each
-mapped feature names a type, and the highest type in this order wins:
+First a check on the stored daily usage (`AlertRules.cs`): when at least 2
+of the window's scored days have `total_mb` at most 1 MB and `billed_mb` at
+least 100 MB, the type is `inactiveBilling`. It runs when the alert is
+created and on every update, and an alert typed `inactiveBilling` keeps that
+type when a riskier day replaces its score and reasons.
+
+The thresholds come from the demo data: inside the alert spans, SIMs
+labelled `inactive_billing` have a median usage of 0 MB while billed about
+2000 MB; every other labelled or normal SIM has usage equal to billed. Of
+the 90000 usage rows, 206 are billed days with usage at most 1 MB, and all
+belong to the 21 `inactive_billing` SIMs. Two days are required rather
+than one so that a single bad usage row does not retype an alert; with 1 or
+2 days the demo result is the same, 3 days lost 3 of the 20 alerts.
+
+Otherwise `Scoring/AlertTypeMap.cs` reads the reasons of the riskiest window
+day. Only reasons with direction `up` count. Each mapped feature names a
+type, and the highest type in this order wins:
 
 | Order | Type | Features (value is the scaled value the model saw, 0 = normal) |
 | ----- | ---- | -------------------------------------------------------------- |
@@ -157,11 +175,24 @@ Volume features: `total_mb`, `total_download_mb`, `total_upload_mb`,
 roaming, tier, `cohort_z_iso_anomaly_score`) do not decide.
 
 Order, not contribution, decides because a low `peak_mb` ranks first for
-reselling, ghost usage and inactive billing alike. On the demo data the
-labelled SIMs with an alert were typed: sharing 55 of 61, reselling 32 of 37,
-ghost usage 35 of 40. Inactive billing SIMs come out as `ghostUsage`: their
-top reasons hold no billing feature above normal, so the two cannot be told
-apart from the reasons.
+reselling, ghost usage and inactive billing alike. The top reasons of
+inactive billing SIMs hold no billing feature above normal, which is why the
+usage check comes first.
+
+Type against the generator labels for the 143 alerts on labelled SIMs
+(current alert rule, demo backfill):
+
+| Label | Without usage check | With usage check |
+| ----- | ------------------- | ---------------- |
+| `unauthorized_sharing` | sharing 53 | sharing 53 |
+| `data_reselling` | reselling 32, sharing 1 | reselling 32, sharing 1 |
+| `ghost_usage` | ghostUsage 35, sharing 2 | ghostUsage 35, sharing 2 |
+| `inactive_billing` | ghostUsage 20 | inactiveBilling 19, ghostUsage 1 |
+| Exact match | 120 of 143 | 139 of 143 |
+
+The one `inactive_billing` SIM left as `ghostUsage` (generator SIM 216) has
+its labelled days before its alert span. The 11 alerts on unlabelled SIMs
+stay reselling 6 and sharing 5.
 
 Reasons are stored in the alert contract format with real feature names:
 `[{feature, value, contribution, direction}]`.

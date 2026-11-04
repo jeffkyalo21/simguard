@@ -29,6 +29,11 @@ namespace SimGuard.Api.Scoring;
 //    for a date the cleared alert already covered (up to the latest date
 //    scored for the SIM when it was cleared). After a false positive there
 //    is also a cooldown of FalsePositiveCooldownDays (7) days.
+//  - Type: inactiveBilling when the stored daily usage on the window's
+//    scored days holds at least Alerts:InactiveBillingMinDays (2) days with
+//    total_mb at most InactiveBillingMaxUsageMb (1) and billed_mb at least
+//    InactiveBillingMinBilledMb (100). Otherwise AlertTypeMap reads the
+//    reasons of the riskiest day. Once inactiveBilling, an alert keeps it.
 public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> options, IOptions<AlertOptions> alertOptions)
 {
     private readonly ScoringOptions _options = options.Value;
@@ -42,6 +47,7 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
     public int MinDays => Math.Clamp(_options.SustainedMinDays, 1, WindowDays);
     public int CooldownDays => Math.Max(0, _options.FalsePositiveCooldownDays);
     public int MinFlaggedDays => Math.Clamp(_alertOptions.MinFlaggedDaysInWindow, 0, WindowDays);
+    public int InactiveBillingMinDays => Math.Clamp(_alertOptions.InactiveBillingMinDays, 0, WindowDays);
 
     public async Task<Result> ApplyAsync(
         IDbContextTransaction transaction,
@@ -80,6 +86,7 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
             .ToDictionary(g => g.Key, g => g.First());
 
         var blockedUntil = await LoadBlockedUntilAsync(transaction, simIds, cancellationToken);
+        var inactiveBilling = await LoadInactiveBillingAsync(transaction, sustained, cancellationToken);
         var now = Timestamps.UtcNow();
         int created = 0, updated = 0;
 
@@ -90,9 +97,11 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
             var top = raised.OrderByDescending(d => d.Probability).ThenByDescending(d => d.Date).First();
             var topScore = Math.Round(top.Probability, 2, MidpointRounding.AwayFromZero);
 
+            var billedWhileInactive = inactiveBilling.Contains(simId);
+
             if (open.TryGetValue(simId, out var alert))
             {
-                Update(alert, date, status, top, topScore, modelVersion);
+                Update(alert, date, status, top, topScore, modelVersion, billedWhileInactive);
                 updated++;
                 continue;
             }
@@ -107,7 +116,7 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
             db.Alerts.Add(new Alert
             {
                 SimId = simId,
-                Type = AlertTypeMap.For(reasons.RootElement),
+                Type = billedWhileInactive ? AlertTypes.InactiveBilling : AlertTypeMap.For(reasons.RootElement),
                 RiskScore = topScore,
                 RiskLevel = RiskLevels.ForNewAlert(status),
                 Status = status,
@@ -124,8 +133,10 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
     }
 
     // Escalated may become flagged; flagged is never lowered. Score, reasons
-    // and type follow the riskiest day seen.
-    private static void Update(Alert alert, DateOnly date, string status, Day top, decimal topScore, string? modelVersion)
+    // and type follow the riskiest day seen, except that inactiveBilling from
+    // the usage check is kept.
+    private static void Update(
+        Alert alert, DateOnly date, string status, Day top, decimal topScore, string? modelVersion, bool billedWhileInactive)
     {
         if (alert.DetectedOn is null || date < alert.DetectedOn)
         {
@@ -147,10 +158,61 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
         {
             using var reasons = JsonDocument.Parse(top.Reasons);
             alert.RiskScore = topScore;
-            alert.Type = AlertTypeMap.For(reasons.RootElement);
             alert.Reasons = JsonDocument.Parse(top.Reasons);
             alert.ModelVersion = modelVersion;
+
+            if (alert.Type != AlertTypes.InactiveBilling)
+            {
+                alert.Type = AlertTypeMap.For(reasons.RootElement);
+            }
         }
+
+        if (billedWhileInactive)
+        {
+            alert.Type = AlertTypes.InactiveBilling;
+        }
+    }
+
+    // SIMs whose stored usage on the window's scored days shows the SIM
+    // billed while (almost) unused on at least InactiveBillingMinDays days.
+    private async Task<HashSet<int>> LoadInactiveBillingAsync(
+        IDbContextTransaction transaction,
+        Dictionary<int, List<Day>> windows,
+        CancellationToken cancellationToken)
+    {
+        var result = new HashSet<int>();
+
+        if (InactiveBillingMinDays == 0 || windows.Count == 0)
+        {
+            return result;
+        }
+
+        const string sql = """
+            SELECT u.sim_id
+            FROM unnest(@sim_ids, @dates) AS w(sim_id, date)
+            JOIN daily_usage u ON u.sim_id = w.sim_id AND u.date = w.date
+            WHERE u.total_mb <= @max_usage AND u.billed_mb >= @min_billed
+            GROUP BY u.sim_id
+            HAVING count(*) >= @min_days
+            """;
+
+        var pairs = windows.SelectMany(w => w.Value.Select(d => (SimId: w.Key, d.Date))).ToArray();
+
+        await using var command = Command(sql, transaction);
+        command.Parameters.Add(new NpgsqlParameter("sim_ids", NpgsqlDbType.Array | NpgsqlDbType.Integer) { Value = pairs.Select(p => p.SimId).ToArray() });
+        command.Parameters.Add(new NpgsqlParameter("dates", NpgsqlDbType.Array | NpgsqlDbType.Date) { Value = pairs.Select(p => p.Date).ToArray() });
+        command.Parameters.Add(new NpgsqlParameter("max_usage", NpgsqlDbType.Double) { Value = _alertOptions.InactiveBillingMaxUsageMb });
+        command.Parameters.Add(new NpgsqlParameter("min_billed", NpgsqlDbType.Double) { Value = _alertOptions.InactiveBillingMinBilledMb });
+        command.Parameters.Add(new NpgsqlParameter("min_days", NpgsqlDbType.Integer) { Value = InactiveBillingMinDays });
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(reader.GetInt32(0));
+        }
+
+        return result;
     }
 
     // The last WindowDays scored days up to the date, newest first.

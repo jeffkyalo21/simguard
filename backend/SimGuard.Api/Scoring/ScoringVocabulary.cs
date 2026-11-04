@@ -59,4 +59,12 @@ public sealed class AlertOptions
     // many of its days are flag (score above the flag threshold). With 1, a
     // SIM that is only ever escalated keeps its scores but gets no alert.
     public int MinFlaggedDaysInWindow { get; set; } = 1;
+
+    // Inactive billing check on the stored daily usage of the window, ahead
+    // of the reasons mapping. Chosen from the demo data: billed days with
+    // usage at most 1 MB occur only on SIMs labelled inactive_billing (median
+    // usage 0 MB, billed about 2000 MB). 0 days turns the check off.
+    public double InactiveBillingMaxUsageMb { get; set; } = 1;
+    public double InactiveBillingMinBilledMb { get; set; } = 100;
+    public int InactiveBillingMinDays { get; set; } = 2;
 }
