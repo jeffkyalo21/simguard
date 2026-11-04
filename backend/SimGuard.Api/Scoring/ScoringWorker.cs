@@ -107,7 +107,9 @@ public static class ScoringRegistration
         services.AddSingleton<ScoringQueue>();
         services.AddScoped<AlertRules>();
         services.AddScoped<ScoringRunner>();
+        services.AddSingleton<ScoringImportTrigger>();
         services.AddHostedService<ScoringWorker>();
+        services.AddHostedService<ScoringScheduler>();
         return services;
     }
 }

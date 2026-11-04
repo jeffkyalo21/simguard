@@ -64,6 +64,17 @@ app.MapGet("/", () => Results.Ok(new
 .WithName("GetApiStatus")
 .AllowAnonymous();
 
+// For hosting probes: anonymous, checks only the database, says nothing
+// about the ML service or the data.
+app.MapGet("/health", async (
+    SimGuardDbContext db,
+    CancellationToken cancellationToken) =>
+    await db.Database.CanConnectAsync(cancellationToken)
+        ? Results.Ok(new { status = "healthy" })
+        : Results.Json(new { status = "unhealthy" }, statusCode: StatusCodes.Status503ServiceUnavailable))
+.WithName("GetHealth")
+.AllowAnonymous();
+
 app.MapGet("/health/database", async (
     SimGuardDbContext db,
     CancellationToken cancellationToken) =>
@@ -95,6 +106,7 @@ api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
 api.MapImportEndpoints();
 api.MapTierRecommendationEndpoints();
+api.MapAdminScoringEndpoints();
 
 // Demo data tools exist only in Development; elsewhere the routes are not
 // mapped at all, so they return 404.

@@ -7,6 +7,7 @@ using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
 using SimGuard.Api.Imports;
 using SimGuard.Api.Models;
+using SimGuard.Api.Scoring;
 
 namespace SimGuard.Api.Endpoints;
 
@@ -114,6 +115,7 @@ public static class ImportEndpoints
         HttpContext httpContext,
         SimGuardDbContext db,
         AuditWriter audit,
+        ScoringImportTrigger scoringTrigger,
         CancellationToken cancellationToken)
     {
         if (!ImportHandlers.ByType.TryGetValue(type.ToLowerInvariant(), out var handler))
@@ -276,6 +278,11 @@ public static class ImportEndpoints
         }
 
         db.ChangeTracker.Clear();
+
+        if (isCommit && applied.Coverage is { } coverage && applied.Inserted + applied.Updated > 0)
+        {
+            await scoringTrigger.AfterUsageImportAsync(coverage, CancellationToken.None);
+        }
 
         return TypedResults.Ok(BuildResult(
             handler.Type,
