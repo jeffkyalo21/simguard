@@ -204,3 +204,36 @@ CREATE INDEX idx_audit_logs_actor ON audit_logs(actor_user_id);
 CREATE INDEX idx_audit_logs_sim ON audit_logs(affected_sim_id);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX idx_audit_logs_category ON audit_logs(category);
+
+-- ============================
+-- import_runs
+-- ============================
+-- One row per CSV import commit (previews are not recorded). See
+-- backend/docs/imports.md.
+CREATE TABLE import_runs (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR(20) NOT NULL
+        CHECK (type IN ('departments', 'employees', 'sims', 'usage')),
+    file_name VARCHAR(255) NOT NULL,
+    sha256 VARCHAR(64),
+    uploaded_by_user_id INTEGER, -- app_users(id), ON DELETE SET NULL
+    uploaded_by_email VARCHAR(256),
+    started_at TIMESTAMPTZ NOT NULL,
+    finished_at TIMESTAMPTZ NOT NULL,
+    status VARCHAR(20) NOT NULL
+        CHECK (status IN ('committed', 'rejected', 'failed')),
+    skip_invalid BOOLEAN NOT NULL,
+    total_rows INTEGER NOT NULL,
+    valid_rows INTEGER NOT NULL,
+    invalid_rows INTEGER NOT NULL,
+    inserted INTEGER NOT NULL,
+    updated INTEGER NOT NULL,
+    unchanged INTEGER NOT NULL,
+    error_count INTEGER NOT NULL,
+    warning_count INTEGER NOT NULL,
+    message VARCHAR(500)
+);
+
+CREATE INDEX idx_import_runs_started_at ON import_runs(started_at);
+CREATE INDEX idx_import_runs_type ON import_runs(type);
+CREATE INDEX idx_import_runs_uploaded_by ON import_runs(uploaded_by_user_id);

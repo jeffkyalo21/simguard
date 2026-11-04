@@ -779,6 +779,114 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("employees", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.ImportRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ErrorCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("error_count");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<DateTime>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("Inserted")
+                        .HasColumnType("integer")
+                        .HasColumnName("inserted");
+
+                    b.Property<int>("InvalidRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("invalid_rows");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<bool>("SkipInvalid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("skip_invalid");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_rows");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<int>("Unchanged")
+                        .HasColumnType("integer")
+                        .HasColumnName("unchanged");
+
+                    b.Property<int>("Updated")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated");
+
+                    b.Property<string>("UploadedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("uploaded_by_email");
+
+                    b.Property<int?>("UploadedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("uploaded_by_user_id");
+
+                    b.Property<int>("ValidRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("valid_rows");
+
+                    b.Property<int>("WarningCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("warning_count");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("idx_import_runs_started_at");
+
+                    b.HasIndex("Type")
+                        .HasDatabaseName("idx_import_runs_type");
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.ToTable("import_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_import_runs_status", "status IN ('committed', 'rejected', 'failed')");
+
+                            t.HasCheckConstraint("chk_import_runs_type", "type IN ('departments', 'employees', 'sims', 'usage')");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>
                 {
                     b.Property<long>("Id")
@@ -1083,6 +1191,16 @@ namespace SimGuard.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.ImportRun", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "UploadedBy")
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UploadedBy");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>

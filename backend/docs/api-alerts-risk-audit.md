@@ -365,6 +365,7 @@ written (`Admin`, `SecurityOfficer` or `Auditor`).
 | `allocation.created`, `allocation.returned` | `/api/allocations` | the SIM |
 | `alert.status_changed` | `PATCH /api/alerts/{id}/status` | the alert's SIM |
 | `user.created`, `user.role_changed`, `user.disabled`, `user.enabled`, `user.mfa_reset`, `user.password_reset` | `/api/users` | null |
+| `import.committed` | `POST /api/imports/{type}?mode=commit` ([imports.md](imports.md)) | null |
 | `dev.demo_seeded` | `POST /api/dev/seed-demo` | null |
 
 Sign-in, MFA enrolment and a user's own password change are recorded in the

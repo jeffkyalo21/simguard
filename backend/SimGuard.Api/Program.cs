@@ -83,6 +83,7 @@ api.MapRiskEndpoints();
 api.MapUsageEndpoints();
 api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
+api.MapImportEndpoints();
 
 // Demo data tools exist only in Development; elsewhere the routes are not
 // mapped at all, so they return 404.

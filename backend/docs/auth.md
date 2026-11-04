@@ -288,6 +288,7 @@ The roles split operator from organisation:
 | `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
 | `GET /api/carriers` | no | yes | yes | `OrgRead` |
 | `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
+| `GET /api/imports`, `GET /api/imports/{type}/template`, `POST /api/imports/{type}` | no | yes | no | `OrgWrite` |
 | `GET /api/allocations`, `/{id}` | no | yes | yes | `OrgRead` |
 | `POST /api/allocations`, `POST /api/allocations/{id}/return` | no | yes | no | `OrgWrite` |
 | `GET /api/alerts`, `/{id}` | no | yes | yes | `OrgRead` |

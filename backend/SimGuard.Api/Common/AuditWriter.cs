@@ -32,6 +32,7 @@ public static class AuditActions
     public const string UserMfaReset = "user.mfa_reset";
     public const string UserPasswordReset = "user.password_reset";
     public const string AlertStatusChanged = "alert.status_changed";
+    public const string ImportCommitted = "import.committed";
     public const string DemoSeeded = "dev.demo_seeded";
 }
 
