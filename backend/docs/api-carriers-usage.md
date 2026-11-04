@@ -184,7 +184,14 @@ the tier stored on each usage row.
 
 The AddSimTier migration set the tier of every SIM with usage from its most
 recent usage row. SIMs without usage have no tier (`null`) until one is set.
-`SimResponse` does not include the tier.
+Every SIM response (`GET /api/sims`, `GET /api/sims/{id}`, POST, PUT and
+the status PATCH) includes `tier` (one of the four tiers, or `null`), placed
+after `status`.
+
+`sims.iccid` already exists (required, unique, at most 30 characters), so no
+ICCID migration was needed. The SIM endpoints keep their current ICCID
+check; the CSV import (see [imports.md](imports.md)) is stricter and accepts
+18 to 22 digits only.
 
 ### PATCH /api/sims/{id}/tier
 

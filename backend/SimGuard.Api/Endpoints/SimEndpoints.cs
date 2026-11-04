@@ -573,6 +573,7 @@ public static class SimEndpoints
             sim.PlanType,
             sim.MonthlyCost,
             sim.Status,
+            sim.Tier,
             sim.CreatedAt,
             currentAllocation);
 

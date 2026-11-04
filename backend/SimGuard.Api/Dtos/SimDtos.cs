@@ -33,6 +33,7 @@ public record CurrentAllocationResponse(
     DateTime AssignedAt);
 
 // Operator is the carrier's name, kept so existing screens keep working.
+// Tier is the ML plan tier (field, manager, professional, support) or null.
 public record SimResponse(
     int Id,
     string PhoneNumber,
@@ -42,6 +43,7 @@ public record SimResponse(
     string PlanType,
     decimal MonthlyCost,
     string Status,
+    string? Tier,
     DateTime CreatedAt,
     CurrentAllocationResponse? CurrentAllocation)
 {
@@ -57,6 +59,7 @@ public record SimResponse(
             s.PlanType,
             s.MonthlyCost,
             s.Status,
+            s.Tier,
             s.CreatedAt,
             s.Allocations
                 .Where(a => a.ReturnDate == null)
