@@ -326,6 +326,14 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
                 .HasColumnName("resolved_at")
                 .HasColumnType("timestamp with time zone");
 
+            entity.Property(e => e.DetectedOn)
+                .HasColumnName("detected_on")
+                .HasColumnType("date");
+
+            entity.Property(e => e.LastDetectedOn)
+                .HasColumnName("last_detected_on")
+                .HasColumnType("date");
+
             entity.Property(e => e.Resolution)
                 .HasColumnName("resolution")
                 .HasMaxLength(20);
@@ -348,6 +356,9 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
 
             entity.HasIndex(e => e.ModelVersion)
                 .HasDatabaseName("idx_alerts_model_version");
+
+            entity.HasIndex(e => e.DetectedOn)
+                .HasDatabaseName("idx_alerts_detected_on");
 
             entity.HasOne(e => e.Sim)
                 .WithMany(s => s.Alerts)

@@ -105,6 +105,7 @@ public static class ScoringRegistration
         services.Configure<ScoringOptions>(configuration.GetSection(ScoringOptions.Section));
         services.AddSingleton<PipelineLock>();
         services.AddSingleton<ScoringQueue>();
+        services.AddScoped<AlertRules>();
         services.AddScoped<ScoringRunner>();
         services.AddHostedService<ScoringWorker>();
         return services;

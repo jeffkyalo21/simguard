@@ -33,10 +33,14 @@ change does not change it.
 `riskScore` (alerts) is a number from 0 to 1 with two decimals.
 `probability` (risk scores) is a number from 0 to 1 with up to four decimals.
 
-A reason explains one feature's share of a score:
+A reason explains one feature's share of a score. `feature` is the real ML
+feature name (for example `hotspot_sessions`, `billing_gap_mb`, `total_mb`),
+`value` is the scaled value the model saw, and `contribution` its SHAP
+contribution; the ML direction `increases_risk` is stored as `up` and
+`decreases_risk` as `down`. Scoring stores the top 5 reasons:
 
 ```json
-{ "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+{ "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
 ```
 
 ## Roles
@@ -62,6 +66,14 @@ Returned by `GET /api/alerts` and in `needsReview` on the dashboard.
 `employeeName` and `departmentName` are the SIM's current allocation, or
 null when the SIM is not allocated.
 
+`detectedOn` and `lastDetectedOn` (additive, issue #14) are as-of dates
+(`YYYY-MM-DD`, UTC) of the scored usage days: the first sustained day that
+raised the alert and the latest one that updated it. `createdAt` stays the
+real time the alert was stored, so after a backfill `createdAt` is today
+while `detectedOn` can be months earlier. Both are null for alerts that
+were not raised by the scoring pipeline (for example the demo seed). How
+alerts are raised, typed and cooled down: [scoring-pipeline.md](scoring-pipeline.md).
+
 ```json
 {
   "id": 17,
@@ -74,12 +86,14 @@ null when the SIM is not allocated.
   "createdAt": "2026-11-02T14:05:00Z",
   "resolvedAt": null,
   "reasons": [
-    { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" },
-    { "feature": "distinctCellsPerDay", "value": 19, "contribution": 0.22, "direction": "up" }
+    { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" },
+    { "feature": "hotspot_sum_7d", "value": 1.92, "contribution": 0.52, "direction": "up" }
   ],
-  "modelVersion": "2026.10.1",
+  "modelVersion": "v1-3f9a1c2b7d4e",
   "employeeName": "Jane Wanjiru",
-  "departmentName": "Field Sales"
+  "departmentName": "Field Sales",
+  "detectedOn": "2025-03-12",
+  "lastDetectedOn": "2025-03-31"
 }
 ```
 
@@ -118,9 +132,9 @@ Query:
   "createdAt": "2026-11-02T14:05:00Z",
   "resolvedAt": "2026-11-03T08:30:00Z",
   "reasons": [
-    { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+    { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
   ],
-  "modelVersion": "2026.10.1",
+  "modelVersion": "v1-3f9a1c2b7d4e",
   "resolution": "falsePositive",
   "resolutionNote": "Device swap approved by IT.",
   "resolvedBy": { "id": 2, "name": "Smoke Officer", "email": "officer@simguard.local" },
@@ -149,7 +163,9 @@ Query:
       "createdAt": "2026-10-05T10:00:00Z",
       "resolvedAt": null
     }
-  ]
+  ],
+  "detectedOn": "2025-03-12",
+  "lastDetectedOn": "2025-03-31"
 }
 ```
 
@@ -202,9 +218,9 @@ Issue #14 fills `risk_scores` from the ML service: one row per SIM per day
   "bucket": "flag",
   "riskLevel": "high",
   "reasons": [
-    { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+    { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
   ],
-  "modelVersion": "2026.10.1",
+  "modelVersion": "v1-3f9a1c2b7d4e",
   "createdAt": "2026-11-03T02:00:00Z"
 }
 ```
@@ -226,9 +242,9 @@ calendar days up to today (UTC), oldest first.
     "bucket": "flag",
     "riskLevel": "high",
     "reasons": [
-      { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+      { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
     ],
-    "modelVersion": "2026.10.1",
+    "modelVersion": "v1-3f9a1c2b7d4e",
     "createdAt": "2026-11-03T02:00:00Z"
   },
   "history": [
@@ -471,6 +487,9 @@ Migration `AddAlertsRiskAndAudit`:
   `app_users`, set to null if the user is deleted) and `actor_email`;
   `affected_sim_id` is set to null when its SIM is deleted, so audit history
   survives a SIM deletion.
+
+Migration `AddAlertDetectedOn` (issue #14): `alerts` gets `detected_on` and
+`last_detected_on` (date, nullable) and index `idx_alerts_detected_on`.
 
 Migration `AddAuditCategory`: `audit_logs` gets `category` (varchar 20, not
 null, check `system` or `organisation`, indexed) and `actor_role` (varchar

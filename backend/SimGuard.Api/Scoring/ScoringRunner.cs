@@ -22,7 +22,8 @@ namespace SimGuard.Api.Scoring;
 //  3. Scores the dates in ascending order, in batches of at most
 //     Scoring:BatchSize SIMs (contract maximum 5000) per /v1/score call.
 //     Each batch is validated and then written in one transaction (upsert
-//     by SIM and date), so a failed batch writes nothing.
+//     by SIM and date, then the alert rules in AlertRules), so a failed
+//     batch writes nothing.
 //  4. Stops at the first failed batch: the run is partial when something
 //     was scored, failed otherwise. Existing scores are never removed, and
 //     the next run picks up the SIM-days that are still missing.
@@ -30,6 +31,7 @@ public sealed class ScoringRunner(
     SimGuardDbContext db,
     MlServiceClient ml,
     AuditWriter audit,
+    AlertRules alertRules,
     IOptions<ScoringOptions> options,
     ILogger<ScoringRunner> logger)
 {
@@ -128,23 +130,18 @@ public sealed class ScoringRunner(
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
             await UpsertAsync(transaction, date, response.Results, run.ModelVersion, run.Force, cancellationToken);
-            await AfterBatchAsync(run, date, response.Results, counters, cancellationToken);
+            var alerts = await alertRules.ApplyAsync(
+                transaction, date, response.Results.Select(r => r.SimId).ToArray(), run.ModelVersion, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            counters.AlertsCreated += alerts.Created;
+            counters.AlertsUpdated += alerts.Updated;
         }
 
         counters.SimDays += response.Results.Count;
         counters.Skipped += response.NotFound.Count;
         return null;
     }
-
-    // Hook for the alert rules, inside the batch transaction.
-    private Task AfterBatchAsync(
-        ScoringRun run,
-        DateOnly date,
-        IReadOnlyList<MlSimScore> results,
-        Counters counters,
-        CancellationToken cancellationToken) => Task.CompletedTask;
 
     // Anything that does not match the request is rejected before a row is
     // written.

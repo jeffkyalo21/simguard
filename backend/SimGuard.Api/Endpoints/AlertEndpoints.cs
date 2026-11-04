@@ -275,7 +275,9 @@ public static class AlertEndpoints
                         x.Employee.Department.Name,
                         x.AssignmentDate))
                     .FirstOrDefault(),
-                Array.Empty<RecentAlertItem>()))
+                Array.Empty<RecentAlertItem>(),
+                a.DetectedOn,
+                a.LastDetectedOn))
             .FirstOrDefaultAsync(cancellationToken);
 
         if (detail is null)

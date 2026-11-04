@@ -25,6 +25,13 @@ public class Alert
 
     public string? ModelVersion { get; set; }
 
+    // As-of dates of the scored days (issue #14): the first sustained day
+    // that raised the alert and the latest one that updated it. CreatedAt
+    // stays the real time the alert was stored, which differs during a
+    // backfill. Null for alerts created before scoring existed.
+    public DateOnly? DetectedOn { get; set; }
+    public DateOnly? LastDetectedOn { get; set; }
+
     // Set when the alert is cleared, reset when it is reopened.
     public DateTime? ResolvedAt { get; set; }
     public string? Resolution { get; set; }

@@ -192,6 +192,14 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
 
+                    b.Property<DateOnly?>("DetectedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("detected_on");
+
+                    b.Property<DateOnly?>("LastDetectedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("last_detected_on");
+
                     b.Property<string>("ModelVersion")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
@@ -255,6 +263,9 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("idx_alerts_created_at");
+
+                    b.HasIndex("DetectedOn")
+                        .HasDatabaseName("idx_alerts_detected_on");
 
                     b.HasIndex("ModelVersion")
                         .HasDatabaseName("idx_alerts_model_version");

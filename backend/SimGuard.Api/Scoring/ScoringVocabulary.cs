@@ -42,4 +42,10 @@ public sealed class ScoringOptions
 
     // SIMs per /v1/score request; capped at the contract maximum (5000).
     public int BatchSize { get; set; } = 1000;
+
+    // Alert rules (Scoring/AlertRules.cs). Not defined in the ML docs; these
+    // are the issue #14 defaults.
+    public int SustainedWindowDays { get; set; } = 5;
+    public int SustainedMinDays { get; set; } = 3;
+    public int FalsePositiveCooldownDays { get; set; } = 7;
 }
