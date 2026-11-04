@@ -149,6 +149,38 @@ first. An email that appears twice in the file is a row error.
 Department and employee imports write only the `import.committed` audit
 entry, not one entry per row.
 
+## SIMs
+
+Columns:
+
+| Column | Rule |
+| ------ | ---- |
+| `iccid` | required, 18 to 22 digits, the key |
+| `phone_number` | required, E.164 (`+254712345678`), not used by another SIM |
+| `carrier` | required, the name of an existing carrier, matched ignoring case |
+| `tier` | required, `field`, `manager`, `professional` or `support` (ignoring case) |
+| `status` | empty, `available` or `inactive` |
+
+Upsert by ICCID. An import never creates carriers (an unknown carrier is a
+row error) and never creates allocations, so `assigned` is not accepted.
+An empty status keeps the current status; new SIMs then start as
+`available`. Changing the status of a SIM with an active allocation is a
+row error. An ICCID or phone number that appears twice in the file is a row
+error on the later row, and so is a phone number that belongs to another
+SIM (two SIMs cannot swap numbers in one import).
+
+New SIMs get `plan_type` = the tier and `monthly_cost` = 0, because the
+file has no plan or cost; edit them with `PUT /api/sims/{id}`. An existing
+SIM is updated when the phone number, carrier, tier or a given status
+differs; its plan type and cost are kept. The import sets `sims.tier`, which
+the ML view `ml_daily_usage` uses for the SIM's cohort.
+
+Each changed SIM gets its own audit entries, in the same shapes as the SIM
+endpoints: `sim.updated` (old and new snapshot) when the phone number or
+carrier changed, `sim.tier_changed` (`{ tier }` old and new) and
+`sim.status_changed` (`{ status }` old and new). New SIMs are covered by the
+`import.committed` entry only.
+
 ## Audit
 
 Each successful commit writes `import.committed` (category `organisation`,

@@ -6,7 +6,8 @@ public static class ImportHandlers
     private static readonly IImportHandler[] All =
     [
         new DepartmentImportHandler(),
-        new EmployeeImportHandler()
+        new EmployeeImportHandler(),
+        new SimImportHandler()
     ];
 
     public static readonly IReadOnlyDictionary<string, IImportHandler> ByType =
