@@ -27,6 +27,7 @@ public sealed class CsvReader
     private bool _atStart = true;
     private bool _endOfFile;
     private int _recordNumber;
+    private bool _recordHadQuote;
 
     private CsvReader(TextReader reader)
     {
@@ -55,8 +56,8 @@ public sealed class CsvReader
 
             _recordNumber++;
 
-            // A line with nothing on it.
-            if (fields.Count == 1 && fields[0].Length == 0)
+            // A line with nothing on it (a lone "" is an empty value, not a blank line).
+            if (fields.Count == 1 && fields[0].Length == 0 && !_recordHadQuote)
             {
                 continue;
             }
@@ -77,6 +78,7 @@ public sealed class CsvReader
         var inQuotes = false;
         var afterQuote = false;
         var row = _recordNumber + 1;
+        _recordHadQuote = false;
 
         while (true)
         {
@@ -142,6 +144,7 @@ public sealed class CsvReader
                     // Spaces before an opening quote are dropped.
                     cell.Clear();
                     inQuotes = true;
+                    _recordHadQuote = true;
                     break;
                 default:
                     if (afterQuote)

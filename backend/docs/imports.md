@@ -123,6 +123,32 @@ Every commit attempt is a row in `import_runs`, previews are not:
 file-wide problem; `message` says why, and `sha256` is null when the file
 was never read) or `failed` (an unexpected error; nothing was changed).
 
+## Departments
+
+Columns: `name` (required, at most 100 characters).
+
+Upsert by name, ignoring case. A new name is inserted. A name that exists
+with other casing is an update (the department is renamed to the file's
+casing); the same name is unchanged. A name that appears twice in the file
+(ignoring case) is a row error on the second row. Departments are never
+deleted by an import.
+
+## Employees
+
+Columns: `name` (required, at most 150), `email` (required, valid address,
+at most 150), `department` (required, the name of an existing department,
+matched ignoring case), `job_role` (required, at most 100; the employee
+model requires it).
+
+Upsert by email, ignoring case. An existing employee is updated when the
+name, the email's casing, the department or the job role differs, and
+unchanged otherwise. An unknown department is a row error ("There is no
+department named 'X'. Import or add it first."), so import departments
+first. An email that appears twice in the file is a row error.
+
+Department and employee imports write only the `import.committed` audit
+entry, not one entry per row.
+
 ## Audit
 
 Each successful commit writes `import.committed` (category `organisation`,
