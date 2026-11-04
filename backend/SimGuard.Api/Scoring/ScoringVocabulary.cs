@@ -49,3 +49,14 @@ public sealed class ScoringOptions
     public int SustainedMinDays { get; set; } = 3;
     public int FalsePositiveCooldownDays { get; set; } = 7;
 }
+
+// Configuration section "Alerts": conditions on top of the sustained rule.
+public sealed class AlertOptions
+{
+    public const string Section = "Alerts";
+
+    // A sustained window raises or updates an alert only when at least this
+    // many of its days are flag (score above the flag threshold). With 1, a
+    // SIM that is only ever escalated keeps its scores but gets no alert.
+    public int MinFlaggedDaysInWindow { get; set; } = 1;
+}

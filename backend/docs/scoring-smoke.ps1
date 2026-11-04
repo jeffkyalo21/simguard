@@ -14,7 +14,8 @@
         Auditor get 403, no token 401); Admin and Auditor get 403 on a tier
         run and on tier settings changes; scoring status holds totals only
       - Run now twice: the second run scores nothing, no duplicate risk
-        scores or alerts, at most one open alert per SIM
+        scores or alerts, at most one open alert per SIM, and every scoring
+        alert is flagged (Alerts:MinFlaggedDaysInWindow = 1)
       - a usage import queues a scoring run (trigger import, actor system)
         that scores the new SIM-day
       - tier interval outside 90 to 365 is rejected with 400, a change is
@@ -339,7 +340,8 @@ function Get-OpenAlertCheck {
     # earlier smokes or created before issue #14) are not counted per SIM.
     $pipeline = @($open | Where-Object { $null -ne $_.detectedOn })
     $sims = @($pipeline | ForEach-Object { $_.simId } | Sort-Object -Unique)
-    return [pscustomobject]@{ Open = $open.Count; Pipeline = $pipeline.Count; Sims = $sims.Count }
+    $escalatedOnly = @($pipeline | Where-Object { $_.status -ne 'flagged' })
+    return [pscustomobject]@{ Open = $open.Count; Pipeline = $pipeline.Count; Sims = $sims.Count; NotFlagged = $escalatedOnly.Count }
 }
 
 # 19-digit ICCID: 8925400, 11 digits, Luhn check digit.
@@ -390,6 +392,8 @@ Check-True 'Second run scores nothing new' (($second.Run.status -eq 'succeeded')
 Check-True 'Risk score total unchanged by the second run' ($second.Status.totals.riskScores -eq $scoresBefore) "before=$scoresBefore after=$($second.Status.totals.riskScores)"
 Check-True 'Open alerts unchanged by the second run' ($alertsAfter.Open -eq $alertsBefore.Open) "before=$($alertsBefore.Open) after=$($alertsAfter.Open)"
 Check-True 'At most one open scoring alert per SIM' (($alertsAfter.Pipeline -gt 0) -and ($alertsAfter.Pipeline -eq $alertsAfter.Sims)) "open=$($alertsAfter.Pipeline) sims=$($alertsAfter.Sims)"
+# Alerts:MinFlaggedDaysInWindow = 1: every scoring alert had a flag day, so it is flagged.
+Check-True 'Every open scoring alert has a flag day (status flagged)' ($alertsAfter.NotFlagged -eq 0) "not flagged=$($alertsAfter.NotFlagged)"
 
 $runAudit = Invoke-Api GET '/api/audit-logs?action=scoring.run_requested&pageSize=5' $null $admin
 Check-True 'Run now audited with the Admin email (category system)' (@(@($runAudit.Data.items) | Where-Object { $_.actorEmail -eq $adminEmail -and $_.category -eq 'system' }).Count -gt 0) "rows=$($runAudit.Data.total)"

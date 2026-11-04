@@ -103,6 +103,7 @@ public static class ScoringRegistration
     public static IServiceCollection AddScoringPipeline(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<ScoringOptions>(configuration.GetSection(ScoringOptions.Section));
+        services.Configure<AlertOptions>(configuration.GetSection(AlertOptions.Section));
         services.AddSingleton<PipelineLock>();
         services.AddSingleton<ScoringQueue>();
         services.AddScoped<AlertRules>();

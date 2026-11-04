@@ -96,12 +96,14 @@ ids and date range, null for a full run), `requested_by` (user email or
 
 The ML documentation (`ml-service/README.md`, `ml-service/docs/`) does not
 define a sustained pattern or a cooldown, so these defaults from issue #14
-apply. They are in configuration:
+apply. The flagged-day condition was added after the demo backfill (below).
+They are in configuration:
 
 | Rule | Setting | Default |
 | ---- | ------- | ------- |
 | Sustained: at least N non-clear days ... | `Scoring:SustainedMinDays` | 3 |
 | ... among the last M scored days up to D | `Scoring:SustainedWindowDays` | 5 |
+| ... of which at least K are `flag` | `Alerts:MinFlaggedDaysInWindow` | 1 |
 | No new alert after a false positive for | `Scoring:FalsePositiveCooldownDays` | 7 days |
 
 For each scored date D and each SIM whose score on D is `flag` or
@@ -109,13 +111,17 @@ For each scored date D and each SIM whose score on D is `flag` or
 
 - Sustained means at least 3 of the SIM's last 5 scored days up to and
   including D are `flag` or `escalated`.
+- And at least 1 of those 5 days is `flag` (score above the flag threshold).
+  A SIM that is only `escalated` keeps its stored scores but raises no alert
+  and does not update an open one. With `MinFlaggedDaysInWindow` set to 0
+  the escalated-only rule applies again.
 - One open alert per SIM. If the SIM has an open alert (`flagged` or
   `escalated`), it is updated, never duplicated: `last_detected_on` moves to
   D; an `escalated` alert becomes `flagged` (risk level `high`) when a window
   day is `flag`; when D's probability is higher than the stored score, the
   score, type, reasons and model version are replaced.
 - Otherwise a new alert is created with status `flagged` if any window day is
-  `flag`, else `escalated`. `detected_on` and `last_detected_on` are D,
+  `flag` (always, with the default of 1), else `escalated`. `detected_on` and `last_detected_on` are D,
   `created_at` is the real time. The score is the highest probability in the
   window, the reasons are that day's top reasons.
 - Cooldown: after an alert is cleared as `falsePositive`, no new alert for
@@ -279,9 +285,15 @@ service with `READER=postgres`:
   date), no SIM with more than one open alert.
 - With the ML service stopped, Run now ended `failed` with the reason, and no
   score or alert changed.
-- 894 of the 1000 SIMs got an alert, including 160 of the 162 SIMs the
-  generator labels as anomalous. Escalated days are frequent (about 55
-  percent of SIMs on some February days), so 3 of 5 non-clear days is met
-  by many normal SIMs. Requiring at least one `flag` day would give about
-  161 alerts, 147 of them labelled anomalous; that is a rule change for the
-  product owner to decide.
+- Alerts against the generator labels (`ml-service/data/synthetic_cdr_labels.csv`,
+  162 anomalous SIMs):
+
+  | Rule | Alerts | On anomalous SIMs | On other SIMs | Anomalous SIMs without alert |
+  | ---- | -----: | ----------------: | ------------: | ---------------------------: |
+  | 3 of 5 non-clear | 894 | 160 | 734 | 2 |
+  | 3 of 5 non-clear and 1 flag (current) | 154 | 143 | 11 | 19 |
+
+  Escalated days are frequent (about 55 percent of SIMs on some February
+  days), so the sustained rule alone is met by most normal SIMs. The SIMs
+  missed by the current rule: 9 sharing, 6 reselling, 3 ghost usage, 1
+  inactive billing.

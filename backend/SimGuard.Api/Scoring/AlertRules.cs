@@ -21,15 +21,18 @@ namespace SimGuard.Api.Scoring;
 //  - Sustained on date D: at least SustainedMinDays (3) of the last
 //    SustainedWindowDays (5) scored days up to D are flag or escalated, and
 //    D itself is not clear.
+//  - And at least Alerts:MinFlaggedDaysInWindow (1) of those window days is
+//    flag. A SIM that is only escalated keeps its scores and gets no alert.
 //  - One open alert (flagged or escalated) per SIM. A sustained day on a
 //    SIM with an open alert updates that alert and never adds a second.
 //  - Cleared alerts are never reopened by scoring. No new alert is raised
 //    for a date the cleared alert already covered (up to the latest date
 //    scored for the SIM when it was cleared). After a false positive there
 //    is also a cooldown of FalsePositiveCooldownDays (7) days.
-public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> options)
+public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> options, IOptions<AlertOptions> alertOptions)
 {
     private readonly ScoringOptions _options = options.Value;
+    private readonly AlertOptions _alertOptions = alertOptions.Value;
 
     public sealed record Result(int Created, int Updated);
 
@@ -38,6 +41,7 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
     public int WindowDays => Math.Clamp(_options.SustainedWindowDays, 1, 60);
     public int MinDays => Math.Clamp(_options.SustainedMinDays, 1, WindowDays);
     public int CooldownDays => Math.Max(0, _options.FalsePositiveCooldownDays);
+    public int MinFlaggedDays => Math.Clamp(_alertOptions.MinFlaggedDaysInWindow, 0, WindowDays);
 
     public async Task<Result> ApplyAsync(
         IDbContextTransaction transaction,
@@ -57,7 +61,8 @@ public sealed class AlertRules(SimGuardDbContext db, IOptions<ScoringOptions> op
             .Where(w => w.Value.Count > 0
                         && w.Value[0].Date == date
                         && w.Value[0].Bucket != RiskBuckets.Clear
-                        && w.Value.Count(d => d.Bucket != RiskBuckets.Clear) >= MinDays)
+                        && w.Value.Count(d => d.Bucket != RiskBuckets.Clear) >= MinDays
+                        && w.Value.Count(d => d.Bucket == RiskBuckets.Flag) >= MinFlaggedDays)
             .ToDictionary(w => w.Key, w => w.Value);
 
         if (sustained.Count == 0)

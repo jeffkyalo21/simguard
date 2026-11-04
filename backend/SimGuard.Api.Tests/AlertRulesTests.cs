@@ -106,10 +106,10 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
     }
 
     [DbFact]
-    public async Task Three_of_five_scored_days_raise_one_alert_on_the_third_day()
+    public async Task Three_of_five_scored_days_with_a_flag_raise_one_alert_on_the_third_day()
     {
         var sim = await _h.AddSimAsync("field", Days(0, 25));
-        Pattern("ecece");
+        Pattern("ecfce");
 
         var run = await _h.RunAsync();
 
@@ -118,10 +118,10 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
         Assert.Equal(sim, alert.SimId);
         Assert.Equal(ScoringHarness.Day(18), alert.DetectedOn);
         Assert.Equal(ScoringHarness.Day(18), alert.LastDetectedOn);
-        Assert.Equal(AlertStatuses.Escalated, alert.Status);
-        Assert.Equal(RiskLevels.Medium, alert.RiskLevel);
+        Assert.Equal(AlertStatuses.Flagged, alert.Status);
+        Assert.Equal(RiskLevels.High, alert.RiskLevel);
         Assert.Equal(AlertTypes.Sharing, alert.Type);
-        Assert.Equal(0.5m, alert.RiskScore);
+        Assert.Equal(0.95m, alert.RiskScore);
         Assert.Equal("hotspot_sessions", alert.Reasons.RootElement[0].GetProperty("feature").GetString());
         Assert.Equal("up", alert.Reasons.RootElement[0].GetProperty("direction").GetString());
     }
@@ -139,6 +139,33 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
     }
 
     [DbFact]
+    public async Task Escalated_only_raises_nothing_but_keeps_the_scores()
+    {
+        var sim = await _h.AddSimAsync("field", Days(0, 30));
+        Pattern(new string('e', 17));
+
+        var run = await _h.RunAsync();
+
+        Assert.Equal(0, run.AlertsCreated);
+        Assert.Empty(await AlertsAsync());
+        Assert.Equal(17, await database.ScalarAsync($"SELECT count(*) FROM risk_scores WHERE sim_id = {sim} AND bucket = 'escalated'"));
+    }
+
+    [DbFact]
+    public async Task The_flag_day_must_be_inside_the_window()
+    {
+        await _h.AddSimAsync("field", Days(0, 30));
+        Pattern("feeeeeeeee");   // flag on day 14, escalated on days 15 to 23
+
+        var run = await _h.RunAsync();
+
+        var alert = Assert.Single(await AlertsAsync());
+        Assert.Equal(1, run.AlertsCreated);
+        Assert.Equal(ScoringHarness.Day(16), alert.DetectedOn);
+        Assert.Equal(ScoringHarness.Day(18), alert.LastDetectedOn);   // day 19 window is 15 to 19, no flag
+    }
+
+    [DbFact]
     public async Task A_backfill_leaves_one_open_alert_per_sustained_sim()
     {
         var sim = await _h.AddSimAsync("field", Days(0, 30));
@@ -150,12 +177,12 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
         var alerts = await AlertsAsync();
         Assert.Equal(2, alerts.Count);
         Assert.Equal(2, run.AlertsCreated);
-        Assert.Equal(2 * 13, run.AlertsUpdated);
+        Assert.Equal(2 * 4, run.AlertsUpdated);
         Assert.All(alerts, a =>
         {
-            Assert.Equal(ScoringHarness.Day(16), a.DetectedOn);
-            Assert.Equal(ScoringHarness.Day(29), a.LastDetectedOn);
-            Assert.Equal(AlertStatuses.Flagged, a.Status);   // upgraded on the flag day
+            Assert.Equal(ScoringHarness.Day(22), a.DetectedOn);       // the flag day
+            Assert.Equal(ScoringHarness.Day(26), a.LastDetectedOn);   // last window holding it
+            Assert.Equal(AlertStatuses.Flagged, a.Status);
             Assert.Equal(RiskLevels.High, a.RiskLevel);
             Assert.Equal(0.95m, a.RiskScore);
         });
@@ -173,7 +200,7 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
     public async Task A_false_positive_starts_a_seven_day_cooldown()
     {
         await _h.AddSimAsync("field", Days(0, 40));
-        Pattern(new string('e', 30));
+        Pattern(new string('f', 30));
         await _h.RunAsync(to: ScoringHarness.Day(20));
         await database.ExecuteAsync(
             "UPDATE alerts SET status = 'cleared', resolution = 'falsePositive', resolved_at = (SELECT max(created_at) FROM risk_scores)");
@@ -186,14 +213,14 @@ public sealed class AlertRulesTests(TestDatabase database) : IClassFixture<TestD
         Assert.Equal(AlertStatuses.Cleared, alerts[0].Status);
         Assert.Equal(ScoringHarness.Day(20), alerts[0].LastDetectedOn);
         Assert.Equal(ScoringHarness.Day(28), alerts[1].DetectedOn);   // 21..27 in cooldown
-        Assert.Equal(AlertStatuses.Escalated, alerts[1].Status);
+        Assert.Equal(AlertStatuses.Flagged, alerts[1].Status);
     }
 
     [DbFact]
     public async Task A_confirmed_misuse_alert_is_never_reopened()
     {
         await _h.AddSimAsync("field", Days(0, 30));
-        Pattern(new string('e', 20));
+        Pattern(new string('f', 20));
         await _h.RunAsync(to: ScoringHarness.Day(20));
         await database.ExecuteAsync(
             "UPDATE alerts SET status = 'cleared', resolution = 'confirmedMisuse', resolved_at = (SELECT max(created_at) FROM risk_scores)");
