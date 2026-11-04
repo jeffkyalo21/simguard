@@ -56,6 +56,33 @@ JSON field names are camelCase. Errors are JSON with `title`, `status` and
 Status codes: `422` for bad input (empty list, too many SIMs, bad date,
 unknown field), `503` when artifacts are missing.
 
+## Demo import files
+
+`scripts/make_import_files.py` turns the generator output into files for the
+backend CSV import (`backend/docs/imports.md`):
+
+```
+venv/Scripts/python scripts/make_import_files.py
+```
+
+It writes `departments.csv`, `employees.csv`, `sims.csv`, `usage.csv`
+(the 90,000 generator rows), `usage_perf_100k.csv` (100,000 more rows for the
+timing test) and `sim_mapping.csv` into `data/import_samples/`, which is
+git-ignored. Import them in that order.
+
+The generator has no department, employee or carrier data, so the script
+assigns them:
+
+- Departments by tier: field = Field Operations, manager = Management,
+  professional = Professional Services, support = Customer Support.
+- One employee per SIM ("Demo Employee 0042",
+  `demo.employee.0042@simguard.local`) in the SIM's tier department, with a
+  job role by tier. SIMs are not allocated to them.
+- Carrier by `sim_id` modulo 3: Safaricom, Airtel, Telkom.
+- Fake ICCID `8925400` + `sim_id` (11 digits) + a Luhn digit, and phone
+  `+2547` + `10000000 + sim_id`. Both are kept in `sim_mapping.csv` and
+  reused when it exists, so they never change between runs.
+
 ## Known limitations
 
 - The fill value for the first day of each SIM's rolling volume mean

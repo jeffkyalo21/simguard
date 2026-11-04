@@ -253,3 +253,20 @@ Each successful commit writes `import.committed` (category `organisation`,
 `actorRole` of the caller) with `newValues`
 `{ importRunId, type, fileName, sha256, skipInvalid, totalRows, validRows, invalidRows, inserted, updated, unchanged }`.
 Imports may also write per-row entries, listed with each type below.
+
+## Demo files and smoke test
+
+`ml-service/scripts/make_import_files.py` writes import-ready files from
+the generator data into `ml-service/data/import_samples/` (git-ignored):
+4 departments, 1000 employees, 1000 SIMs, 90000 usage rows and a 100000
+row usage file for timing. How departments, employees, carriers, ICCIDs and
+phone numbers are assigned is in [ml-service/README.md](../../ml-service/README.md).
+All 1000 demo SIMs have 90 consecutive days, so all are scorable.
+
+[imports-smoke.ps1](imports-smoke.ps1) checks this contract against a
+running Development API on a throwaway database (the imported rows stay).
+Generate the demo files first, then run it with the same credentials setup
+as [roles-smoke.ps1](roles-smoke.ps1). It reports the time of each demo
+commit; on a laptop with Postgres in Docker the 100000 row usage commit
+took about 4 seconds.
+
