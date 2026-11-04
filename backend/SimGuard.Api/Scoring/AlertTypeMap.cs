@@ -6,27 +6,41 @@ namespace SimGuard.Api.Scoring;
 // Alert type from the top reasons of the scored day that raised or last
 // raised the alert (backend/docs/scoring-pipeline.md, "Alert type").
 //
-// The reasons are tried in order of contribution, largest first, and only
-// those that increase risk (direction "up") count. The first feature found
-// in the table below decides the type. Features not in the table (geo,
-// roaming, session shape, tier and cohort_z_iso_anomaly_score) do not
-// decide; when no reason decides, the type is "other".
+// Only reasons that increase risk (direction "up") count. Each mapped
+// feature names a type, and the type with the highest precedence among all
+// such reasons wins, whatever their order:
 //
-// Volume features depend on the sign of the scaled value the model saw:
-// above the SIM's normal (value > 0) points to reselling bursts, at or
-// below it (value <= 0) to ghost usage (a SIM kept alive with almost no
-// traffic). The patterns follow the anomaly types in
-// ml-service/docs/evaluation_report.md.
+//   1. inactiveBilling  a billing feature above normal (value > 0)
+//   2. sharing          hotspot features
+//   3. reselling        offpeak_ratio, data_session_count, or a volume
+//                       feature clearly above normal (value > 0.5)
+//   4. ghostUsage       a volume feature at or below normal (value <= 0)
+//   5. other            nothing mapped
+//
+// Values are the scaled values the model saw (0 is the SIM's normal). A
+// volume value between 0 and 0.5 and a billing value at or below 0 decide
+// nothing.
+//
+// Precedence, not contribution order, decides because the low-volume
+// features (peak_mb, bytes_per_session) rank first for reselling, ghost
+// usage and inactive billing alike; the specific features after them tell
+// the patterns apart. Checked against the generator labels on the demo data
+// (scoring-pipeline.md). Features not in the table (geo, roaming, tier and
+// cohort_z_iso_anomaly_score) do not decide.
 public static class AlertTypeMap
 {
     private const string VolumeBySign = "volume";
+    private const string BillingAbove = "billing";
+
+    // Scaled value above which a volume feature means reselling.
+    public const double ResellingVolumeMin = 0.5;
 
     public static readonly IReadOnlyDictionary<string, string> Features = new Dictionary<string, string>
     {
         // Billed without matching usage.
-        ["billed_mb"] = AlertTypes.InactiveBilling,
-        ["billing_gap_mb"] = AlertTypes.InactiveBilling,
-        ["billing_ratio"] = AlertTypes.InactiveBilling,
+        ["billed_mb"] = BillingAbove,
+        ["billing_gap_mb"] = BillingAbove,
+        ["billing_ratio"] = BillingAbove,
 
         // Tethering to other devices.
         ["hotspot_sessions"] = AlertTypes.Sharing,
@@ -34,11 +48,12 @@ public static class AlertTypeMap
         ["hotspot_sum_7d"] = AlertTypes.Sharing,
         ["hotspot_sum_14d"] = AlertTypes.Sharing,
 
-        // Night-time resale traffic (evaluation report: offpeak_ratio
-        // separates data_reselling, AUC 0.94).
+        // Night-time resale traffic in many sessions (evaluation report:
+        // offpeak_ratio separates data_reselling).
         ["offpeak_ratio"] = AlertTypes.Reselling,
+        ["data_session_count"] = AlertTypes.Reselling,
 
-        // Volume: reselling when value > 0, ghostUsage when value <= 0.
+        // Volume: reselling when value > 0.5, ghostUsage when value <= 0.
         ["total_mb"] = VolumeBySign,
         ["total_download_mb"] = VolumeBySign,
         ["total_upload_mb"] = VolumeBySign,
@@ -57,6 +72,15 @@ public static class AlertTypeMap
         ["cohort_z_vol_zscore_14d"] = VolumeBySign
     };
 
+    // Highest precedence first.
+    public static readonly IReadOnlyList<string> Precedence =
+    [
+        AlertTypes.InactiveBilling,
+        AlertTypes.Sharing,
+        AlertTypes.Reselling,
+        AlertTypes.GhostUsage
+    ];
+
     // Reasons in the stored format: [{feature, value, contribution, direction}].
     public static string For(JsonElement reasons)
     {
@@ -65,28 +89,35 @@ public static class AlertTypeMap
             return AlertTypes.Other;
         }
 
-        var ordered = reasons.EnumerateArray()
-            .Where(r => r.TryGetProperty("direction", out var d) && d.GetString() == "up")
-            .OrderByDescending(r => Number(r, "contribution"));
+        var found = new HashSet<string>();
 
-        foreach (var reason in ordered)
+        foreach (var reason in reasons.EnumerateArray())
         {
-            if (!reason.TryGetProperty("feature", out var f)
+            if (!reason.TryGetProperty("direction", out var d) || d.GetString() != "up"
+                || !reason.TryGetProperty("feature", out var f)
                 || f.GetString() is not { } feature
                 || !Features.TryGetValue(feature, out var type))
             {
                 continue;
             }
 
-            if (type != VolumeBySign)
+            var value = Number(reason, "value");
+            var decided = type switch
             {
-                return type;
-            }
+                BillingAbove => value > 0 ? AlertTypes.InactiveBilling : null,
+                VolumeBySign => value > ResellingVolumeMin ? AlertTypes.Reselling
+                    : value <= 0 ? AlertTypes.GhostUsage
+                    : null,
+                _ => type
+            };
 
-            return Number(reason, "value") > 0 ? AlertTypes.Reselling : AlertTypes.GhostUsage;
+            if (decided is not null)
+            {
+                found.Add(decided);
+            }
         }
 
-        return AlertTypes.Other;
+        return Precedence.FirstOrDefault(found.Contains) ?? AlertTypes.Other;
     }
 
     private static double Number(JsonElement element, string name) =>

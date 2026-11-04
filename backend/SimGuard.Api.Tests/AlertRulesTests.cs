@@ -29,10 +29,28 @@ public sealed class AlertTypeMapTests
     }
 
     [Fact]
-    public void The_largest_mapped_risk_increasing_reason_decides()
+    public void The_highest_precedence_risk_increasing_reason_decides()
     {
-        var reasons = $"[{R("hotspot_sessions", 1, 0.2)},{R("geo_sum_7d", 3, 3)},{R("billing_ratio", 1, 0.9)},{R("total_mb", 1, 5, "down")}]";
+        var reasons = $"[{R("hotspot_sessions", 1, 0.2)},{R("geo_sum_7d", 3, 3)},{R("billing_ratio", 1, 0.1)},{R("total_mb", 1, 5, "down")}]";
         Assert.Equal(AlertTypes.InactiveBilling, TypeOf(reasons));
+    }
+
+    [Fact]
+    public void Low_peak_volume_first_does_not_hide_reselling()
+    {
+        // The demo pattern for data_reselling: peak_mb below normal ranks first.
+        var reselling = $"[{R("peak_mb", -0.96, 2.8)},{R("cohort_z_iso_anomaly_score", 2, 1)},{R("offpeak_ratio", 0.8, 0.9)}]";
+        Assert.Equal(AlertTypes.Reselling, TypeOf(reselling));
+
+        var ghost = $"[{R("bytes_per_session", -1.2, 2.1)},{R("peak_mb", -0.9, 1.4)},{R("offpeak_mb", -0.7, 1)}]";
+        Assert.Equal(AlertTypes.GhostUsage, TypeOf(ghost));
+    }
+
+    [Fact]
+    public void Values_near_normal_and_low_billing_decide_nothing()
+    {
+        Assert.Equal(AlertTypes.GhostUsage, TypeOf($"[{R("peak_mb", -0.9, 2)},{R("offpeak_mb", 0.04, 1)},{R("billed_mb", -1, 0.5)}]"));
+        Assert.Equal(AlertTypes.Other, TypeOf($"[{R("offpeak_mb", 0.3, 1)}]"));
     }
 
     [Fact]

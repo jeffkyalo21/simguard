@@ -277,6 +277,7 @@ The roles split operator from organisation:
 | `GET /`, `POST /api/auth/login`, `POST /api/auth/mfa/verify` | anonymous | anonymous | anonymous | none |
 | `POST /api/auth/mfa/enroll/start`, `POST /api/auth/mfa/enroll/confirm` | enrolment token | enrolment token | enrolment token | `MfaEnrollment` |
 | `GET /api/auth/me`, `POST /api/auth/change-password` | yes | yes | yes | `SignedIn` |
+| `GET /health` (database check only, for hosting) | anonymous | anonymous | anonymous | none |
 | `GET /health/database` | yes | yes | yes | `AnyRole` |
 | `GET /api/departments`, `/{id}`, `/{id}/employees` | no | yes | yes | `OrgRead` |
 | `POST /api/departments`, `PUT/DELETE /api/departments/{id}` | no | yes | no | `OrgWrite` |
@@ -297,6 +298,7 @@ The roles split operator from organisation:
 | `GET /api/dashboard/summary` | no | yes | yes | `OrgRead` |
 | `GET /api/tier-recommendations`, `/settings`, `/status` | no | yes | yes | `OrgRead` |
 | `PUT /api/tier-recommendations/settings`, `POST /api/tier-recommendations/run`, `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
+| `POST /api/admin/scoring/run`, `GET /api/admin/scoring/status` (totals only) | yes | no | no | `AdminOnly` |
 | `/api/users/*` (list, get, create, role, disable, enable, MFA reset, password reset) | yes | no | no | `AdminOnly` |
 | `GET /api/audit-logs` | `system` rows only | no | all rows | `AuditRead` |
 | `GET /api/auth/events` | yes | no | yes | `AuditRead` |

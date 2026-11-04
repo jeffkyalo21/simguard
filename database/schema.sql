@@ -96,13 +96,18 @@ CREATE TABLE alerts (
     resolution VARCHAR(20)
         CHECK (resolution IS NULL OR resolution IN ('confirmedMisuse', 'falsePositive')),
     resolution_note VARCHAR(500),
-    resolved_by_user_id INTEGER -- app_users(id), ON DELETE SET NULL
+    resolved_by_user_id INTEGER, -- app_users(id), ON DELETE SET NULL
+    -- Scored dates (UTC) the alert covers: first and latest detection.
+    -- created_at stays the real time the row was written, also in a backfill.
+    detected_on DATE,
+    last_detected_on DATE
 );
 
 CREATE INDEX idx_alerts_sim ON alerts(sim_id);
 CREATE INDEX idx_alerts_status ON alerts(status);
 CREATE INDEX idx_alerts_created_at ON alerts(created_at);
 CREATE INDEX idx_alerts_model_version ON alerts(model_version);
+CREATE INDEX idx_alerts_detected_on ON alerts(detected_on);
 
 -- ============================
 -- risk_scores
@@ -237,3 +242,100 @@ CREATE TABLE import_runs (
 CREATE INDEX idx_import_runs_started_at ON import_runs(started_at);
 CREATE INDEX idx_import_runs_type ON import_runs(type);
 CREATE INDEX idx_import_runs_uploaded_by ON import_runs(uploaded_by_user_id);
+
+-- ============================
+-- scoring_runs
+-- ============================
+-- One row per scoring run (schedule, manual, import). See
+-- backend/docs/scoring-pipeline.md. scope_* is null for a full run.
+CREATE TABLE scoring_runs (
+    id SERIAL PRIMARY KEY,
+    trigger VARCHAR(20) NOT NULL
+        CHECK (trigger IN ('schedule', 'manual', 'import')),
+    status VARCHAR(20) NOT NULL
+        CHECK (status IN ('queued', 'running', 'succeeded', 'partial', 'failed')),
+    force BOOLEAN NOT NULL,
+    scope_sim_ids INTEGER[],
+    scope_from DATE,
+    scope_to DATE,
+    merged_requests INTEGER NOT NULL,
+    requested_by_user_id INTEGER, -- app_users(id), ON DELETE SET NULL
+    requested_by VARCHAR(256) NOT NULL, -- user email, or 'system'
+    requested_at TIMESTAMPTZ NOT NULL,
+    started_at TIMESTAMPTZ,
+    finished_at TIMESTAMPTZ,
+    first_date DATE,
+    last_date DATE,
+    dates_scored INTEGER NOT NULL,
+    sim_days_scored INTEGER NOT NULL,
+    sim_days_skipped INTEGER NOT NULL,
+    failures INTEGER NOT NULL,
+    alerts_created INTEGER NOT NULL,
+    alerts_updated INTEGER NOT NULL,
+    error_summary VARCHAR(1000),
+    model_version VARCHAR(50)
+);
+
+CREATE INDEX idx_scoring_runs_requested_at ON scoring_runs(requested_at);
+CREATE INDEX idx_scoring_runs_status ON scoring_runs(status);
+CREATE INDEX idx_scoring_runs_requested_by ON scoring_runs(requested_by_user_id);
+
+-- ============================
+-- tier recommendations
+-- ============================
+-- See backend/docs/api-tier-recommendations.md. Nothing is applied
+-- automatically; a tier changes only through PATCH /api/sims/{id}/tier.
+CREATE TABLE tier_recommendation_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1), -- single row
+    interval_days INTEGER NOT NULL CHECK (interval_days BETWEEN 90 AND 365),
+    updated_by_user_id INTEGER, -- app_users(id), ON DELETE SET NULL
+    updated_by VARCHAR(256),
+    updated_at TIMESTAMPTZ
+);
+
+INSERT INTO tier_recommendation_settings (id, interval_days) VALUES (1, 90);
+
+CREATE TABLE tier_recommendation_runs (
+    id SERIAL PRIMARY KEY,
+    trigger VARCHAR(20) NOT NULL
+        CHECK (trigger IN ('manual', 'automatic')),
+    status VARCHAR(20) NOT NULL
+        CHECK (status IN ('running', 'succeeded', 'partial', 'failed')),
+    requested_by_user_id INTEGER, -- app_users(id), ON DELETE SET NULL
+    requested_by VARCHAR(256) NOT NULL, -- user email, or 'system'
+    started_at TIMESTAMPTZ NOT NULL,
+    finished_at TIMESTAMPTZ,
+    billing_cycle INTEGER,
+    sims_evaluated INTEGER NOT NULL,
+    recommendations_created INTEGER NOT NULL,
+    error_summary VARCHAR(1000)
+);
+
+CREATE INDEX idx_tier_rec_runs_started_at ON tier_recommendation_runs(started_at);
+
+CREATE TABLE tier_recommendations (
+    id SERIAL PRIMARY KEY,
+    sim_id INTEGER NOT NULL REFERENCES sims(id) ON DELETE CASCADE,
+    run_id INTEGER NOT NULL REFERENCES tier_recommendation_runs(id) ON DELETE CASCADE,
+    current_tier VARCHAR(20) NOT NULL
+        CHECK (current_tier IN ('field', 'manager', 'professional', 'support')),
+    recommended_tier VARCHAR(20) NOT NULL
+        CHECK (recommended_tier IN ('field', 'manager', 'professional', 'support')),
+    recommendation VARCHAR(20) NOT NULL
+        CHECK (recommendation IN ('upgrade', 'downgrade')),
+    reason VARCHAR(500) NOT NULL,
+    billing_cycle INTEGER NOT NULL,
+    projected_overage_mb DOUBLE PRECISION,
+    days_to_depletion INTEGER,
+    status VARCHAR(20) NOT NULL
+        CHECK (status IN ('open', 'dismissed')),
+    created_at TIMESTAMPTZ NOT NULL,
+    dismissed_at TIMESTAMPTZ,
+    dismissed_by_user_id INTEGER -- app_users(id), ON DELETE SET NULL
+);
+
+-- One open recommendation per SIM.
+CREATE UNIQUE INDEX idx_tier_recs_one_open_per_sim ON tier_recommendations(sim_id) WHERE status = 'open';
+CREATE INDEX idx_tier_recs_sim_status ON tier_recommendations(sim_id, status);
+CREATE INDEX idx_tier_recs_status ON tier_recommendations(status);
+CREATE INDEX idx_tier_recs_run ON tier_recommendations(run_id);
