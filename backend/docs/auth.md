@@ -302,6 +302,8 @@ not declare its own policy, so a new endpoint is protected by default.
 | `SimGuard:Seed:AdminEmail` | first run only | | |
 | `SimGuard:Seed:AdminPassword` | first run only | | at least 12 characters |
 | `SimGuard:Seed:AdminName` | no | `Administrator` | |
+| `SimGuard:Seed:OfficerEmail`, `OfficerPassword`, `OfficerName` | no (Development only) | name `Security Officer` | test SecurityOfficer |
+| `SimGuard:Seed:AuditorEmail`, `AuditorPassword`, `AuditorName` | no (Development only) | name `Auditor` | test Auditor |
 
 Keep secrets out of `appsettings*.json`. In Development use user-secrets;
 elsewhere use environment variables (`Jwt__Key`, `SimGuard__Seed__AdminPassword`,
@@ -333,6 +335,26 @@ the Admin exists, remove the seed password:
 ```bash
 dotnet user-secrets remove "SimGuard:Seed:AdminPassword"
 ```
+
+### Test accounts (Development only)
+
+Admin cannot read or change organisation data, so local testing also needs
+a SecurityOfficer and an Auditor. When `ASPNETCORE_ENVIRONMENT` is
+`Development`, each startup also creates them from these settings if they
+are set and no account has that email yet:
+
+```bash
+dotnet user-secrets set "SimGuard:Seed:OfficerEmail" "officer@simguard.local"
+dotnet user-secrets set "SimGuard:Seed:OfficerPassword" "<temporary password, 12+ characters>"
+dotnet user-secrets set "SimGuard:Seed:AuditorEmail" "auditor@simguard.local"
+dotnet user-secrets set "SimGuard:Seed:AuditorPassword" "<temporary password, 12+ characters>"
+```
+
+There are no default passwords: an unset email or password means the
+account is not created. Like the first Admin, each account must enrol MFA
+and change its password at first sign-in (the smoke scripts do this with
+`Complete-FirstSignIn`). Outside Development these settings are ignored;
+create accounts through `POST /api/users` instead.
 
 ## Database
 
