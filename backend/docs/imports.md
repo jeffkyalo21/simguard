@@ -181,6 +181,72 @@ carrier changed, `sim.tier_changed` (`{ tier }` old and new) and
 `sim.status_changed` (`{ status }` old and new). New SIMs are covered by the
 `import.committed` entry only.
 
+## Daily usage
+
+Columns, in this order in the template (any order is accepted):
+
+`iccid, date, total_download_mb, total_upload_mb, data_session_count,
+data_duration_s, hotspot_sessions, public_apn_sessions, unique_towers,
+geo_flag_count, peak_mb, offpeak_mb, total_mb, roaming_sessions, billed_mb,
+tier, voice_minutes_used, sms_count, voice_minutes_remaining, sms_remaining`
+
+These are `iccid` plus the ML daily usage contract
+([daily_usage_schema.md](../../ml-service/docs/daily_usage_schema.md)) with
+`sim_id` replaced by `iccid`. Units: data in MB, durations in seconds, voice
+in minutes.
+
+Rules (each failure is a row error):
+
+- `iccid` must be an existing SIM (import SIMs first).
+- `date` is `yyyy-mm-dd`.
+- No empty values anywhere.
+- `*_mb`, `voice_minutes_used` and `voice_minutes_remaining` are numbers
+  with a dot for decimals; the other count columns are whole numbers.
+- Numbers must not be negative, except `voice_minutes_remaining` and
+  `sms_remaining`, which the ML contract allows below zero (bundle overuse;
+  the generator data has such rows).
+- `tier` is one of the four tiers. A tier that differs from `sims.tier` is a
+  warning: the row is stored as given and scoring uses the SIM's tier.
+- The same `(iccid, date)` twice in the file is an error on the later row.
+
+Rows are upserted into `daily_usage` by `(sim_id, date)` with a binary COPY
+into a temporary table and one `INSERT ... ON CONFLICT DO UPDATE ... WHERE
+(old values) IS DISTINCT FROM (new values)`, so unchanged rows are counted
+as `unchanged` and not rewritten. No per row audit entries are written.
+
+### Coverage
+
+A usage import returns `coverage` for the SIMs in the file, computed over
+all their stored days after the import (for a preview: as they would be):
+
+```json
+"coverage": {
+  "sims": 3,
+  "firstDate": "2025-01-01",
+  "lastDate": "2025-01-20",
+  "minimumDays": 15,
+  "scorable": 1,
+  "notEnoughHistory": 2,
+  "withGaps": 1,
+  "details": [
+    { "simId": 41, "iccid": "8925499176223501203", "firstDate": "2025-01-01", "lastDate": "2025-01-20",
+      "days": 18, "gapCount": 1, "missingDays": 2, "latestRunDays": 8, "scorable": false }
+  ]
+}
+```
+
+- `latestRunDays` is the number of consecutive days ending on the SIM's
+  last date. A SIM is `scorable` when it is at least `minimumDays` (15, the
+  ML `SCORE_LOOKBACK_DAYS`), otherwise it counts as `notEnoughHistory`.
+  `scorable + notEnoughHistory = sims`.
+- `withGaps` counts SIMs with at least one missing day between their first
+  and last date, whether or not they are scorable. `gapCount` is the number
+  of gaps, `missingDays` the days missing in total.
+- `details` lists at most 1000 SIMs, the ones that are not scorable first,
+  then those with gaps.
+- Gaps and short history are also reported as warnings (one per SIM, with
+  `row` and `column` null). They never block a commit.
+
 ## Audit
 
 Each successful commit writes `import.committed` (category `organisation`,
