@@ -257,7 +257,8 @@ $verify = Invoke-Api POST '/api/auth/mfa/verify' @{ mfaToken = $login2.Data.mfaT
 Check 'MFA verify TOTP' 200 $verify "mustChangePassword=$($verify.Data.mustChangePassword)"
 $admin = $verify.Data.accessToken
 
-Check 'GET /api/sims as Admin' 200 (Invoke-Api GET '/api/sims' $null $admin)
+Check 'GET /api/users as Admin' 200 (Invoke-Api GET '/api/users' $null $admin)
+Check 'GET /api/sims as Admin (organisation data)' 403 (Invoke-Api GET '/api/sims' $null $admin)
 Check 'GET /health/database as Admin' 200 (Invoke-Api GET '/health/database' $null $admin)
 
 # Recovery code: works once.
@@ -291,26 +292,29 @@ $auditorSession = Complete-FirstSignIn 'Auditor' $auditorEmail $auditorTemp $aud
 $officerToken = $officerSession.Token
 $auditorToken = $auditorSession.Token
 
-# --- Role matrix on write endpoints ------------------------------------------
+# --- Role matrix on organisation endpoints ----------------------------------
+# Admin is the SimGuard operator: no organisation reads or writes. The
+# Security Officer manages the organisation; the Auditor only reads.
 Check 'Auditor GET /api/sims' 200 (Invoke-Api GET '/api/sims' $null $auditorToken)
 Check 'Officer GET /api/sims' 200 (Invoke-Api GET '/api/sims' $null $officerToken)
 Check 'Auditor POST /api/departments' 403 (Invoke-Api POST '/api/departments' @{ name = "Smoke $runId" } $auditorToken)
-Check 'Officer POST /api/departments' 403 (Invoke-Api POST '/api/departments' @{ name = "Smoke $runId" } $officerToken)
-$department = Invoke-Api POST '/api/departments' @{ name = "Smoke $runId" } $admin
-Check 'Admin POST /api/departments' 201 $department
+Check 'Admin POST /api/departments' 403 (Invoke-Api POST '/api/departments' @{ name = "Smoke $runId" } $admin)
+$department = Invoke-Api POST '/api/departments' @{ name = "Smoke $runId" } $officerToken
+Check 'Officer POST /api/departments' 201 $department
 
 $phone = '+2547' + ($runId % 100000000).ToString('00000000')
 $simBody = @{ phoneNumber = $phone; iccid = "8925499$runId"; operator = 'Safaricom'; planType = 'Postpaid'; monthlyCost = 10 }
-Check 'Officer POST /api/sims' 403 (Invoke-Api POST '/api/sims' $simBody $officerToken)
-$sim = Invoke-Api POST '/api/sims' $simBody $admin
-Check 'Admin POST /api/sims' 201 $sim
+Check 'Admin POST /api/sims' 403 (Invoke-Api POST '/api/sims' $simBody $admin)
+$sim = Invoke-Api POST '/api/sims' $simBody $officerToken
+Check 'Officer POST /api/sims' 201 $sim
 $simId = $sim.Data.id
 Check 'Auditor PATCH /api/sims/{id}/status' 403 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $auditorToken)
+Check 'Admin PATCH /api/sims/{id}/status' 403 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $admin)
 Check 'Officer PATCH /api/sims/{id}/status' 200 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $officerToken)
 Check 'Auditor POST /api/allocations' 403 (Invoke-Api POST '/api/allocations' @{ simId = $simId; employeeId = 1; assignedBy = 1 } $auditorToken)
-Check 'Officer DELETE /api/sims/{id}' 403 (Invoke-Api DELETE "/api/sims/$simId" $null $officerToken)
-Check 'Admin DELETE /api/sims/{id} (cleanup)' 204 (Invoke-Api DELETE "/api/sims/$simId" $null $admin)
-Check 'Admin DELETE /api/departments/{id} (cleanup)' 204 (Invoke-Api DELETE "/api/departments/$($department.Data.id)" $null $admin)
+Check 'Admin DELETE /api/sims/{id}' 403 (Invoke-Api DELETE "/api/sims/$simId" $null $admin)
+Check 'Officer DELETE /api/sims/{id} (cleanup)' 204 (Invoke-Api DELETE "/api/sims/$simId" $null $officerToken)
+Check 'Officer DELETE /api/departments/{id} (cleanup)' 204 (Invoke-Api DELETE "/api/departments/$($department.Data.id)" $null $officerToken)
 
 Check 'Officer GET /api/users' 403 (Invoke-Api GET '/api/users' $null $officerToken)
 Check 'Auditor POST /api/users' 403 (Invoke-Api POST '/api/users' @{ email = "z-$runId@simguard.local"; name = 'Z'; role = 'Admin'; temporaryPassword = (New-TestPassword) } $auditorToken)

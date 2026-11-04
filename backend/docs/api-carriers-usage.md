@@ -10,9 +10,12 @@ validation (with an `errors` object keyed by field), 401 no or invalid token,
 
 | Endpoint | Admin | SecurityOfficer | Auditor | Policy |
 | -------- | :---: | :-------------: | :-----: | ------ |
-| `GET /api/carriers` | yes | yes | yes | `CanRead` |
-| `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | yes | no | no | `CanManageCarriers` |
-| `GET /api/sims/{id}/usage` | yes | yes | yes | `CanRead` |
+| `GET /api/carriers` | no | yes | yes | `OrgRead` |
+| `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
+| `GET /api/sims/{id}/usage` | no | yes | yes | `OrgRead` |
+| `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
+
+The full matrix is in [auth.md](auth.md).
 
 ## Carriers
 
