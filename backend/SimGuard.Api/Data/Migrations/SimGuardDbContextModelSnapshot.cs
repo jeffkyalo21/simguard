@@ -954,6 +954,129 @@ namespace SimGuard.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.ScoringRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AlertsCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("alerts_created");
+
+                    b.Property<int>("AlertsUpdated")
+                        .HasColumnType("integer")
+                        .HasColumnName("alerts_updated");
+
+                    b.Property<int>("DatesScored")
+                        .HasColumnType("integer")
+                        .HasColumnName("dates_scored");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("error_summary");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer")
+                        .HasColumnName("failures");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<DateOnly?>("FirstDate")
+                        .HasColumnType("date")
+                        .HasColumnName("first_date");
+
+                    b.Property<bool>("Force")
+                        .HasColumnType("boolean")
+                        .HasColumnName("force");
+
+                    b.Property<DateOnly?>("LastDate")
+                        .HasColumnType("date")
+                        .HasColumnName("last_date");
+
+                    b.Property<int>("MergedRequests")
+                        .HasColumnType("integer")
+                        .HasColumnName("merged_requests");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("model_version");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("requested_by");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<DateOnly?>("ScopeFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("scope_from");
+
+                    b.PrimitiveCollection<int[]>("ScopeSimIds")
+                        .HasColumnType("integer[]")
+                        .HasColumnName("scope_sim_ids");
+
+                    b.Property<DateOnly?>("ScopeTo")
+                        .HasColumnType("date")
+                        .HasColumnName("scope_to");
+
+                    b.Property<int>("SimDaysScored")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_days_scored");
+
+                    b.Property<int>("SimDaysSkipped")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_days_skipped");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("trigger");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedAt")
+                        .HasDatabaseName("idx_scoring_runs_requested_at");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_scoring_runs_status");
+
+                    b.ToTable("scoring_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_scoring_runs_status", "status IN ('queued', 'running', 'succeeded', 'partial', 'failed')");
+
+                            t.HasCheckConstraint("chk_scoring_runs_trigger", "trigger IN ('schedule', 'manual', 'import')");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>
                 {
                     b.Property<int>("Id")
@@ -1212,6 +1335,16 @@ namespace SimGuard.Api.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Sim");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.ScoringRun", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RequestedByUser");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>

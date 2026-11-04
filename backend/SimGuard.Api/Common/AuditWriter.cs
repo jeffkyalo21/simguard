@@ -34,6 +34,8 @@ public static class AuditActions
     public const string AlertStatusChanged = "alert.status_changed";
     public const string ImportCommitted = "import.committed";
     public const string DemoSeeded = "dev.demo_seeded";
+    public const string ScoringRunRequested = "scoring.run_requested";
+    public const string ScoringRunFailed = "scoring.run_failed";
 }
 
 // Audit categories. Admin (the SimGuard operator) reads only "system" rows.
@@ -44,10 +46,12 @@ public static class AuditCategories
 
     // Same rule as the AddAuditCategory backfill: actions starting with
     // user, auth or role are system, everything else is organisation.
+    // Scoring runs (issue #14) operate SimGuard and are system too.
     public static string For(string action) =>
         action.StartsWith("user", StringComparison.Ordinal)
         || action.StartsWith("auth", StringComparison.Ordinal)
         || action.StartsWith("role", StringComparison.Ordinal)
+        || action.StartsWith("scoring.", StringComparison.Ordinal)
             ? System
             : Organisation;
 }
@@ -62,6 +66,30 @@ public sealed class AuditWriter(SimGuardDbContext db, IHttpContextAccessor httpC
     private const int RoleMaxLength = 20;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    // Actor of rows written by background work (scheduled, import or
+    // automatic runs): no user, ActorEmail "system".
+    public const string SystemActor = "system";
+
+    // Adds a row for background work: actor "system", category system.
+    public AuditLog AddSystem(string action, int? affectedSimId, object? oldValues, object? newValues)
+    {
+        var row = new AuditLog
+        {
+            ActorUserId = null,
+            ActorEmail = SystemActor,
+            Action = action,
+            Category = AuditCategories.System,
+            ActorRole = null,
+            AffectedSimId = affectedSimId,
+            OldValues = ToJson(oldValues),
+            NewValues = ToJson(newValues),
+            Timestamp = Timestamps.UtcNow()
+        };
+
+        db.AuditLogs.Add(row);
+        return row;
+    }
 
     // Adds the row to the context without saving it.
     public AuditLog Add(string action, int? affectedSimId, object? oldValues, object? newValues)

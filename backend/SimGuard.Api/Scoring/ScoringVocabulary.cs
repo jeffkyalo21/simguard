@@ -1,0 +1,45 @@
+namespace SimGuard.Api.Scoring;
+
+public static class ScoringTriggers
+{
+    public const string Schedule = "schedule";
+    public const string Manual = "manual";
+    public const string Import = "import";
+
+    public static readonly IReadOnlyList<string> All = [Schedule, Manual, Import];
+}
+
+public static class ScoringRunStatuses
+{
+    // Waiting for the running run to finish. Triggers that arrive meanwhile
+    // are merged into the queued run.
+    public const string Queued = "queued";
+    public const string Running = "running";
+    public const string Succeeded = "succeeded";
+
+    // Stopped after a failure with some SIM-days scored.
+    public const string Partial = "partial";
+
+    // Stopped before any SIM-day was scored, or the ML service was down.
+    public const string Failed = "failed";
+
+    public static readonly IReadOnlyList<string> All = [Queued, Running, Succeeded, Partial, Failed];
+
+    public static bool IsFinished(string status) => status is Succeeded or Partial or Failed;
+}
+
+// Configuration section "Scoring".
+public sealed class ScoringOptions
+{
+    public const string Section = "Scoring";
+
+    // Scheduled daily run, Africa/Nairobi local time (HH:mm).
+    public string DailyRunTimeNairobi { get; set; } = "02:00";
+
+    // Off: no scheduled run and no run after a usage import. Run now
+    // still works.
+    public bool Enabled { get; set; } = true;
+
+    // SIMs per /v1/score request; capped at the contract maximum (5000).
+    public int BatchSize { get; set; } = 1000;
+}

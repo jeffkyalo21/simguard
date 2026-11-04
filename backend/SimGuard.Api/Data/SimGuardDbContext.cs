@@ -6,7 +6,7 @@ using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Data;
 
-public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, int>
+public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, int>
 {
     public SimGuardDbContext(
         DbContextOptions<SimGuardDbContext> options)
@@ -715,6 +715,8 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasForeignKey(e => e.UploadedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        ConfigureScoring(modelBuilder);
     }
 
     // ASP.NET Core Identity tables. Renamed to app_* with snake_case columns
