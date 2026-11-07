@@ -31,11 +31,20 @@ function featureLabel(feature) {
   return copy.featureLabels[feature] ?? feature.replaceAll("_", " ");
 }
 
+// The ML service sends raw contributions (any size, negative when a feature
+// lowers the risk). Each reason shows its share of the total effect.
+function shareOf(reasons) {
+  const total = reasons.reduce((sum, reason) => sum + Math.abs(Number(reason.contribution) || 0), 0);
+  return (reason) => (total > 0 ? Math.abs(Number(reason.contribution) || 0) / total : 0);
+}
+
 function ReasonList({ reasons }) {
+  const share = shareOf(reasons);
   return (
     <ul className="flex flex-col divide-y divide-border">
       {reasons.map((reason, index) => {
-        const contribution = text.contribution(reason.contribution);
+        const value = share(reason);
+        const contribution = text.contribution(value);
         return (
           <li key={`${reason.feature}-${index}`} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
             <div className="min-w-0">
@@ -43,7 +52,7 @@ function ReasonList({ reasons }) {
               <p className="text-sm text-muted-foreground">{text.direction[reason.direction] ?? reason.direction}</p>
             </div>
             <div className="flex items-center gap-2">
-              <ProgressBar value={reason.contribution * 100} max={40} label={featureLabel(reason.feature)} valueText={contribution} className="w-20" />
+              <ProgressBar value={value * 100} max={100} label={featureLabel(reason.feature)} valueText={contribution} className="w-20" />
               <span className="text-sm tabular-nums">{contribution}</span>
             </div>
           </li>

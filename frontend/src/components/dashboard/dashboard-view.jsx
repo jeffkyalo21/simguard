@@ -85,7 +85,7 @@ function DataWaste({ waste }) {
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-medium text-muted-foreground">{text.topDepartments}</h3>
         <BarList
-          items={departments.map(({ name, unusedGb: value }) => ({ key: name, label: name, value }))}
+          items={departments.map(({ name, unusedGb: value }) => ({ key: name ?? "none", label: name ?? copy.sims.unassigned, value }))}
           formatValue={formatGb}
         />
       </div>

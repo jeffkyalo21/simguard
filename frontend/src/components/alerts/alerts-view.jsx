@@ -7,7 +7,7 @@ import { Pagination } from "@/components/data/pagination";
 import { RiskBar } from "@/components/data/risk-bar";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
-import { StatusBadge } from "@/components/shared/status-badge";
+import { RiskBadge } from "@/components/shared/risk-badge";
 import { useResource } from "@/hooks/use-resource";
 import { listAlerts, referenceData } from "@/lib/data";
 import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
@@ -50,7 +50,7 @@ export function AlertsView() {
     { key: "sim", header: copy.columns.number, link: true, cell: (alert) => formatPhone(alert.simPhoneNumber) },
     { key: "type", header: copy.columns.type, cell: (alert) => copy.alertTypes[alert.type] ?? alert.type },
     { key: "risk", header: copy.columns.risk, cell: (alert) => <RiskBar score={alert.riskScore} /> },
-    { key: "status", header: copy.columns.status, cell: (alert) => <StatusBadge status={alert.status} /> },
+    { key: "status", header: copy.columns.status, cell: (alert) => <RiskBadge level={alert.status} /> },
     { key: "date", header: copy.columns.detected, cell: (alert) => (alert.detectedOn ? formatDate(alert.detectedOn) : formatDateTime(alert.createdAt)) },
     {
       key: "employee", header: copy.columns.employee, cell: (alert) => (
