@@ -78,6 +78,14 @@ export const copy = {
     Auditor: "Auditor",
   },
 
+  permissions: {
+    readOnly: "Auditors have read-only access",
+    notAllowed: "Your role cannot do this",
+    deniedTitle: "You do not have access to this page",
+    deniedText: (role) => `Signed in as ${role}. This page is not part of your role.`,
+    goToHome: "Go to your home page",
+  },
+
   admin: {
     title: "Admin",
     comingSoon: "The Admin area is coming soon.",

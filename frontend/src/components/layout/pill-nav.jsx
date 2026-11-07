@@ -7,7 +7,7 @@ import { Bell, LogOut, Menu, Search } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { IconButton } from "@/components/layout/icon-button";
 import { Logo } from "@/components/layout/logo";
-import { isActive, navItems } from "@/components/layout/nav-items";
+import { isActive, navItemsFor } from "@/components/layout/nav-items";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { homeFor } from "@/lib/auth/core";
+import { canOpen } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
@@ -42,13 +43,14 @@ function visiblePageSearch() {
 }
 
 /**
- * The seven links in a glass pill. A shared ink indicator slides to the
+ * The role's links (seven at most) in a glass pill. A shared ink indicator slides to the
  * active link (FLIP: the new size is set at once, then a transform eases
  * from the old position, so only transform animates). Until it is
  * measured, and without JavaScript, the active link draws its own pill.
  */
 function CentreNav() {
   const pathname = usePathname();
+  const items = navItemsFor(useAuth().role);
   const navRef = useRef(null);
   const indicatorRef = useRef(null);
   const previous = useRef(null);
@@ -101,7 +103,7 @@ function CentreNav() {
       {/* No "relative" here: link offsets must be measured from the nav, the
           same origin the indicator is placed from. */}
       <ul className="flex items-center gap-0.5">
-        {navItems.map(({ href, label }) => (
+        {items.map(({ href, label }) => (
           <li key={href}>
             <Link
               href={href}
@@ -120,6 +122,7 @@ function CentreNav() {
 /** Below 1100px the links move into a sheet behind a "Menu" button. */
 function MenuSheet() {
   const pathname = usePathname();
+  const items = navItemsFor(useAuth().role);
   const [open, setOpen] = useState(false);
 
   return (
@@ -140,7 +143,7 @@ function MenuSheet() {
         </SheetHeader>
         <nav aria-label={copy.nav.label} className="px-3">
           <ul className="flex flex-col gap-1">
-            {navItems.map(({ href, label, Icon }) => {
+            {items.map(({ href, label, Icon }) => {
               const active = isActive(pathname, href);
               return (
                 <li key={href}>
@@ -316,7 +319,7 @@ export function PillNav() {
 
         <div className="flex justify-end min-[1100px]:w-[200px]">
           <div className="glass-pill relative flex items-center gap-0.5 p-0.5">
-            <SearchControl />
+            {canOpen(role, "sims") && <SearchControl />}
             <IconButton label={text.notifications} className="hidden sm:inline-flex">
               <Bell aria-hidden="true" />
               <span className="notify-dot" aria-hidden="true" />

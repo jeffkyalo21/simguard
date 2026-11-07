@@ -2,6 +2,7 @@
 // backend, never a token) and turns their error codes into copy.
 import { ERROR_CODES, homeFor, safeNextPath } from "@/lib/auth/core";
 import { copy } from "@/lib/copy";
+import { canOpenPath } from "@/lib/permissions";
 
 /**
  * POSTs (or GETs) to an /api/auth route handler.
@@ -100,5 +101,8 @@ export function loginHref({ next, reason } = {}) {
  */
 export function destinationAfterSignIn({ role, mustChangePassword, next }) {
   if (mustChangePassword) return `/login/change-password${nextQuery(next)}`;
-  return safeNextPath(next) ?? homeFor(role);
+  const safe = safeNextPath(next);
+  // A "next" page outside the role (an Auditor's old /imports link, say)
+  // would only show "no access", so the role's home is used instead.
+  return safe && canOpenPath(role, safe) ? safe : homeFor(role);
 }

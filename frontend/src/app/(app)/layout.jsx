@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AuthProvider } from "@/components/auth/auth-provider";
+import { RouteGuard } from "@/components/auth/route-guard";
 import { PillNav } from "@/components/layout/pill-nav";
 import { getCurrentUser } from "@/lib/auth/server";
 import { MockStoreProvider } from "@/lib/mock/store";
@@ -34,7 +35,7 @@ export default async function AppLayout({ children }) {
             tabIndex={-1}
             className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-6 pt-10 pb-16"
           >
-            {children}
+            <RouteGuard>{children}</RouteGuard>
           </main>
         </div>
       </MockStoreProvider>
