@@ -4,10 +4,9 @@ import { ProgressBar } from "@/components/data/progress-bar";
 import { RiskBar, riskLevel } from "@/components/data/risk-bar";
 import { GlassCard } from "@/components/glass/glass-card";
 import { ExplainVisual } from "@/components/landing/feature-visuals";
-import { SAMPLE_SIM, TOUR_ALERTS } from "@/components/landing/landing-data";
+import { SAMPLE_DASHBOARD, SAMPLE_SIM, TOUR_ALERTS } from "@/components/landing/landing-data";
 import { RiskBadge } from "@/components/shared/risk-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { getSampleDashboard } from "@/lib/data";
 import { formatNumber, formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
@@ -25,9 +24,9 @@ function CardTitle({ children }) {
 
 const formatGb = (value) => copy.units.gb(formatNumber(value));
 
-/** The real dashboard at "Last 30 days", from the same mock data as the app. */
+/** The dashboard at "Last 30 days", from fixed sample data. */
 export function DashboardScreen() {
-  const dashboard = getSampleDashboard(30);
+  const dashboard = SAMPLE_DASHBOARD;
   const kpis = Object.fromEntries(Object.entries(dashboard.kpis).map(([key, value]) => [key, formatNumber(value)]));
   const unused = dashboard.dataWaste.departments.map(({ name, unusedGb }) => ({ key: name, label: name, value: unusedGb }));
   const review = dashboard.needsReview.slice(0, 4).map((row) => ({

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Pencil, Plug, Plus, Trash2, Unplug } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DataTable } from "@/components/data/data-table";
 import { GlassCard } from "@/components/glass/glass-card";
 import { CarrierFormDialog } from "@/components/settings/carrier-form-dialog";
@@ -26,23 +26,6 @@ import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
 const text = copy.settings.carriers;
-
-// Neutral tones with an icon and text: a connection is not a risk.
-function ConnectionBadge({ status }) {
-  const connected = status === "connected";
-  const Icon = connected ? Plug : Unplug;
-  return (
-    <span
-      className={cn(
-        "inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-xs font-medium whitespace-nowrap",
-        connected ? "bg-foreground/8 text-foreground" : "border border-dashed border-input text-muted-foreground"
-      )}
-    >
-      <Icon className="size-3.5" aria-hidden="true" />
-      {text.connection[status] ?? status}
-    </span>
-  );
-}
 
 /** Says why a carrier was kept and how many SIMs hold it. */
 function BlockedDialog({ open, onOpenChange, carrier }) {
@@ -99,7 +82,6 @@ export function CarriersPanel() {
 
   const columns = [
     { key: "name", header: text.form.name, cell: (carrier) => <span className="font-medium">{carrier.name}</span> },
-    { key: "status", header: copy.columns.status, cell: (carrier) => <ConnectionBadge status={carrier.status} /> },
     { key: "sims", header: text.sims, cell: (carrier) => <span className="tabular-nums">{carrier.simCount.toLocaleString("en-KE")}</span> },
     { key: "created", header: text.created, cell: (carrier) => formatDate(carrier.createdAt) },
     {

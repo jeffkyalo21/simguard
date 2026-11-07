@@ -152,3 +152,24 @@ export function errorMessage(error) {
 
   return copy.errors.generic;
 }
+
+/**
+ * Message for a read that failed: a clear line for a role that may not see
+ * the data (403) and for an expired session (401, the sign-in page is
+ * already loading), otherwise the generic load error.
+ */
+export function loadErrorMessage(error) {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return copy.errors.sessionExpired;
+    if (error.status === 403) return copy.errors.forbiddenRead;
+    if (error.status === 404) return copy.errors.notFound;
+    if (error.status === 0) return copy.errors.network;
+  }
+
+  return copy.errors.load;
+}
+
+/** True when trying the same read again cannot help (401 and 403). */
+export function isFinalLoadError(error) {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}

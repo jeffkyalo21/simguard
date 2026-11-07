@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useResource } from "@/hooks/use-resource";
 import { listAlerts, referenceData } from "@/lib/data";
-import { formatDateTime, formatPhone } from "@/lib/format";
+import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const FILTER_KEYS = ["status", "type", "minScore", "sort"];
@@ -51,7 +51,7 @@ export function AlertsView() {
     { key: "type", header: copy.columns.type, cell: (alert) => copy.alertTypes[alert.type] ?? alert.type },
     { key: "risk", header: copy.columns.risk, cell: (alert) => <RiskBar score={alert.riskScore} /> },
     { key: "status", header: copy.columns.status, cell: (alert) => <StatusBadge status={alert.status} /> },
-    { key: "date", header: copy.columns.detected, cell: (alert) => formatDateTime(alert.createdAt) },
+    { key: "date", header: copy.columns.detected, cell: (alert) => (alert.detectedOn ? formatDate(alert.detectedOn) : formatDateTime(alert.createdAt)) },
     {
       key: "employee", header: copy.columns.employee, cell: (alert) => (
         <span className="block min-w-36">

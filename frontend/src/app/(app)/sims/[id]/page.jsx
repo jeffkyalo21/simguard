@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { SimProfile } from "@/components/sims/sim-profile";
-import { isPossibleSimId } from "@/lib/data";
+import { callBackend, getSessionToken } from "@/lib/auth/server";
+import { isPositiveId } from "@/lib/ids";
 import { copy } from "@/lib/copy";
 
 export const metadata = { title: copy.pages.simDetail.title };
@@ -13,9 +14,13 @@ export const instant = false;
 
 export default async function SimDetailPage({ params }) {
   const { id } = await params;
+  if (!isPositiveId(id)) notFound();
 
-  // Ids outside the mock range never reach the client.
-  if (!isPossibleSimId(id)) notFound();
+  // Ask the API whether the SIM exists, so an unknown id is a real 404. Any
+  // other failure (403 for Admin, expiry, network) is left to the screen,
+  // which shows the matching message.
+  const result = await callBackend(`/sims/${id}`, { token: await getSessionToken() });
+  if (result.status === 404) notFound();
 
   return <SimProfile id={Number(id)} />;
 }

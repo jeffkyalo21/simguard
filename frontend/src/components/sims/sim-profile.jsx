@@ -16,6 +16,7 @@ import { NotFoundContent } from "@/components/shared/not-found-content";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { activityText } from "@/components/sims/activity-text";
 import { SimStatusDialog, canChangeStatus } from "@/components/sims/sim-status-dialog";
 import { TierDialog } from "@/components/sims/tier-dialog";
 import { Button } from "@/components/ui/button";
@@ -25,47 +26,36 @@ import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
 import { getSim, getSimUsage, listSimActivity, listSimAlerts, listSimAllocations } from "@/lib/data";
 import { formatDate, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
-import { carrierName, useCarriers } from "@/lib/mock/store";
 import { copy } from "@/lib/copy";
 
 const text = copy.simProfile;
 
-function activityText(entry) {
-  const labels = text.activity;
-  if (entry.kind === "allocated") return labels.allocated(entry.detail);
-  if (entry.kind === "returned") return labels.returned(entry.detail);
-  if (entry.kind === "alert") return labels.alert(copy.alertTypes[entry.detail]);
-  if (entry.kind === "tier") return labels.tier(copy.tiers[entry.detail]);
-  return labels[entry.kind] ?? entry.kind;
-}
-
 const alertColumns = [
   { key: "risk", header: copy.columns.risk, link: true, cell: (a) => <RiskBar score={a.riskScore} /> },
-  { key: "type", header: copy.columns.type, cell: (a) => copy.alertTypes[a.type] },
-  { key: "date", header: copy.columns.date, cell: (a) => formatShortDate(a.createdAt) },
+  { key: "type", header: copy.columns.type, cell: (a) => copy.alertTypes[a.type] ?? a.type },
+  { key: "date", header: copy.columns.detected, cell: (a) => formatShortDate(a.detectedOn ?? a.createdAt) },
   { key: "status", header: copy.columns.status, cell: (a) => <RiskBadge level={a.status} /> },
 ];
 
 const allocationColumns = [
   { key: "employee", header: copy.columns.employee, cell: (a) => a.employeeName },
   { key: "department", header: copy.columns.department, cell: (a) => a.departmentName },
-  { key: "from", header: copy.columns.from, cell: (a) => formatDate(a.assignedAt) },
-  { key: "to", header: copy.columns.to, cell: (a) => (a.returnedAt ? formatDate(a.returnedAt) : text.current) },
+  { key: "from", header: copy.columns.from, cell: (a) => formatDate(a.assignmentDate) },
+  { key: "to", header: copy.columns.to, cell: (a) => (a.returnDate ? formatDate(a.returnDate) : text.current) },
 ];
 
 const activityColumns = [
-  { key: "time", header: copy.columns.time, cell: (e) => formatDateTime(e.at) },
+  { key: "time", header: copy.columns.time, cell: (e) => formatDateTime(e.occurredAt) },
   { key: "action", header: copy.columns.action, cell: activityText },
 ];
 
 function Details({ sim }) {
-  const carriers = useCarriers();
   const allocation = sim.currentAllocation;
   const rows = [
     [text.employee, allocation?.employeeName ?? copy.sims.unassigned],
     [text.department, allocation?.departmentName ?? copy.common.noValue],
-    [text.tier, copy.tiers[sim.tier]],
-    [text.operator, carrierName(carriers, sim.carrierId) ?? copy.common.noValue],
+    [text.tier, copy.tiers[sim.tier ?? "none"] ?? sim.tier],
+    [text.operator, sim.operator ?? copy.common.noValue],
     [text.iccid, sim.iccid],
     [text.assigned, allocation ? formatDate(allocation.assignedAt) : copy.common.noValue],
   ];
@@ -83,15 +73,20 @@ function Details({ sim }) {
 }
 
 function Usage({ usage }) {
-  const top = Math.ceil(Math.max(usage.data.limit, usage.data.used) * 1.15);
+  const hasLimit = usage.data.limit !== null;
+  const top = Math.max(Math.ceil(Math.max(usage.data.limit ?? 0, usage.data.used) * 1.15), 1);
   const balances = [
-    { key: "data", label: text.data, ...usage.data, valueText: copy.units.ofGb(usage.data.used, usage.data.limit) },
-    { key: "voice", label: text.voice, ...usage.voice, valueText: copy.units.ofMin(usage.voice.used, usage.voice.limit) },
-    { key: "sms", label: text.sms, ...usage.sms, valueText: copy.units.ofCount(usage.sms.used, usage.sms.limit) },
+    { key: "data", label: text.data, ...usage.data, valueText: hasLimit ? copy.units.ofGb(usage.data.used, usage.data.limit) : copy.units.gb(usage.data.used) },
+    { key: "voice", label: text.voice, ...usage.voice, valueText: hasLimit ? copy.units.ofMin(usage.voice.used, usage.voice.limit) : usage.voice.used },
+    { key: "sms", label: text.sms, ...usage.sms, valueText: hasLimit ? copy.units.ofCount(usage.sms.used, usage.sms.limit) : usage.sms.used },
   ];
 
   return (
     <div className="flex flex-col gap-5">
+      <p className="text-sm text-muted-foreground">
+        {text.cycle(formatDate(usage.cycleStart), formatDate(usage.cycleEnd), formatDate(usage.asOf))}
+        {!hasLimit && ` ${text.noAllowance}`}
+      </p>
       <LineChart
         data={usage.series}
         xKey="day"
@@ -103,14 +98,14 @@ function Usage({ usage }) {
         formatX={copy.units.day}
         formatY={copy.units.gb}
         yDomain={[0, top]}
-        limit={{ y: usage.data.limit, label: text.limit }}
+        limit={hasLimit ? { y: usage.data.limit, label: text.limit } : undefined}
         height={200}
       />
       <div className="grid gap-4 sm:grid-cols-3">
         {balances.map(({ key, label, used, limit, valueText }) => (
           <div key={key} className="flex flex-col gap-2">
             <p className="text-sm text-muted-foreground">{label}</p>
-            <ProgressBar value={used} max={limit} label={label} valueText={valueText} />
+            {limit !== null && <ProgressBar value={used} max={limit} label={label} valueText={valueText} />}
             <p className="text-sm tabular-nums">{valueText}</p>
           </div>
         ))}
@@ -174,7 +169,7 @@ export function SimProfile({ id }) {
     return (
       <>
         <h1 className="sr-only">{copy.pages.simDetail.title}</h1>
-        <ErrorState onRetry={simResource.retry} />
+        <ErrorState error={simResource.error} onRetry={simResource.retry} />
       </>
     );
   }

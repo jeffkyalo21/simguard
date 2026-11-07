@@ -8,9 +8,10 @@ import { SelectField } from "@/components/sims/sim-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useOpeningKey } from "@/hooks/use-opening-key";
+import { useDepartments } from "@/hooks/use-reference";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
-import { createAllocation, listEmployees, listSims, referenceData } from "@/lib/data";
+import { createAllocation, listEmployees, listSims } from "@/lib/data";
 import { formatPhone, todayDay } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
@@ -23,8 +24,6 @@ const messages = {
   employeeId: { required: text.errors.employeeRequired, invalid: text.errors.employeeRequired },
   assignmentDate: { invalid: text.errors.dateRequired, future: text.errors.dateFuture },
 };
-
-const departmentOptions = referenceData.departmentItems.map(({ id, name }) => ({ value: String(id), label: name }));
 
 function validate(values, today) {
   const errors = {};
@@ -55,8 +54,12 @@ function AllocationForm({ open, onOpenChange }) {
     [values.departmentId]
   );
 
+  const departmentOptions = useDepartments().map(({ id, name }) => ({ value: String(id), label: name }));
   const simOptions = (sims.data?.items ?? []).map((sim) => ({ value: String(sim.id), label: formatPhone(sim.phoneNumber) }));
-  const employeeOptions = (employees.data?.items ?? []).map((employee) => ({ value: String(employee.id), label: employee.name }));
+  // The API lists employees by id; the form shows them by name.
+  const employeeOptions = (employees.data?.items ?? [])
+    .map((employee) => ({ value: String(employee.id), label: employee.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const simPlaceholder = sims.error
     ? text.simPlaceholder

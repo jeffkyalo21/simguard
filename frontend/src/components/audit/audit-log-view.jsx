@@ -8,11 +8,13 @@ import { DataTable } from "@/components/data/data-table";
 import { FilterSelect } from "@/components/data/filter-select";
 import { Pagination } from "@/components/data/pagination";
 import { SearchInput } from "@/components/data/search-input";
+import { useAuth } from "@/components/auth/auth-provider";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useResource } from "@/hooks/use-resource";
+import { ROLES } from "@/lib/auth/core";
 import { listAuditLogs } from "@/lib/data";
 import { dayToUtc, formatDateTime, formatKes, formatPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,9 +25,21 @@ const SEARCH_DELAY_MS = 250;
 const FILTER_KEYS = ["actor", "action", "from", "to"];
 const RANGE_ERROR_ID = "audit-range-error";
 
-// The actions the API records for SIMs, allocations and alerts.
-const ACTIONS = ["sim.created", "sim.updated", "sim.status_changed", "allocation.created", "allocation.returned", "alert.status_changed"];
-const actionOptions = ACTIONS.map((value) => ({ value, label: text.actions[value] }));
+// System actions (user accounts and scoring runs) are all Admin sees; the
+// Auditor also sees the organisation actions. The API enforces the split.
+const SYSTEM_ACTIONS = [
+  "user.created", "user.disabled", "user.enabled", "user.role_changed", "user.password_reset", "user.mfa_reset",
+  "scoring.run_requested", "scoring.run_failed",
+];
+const ORGANISATION_ACTIONS = [
+  "sim.created", "sim.updated", "sim.status_changed", "sim.tier_changed", "sim.deleted",
+  "allocation.created", "allocation.returned", "alert.status_changed",
+  "carrier.created", "carrier.renamed", "carrier.deleted",
+  "department.created", "department.updated", "department.deleted",
+  "employee.created", "employee.updated", "employee.deleted",
+  "import.committed", "tier_recommendation.run_started", "tier_recommendation.settings_changed", "tier_recommendation.dismissed",
+];
+const toOptions = (actions) => actions.map((value) => ({ value, label: text.actions[value] ?? value }));
 
 // Keys that name the record changed rather than a value that changed.
 const CONTEXT_KEYS = ["alertId", "allocationId"];
@@ -163,6 +177,8 @@ export function AuditLogView() {
   const searchParams = useSearchParams();
   const query = Object.fromEntries(FILTER_KEYS.map((key) => [key, searchParams.get(key) ?? ""]));
   const page = Math.max(Number(searchParams.get("page")) || 1, 1);
+  const { role } = useAuth();
+  const actionOptions = toOptions(role === ROLES.admin ? SYSTEM_ACTIONS : [...ORGANISATION_ACTIONS, ...SYSTEM_ACTIONS]);
   const invalidRange = Boolean(query.from && query.to && query.from > query.to);
 
   // The search box is local while typing and follows the URL otherwise.
@@ -257,7 +273,7 @@ export function AuditLogView() {
         <PageHeader title={copy.pages.auditLog.title} />
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <ShieldCheck className="size-4 shrink-0" aria-hidden="true" />
-          {text.roleNote}
+          {role === ROLES.admin ? text.roleNote.Admin : text.roleNote.Auditor}
         </p>
       </div>
 

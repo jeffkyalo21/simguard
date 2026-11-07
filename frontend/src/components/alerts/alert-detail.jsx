@@ -17,29 +17,18 @@ import { FormDialog } from "@/components/shared/form-dialog";
 import { NotFoundContent } from "@/components/shared/not-found-content";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
+import { activityText } from "@/components/sims/activity-text";
 import { Button } from "@/components/ui/button";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
 import { getAlert, getSimRisk, listSimActivity, setAlertStatus } from "@/lib/data";
-import { GATE_BANDS, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
+import { GATE_BANDS, formatDate, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.alertDetail;
 
 function featureLabel(feature) {
   return copy.featureLabels[feature] ?? feature.replaceAll("_", " ");
-}
-
-function activityLabel(entry) {
-  if (entry.kind === "alertStatus") {
-    const detail = entry.detail;
-    return `${copy.alertTypes[detail.type] ?? detail.type} alert: ${copy.risk[detail.status] ?? detail.status}${detail.resolution ? ` (${copy.alertResolution[detail.resolution]})` : ""}`;
-  }
-  if (entry.kind === "alert") return copy.simProfile.activity.alert(copy.alertTypes[entry.detail] ?? entry.detail);
-  if (entry.kind === "allocated") return copy.simProfile.activity.allocated(entry.detail);
-  if (entry.kind === "returned") return copy.simProfile.activity.returned(entry.detail);
-  if (entry.kind === "created") return copy.simProfile.activity.created;
-  return copy.simProfile.activity[entry.kind] ?? entry.kind;
 }
 
 function ReasonList({ reasons }) {
@@ -65,7 +54,10 @@ function ReasonList({ reasons }) {
 }
 
 function Investigation({ alert }) {
-  const risk = useResource(() => getSimRisk(alert.simId, { days: 90 }), [alert.simId]);
+  // The history ends on the alert's last detection day, not today: the demo
+  // scores are in 2025.
+  const riskTo = alert.lastDetectedOn ?? alert.detectedOn ?? undefined;
+  const risk = useResource(() => getSimRisk(alert.simId, { days: 90, to: riskTo }), [alert.simId, riskTo]);
   const activity = useResource(() => listSimActivity(alert.simId), [alert.simId]);
   const [dialog, setDialog] = useState({ open: false, resolution: null });
   const [busy, setBusy] = useState(false);
@@ -111,8 +103,8 @@ function Investigation({ alert }) {
     { key: "status", header: copy.columns.status, cell: (item) => <RiskBadge level={item.status} /> },
   ];
   const activityColumns = [
-    { key: "time", header: copy.columns.time, cell: (entry) => formatDateTime(entry.at) },
-    { key: "action", header: copy.columns.action, cell: activityLabel },
+    { key: "time", header: copy.columns.time, cell: (entry) => formatDateTime(entry.occurredAt) },
+    { key: "action", header: copy.columns.action, cell: activityText },
   ];
 
   return (
@@ -146,11 +138,11 @@ function Investigation({ alert }) {
         <SectionCard title={text.simAndEmployee}>
           <dl className="grid gap-x-5 sm:grid-cols-2">
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{copy.columns.number}</dt><dd className="mt-1 font-medium"><Link href={`/sims/${alert.sim.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring">{formatPhone(alert.sim.phoneNumber)}</Link></dd></div>
-            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.employee}</dt><dd className="mt-1 font-medium">{alert.currentAllocation ? <Link href={`/sims?q=${encodeURIComponent(alert.currentAllocation.employeeName)}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring">{alert.currentAllocation.employeeName}</Link> : text.noEmployee}</dd></div>
+            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.employee}</dt><dd className="mt-1 font-medium">{alert.currentAllocation?.employeeName ?? text.noEmployee}</dd></div>
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.department}</dt><dd className="mt-1 font-medium">{alert.currentAllocation?.departmentName ?? copy.common.noValue}</dd></div>
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.iccid}</dt><dd className="mt-1 font-medium">{alert.sim.iccid}</dd></div>
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.operator}</dt><dd className="mt-1 font-medium">{alert.sim.operator ?? copy.common.noValue}</dd></div>
-            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{copy.columns.detected}</dt><dd className="mt-1 font-medium">{formatDateTime(alert.createdAt)}</dd></div>
+            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{copy.columns.detected}</dt><dd className="mt-1 font-medium">{alert.detectedOn ? formatDate(alert.detectedOn) : formatDateTime(alert.createdAt)}</dd></div>
           </dl>
         </SectionCard>
       </div>
@@ -196,7 +188,7 @@ export function AlertDetail({ id }) {
   if (resource.error instanceof ApiError && resource.error.status === 404) {
     return <NotFoundContent title={text.notFound} href="/alerts" action={copy.actions.viewAll} />;
   }
-  if (resource.error) return <><h1 className="sr-only">{copy.pages.alertDetail.title}</h1><ErrorState onRetry={resource.retry} /></>;
+  if (resource.error) return <><h1 className="sr-only">{copy.pages.alertDetail.title}</h1><ErrorState error={resource.error} onRetry={resource.retry} /></>;
   if (!alert) return <div role="status" aria-busy="true" className="flex flex-col gap-5"><h1 className="sr-only">{copy.pages.alertDetail.title}</h1><ListSkeleton rows={8} /></div>;
   return <Investigation key={`${alert.id}-${alert.status}-${alert.resolvedAt ?? "open"}`} alert={alert} />;
 }

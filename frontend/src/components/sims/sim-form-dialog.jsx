@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ApiError } from "@/lib/api";
 import { createSim, referenceData, updateSim } from "@/lib/data";
-import { useCarriers } from "@/lib/mock/store";
+import { useCarriers } from "@/hooks/use-reference";
 import { formatPhone } from "@/lib/format";
 import { simFieldErrors } from "@/lib/validation";
 import { copy } from "@/lib/copy";

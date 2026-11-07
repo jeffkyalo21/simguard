@@ -20,7 +20,8 @@ export const PAGES = Object.freeze({
   carriers: [OFFICER, AUDITOR],
   departments: [OFFICER, AUDITOR],
   imports: [OFFICER],
-  tierRecommendations: [OFFICER],
+  // The Auditor reads the recommendations; only the Security Officer acts.
+  tierRecommendations: [OFFICER, AUDITOR],
   // The Admin sees only the system entries (the backend filters them).
   auditLog: [AUDITOR, ADMIN],
   admin: [ADMIN],

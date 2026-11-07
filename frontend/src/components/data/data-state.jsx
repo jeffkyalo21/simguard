@@ -13,7 +13,7 @@ import { copy } from "@/lib/copy";
 export function DataState({ resource, skeleton, isEmpty, emptyMessage, emptyIcon, children }) {
   const { data, error, retry } = resource;
 
-  if (error) return <ErrorState onRetry={retry} />;
+  if (error) return <ErrorState error={error} onRetry={retry} />;
 
   if (!data) {
     return (

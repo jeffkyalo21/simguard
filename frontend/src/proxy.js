@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { PENDING_COOKIE, PENDING_KINDS, SESSION_COOKIE, decodePending, safeNextPath } from "@/lib/auth/core";
-import { isPossibleSimId } from "@/lib/data";
+import { isPositiveId } from "@/lib/ids";
 
 // Runs before rendering. Two jobs:
 //
@@ -9,10 +9,10 @@ import { isPossibleSimId } from "@/lib/data";
 //    MFA steps without their pending cookie go back to /login. The real
 //    check (the backend accepting the token) happens in the (app) layout
 //    and in every route handler, never here alone.
-// 2. /sims/[id] is partially prerendered: its static shell is sent before
-//    the page runs, so notFound() there can only stream a 404 page under a
-//    200. Checking the id here, before rendering, gives unknown SIMs a real
-//    404.
+// 2. SIM and alert ids that are not positive integers can never exist, so
+//    they get a 404 here without rendering. Whether a valid id exists is
+//    asked of the API by the page itself (not here: the proxy is not for
+//    slow data fetching).
 
 const PENDING_PAGES = {
   "/login/mfa": PENDING_KINDS.challenge,
@@ -46,7 +46,7 @@ export function proxy(request) {
   if (!hasSession) return toLogin(request, { next: safeNextPath(`${pathname}${search}`) });
 
   const parts = pathname.split("/");
-  if (parts[1] === "sims" && parts.length === 3 && !isPossibleSimId(parts[2])) {
+  if ((parts[1] === "sims" || parts[1] === "alerts") && parts.length === 3 && !isPositiveId(parts[2])) {
     return NextResponse.rewrite(new URL("/_not-found", request.url), { status: 404 });
   }
 
