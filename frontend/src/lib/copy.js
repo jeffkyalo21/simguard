@@ -391,7 +391,7 @@ export const copy = {
       useRecovery: "Use a recovery code instead",
       recoveryIntro: "Enter one of the recovery codes you saved when you set up sign-in. Each code works once.",
       recoveryCode: "Recovery code",
-      recoveryHint: "For example k7m2q-9xw4p.",
+      recoveryHint: "For example K7M2Q-9XW4P.",
       useApp: "Use the authenticator app instead",
       errors: {
         codeRequired: "Enter the 6-digit code.",

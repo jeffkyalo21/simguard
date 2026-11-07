@@ -5,9 +5,9 @@ allocations, usage and misuse alerts). It will talk to the ASP.NET Core API in
 `backend/SimGuard.Api`.
 
 Built so far: the scaffold (#16) and the Landing, Login, Dashboard, SIM list
-and SIM profile screens (#17). **All screens run on mock data**: there are no
-API calls, no auth and no CORS needed yet. Auth arrives in #15, the remaining
-screens in #18 and #19.
+and SIM profile screens (#17), and real sign-in against the backend (#14).
+Sign-in, MFA, password change and roles are real; **the screens' data is still
+mock** (`lib/data.js`). The remaining screens arrive in #18 and #19.
 
 ## Prerequisites
 
@@ -21,11 +21,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000. Any email and password signs in (mock login).
-
-`NEXT_PUBLIC_API_URL` in `.env.local` sets the API base URL (default
-`http://localhost:5275`). Nothing reads it until the mock layer is swapped
-for real calls. `.env.local` is git-ignored; never commit it.
+Open http://localhost:3000 and sign in with a backend account. The backend
+must be running: `BACKEND_URL` in `.env.local` is its address (default
+`http://localhost:5275`). It is read on the server only; the browser never
+talks to the backend and never sees a token. `.env.local` is git-ignored;
+never commit it. See [docs/auth-frontend.md](docs/auth-frontend.md) for the
+design, the cookies, the route handlers and how to run it locally.
 
 ## Scripts
 
@@ -35,6 +36,7 @@ for real calls. `.env.local` is git-ignored; never commit it.
 | `npm run build` | Production build                 |
 | `npm run start` | Serve the production build       |
 | `npm run lint`  | ESLint                           |
+| `npm test`      | Unit tests (`node --test`)       |
 
 ## Folder layout
 
@@ -44,14 +46,18 @@ src/
     layout.jsx              root layout: font, glass theme, backdrop, toaster
     icon.svg                favicon (the SimGuard mark)
     (marketing)/page.jsx    landing page at "/"
-    (auth)/login/page.jsx   login
-    (app)/layout.jsx        app shell + mock store provider
+    (auth)/login/...        sign in, mfa, mfa-setup, change-password
+    (app)/layout.jsx        app shell: checks the session, auth + mock store providers
+    (app)/admin             Admin area (placeholder)
+    api/auth/...            route handlers: login, mfa, enrolment, password, logout, me
+    api/backend/[...path]   forwards signed in calls to the backend
     (app)/dashboard, sims, sims/[id]        built screens
     (app)/alerts, alerts/[id], usage, allocations, audit-log, settings   placeholders
     not-found.jsx, error.jsx
                 (no root loading.jsx: the nav would then stream first; the
                 dynamic routes set `instant = false` and block instead)
-  proxy.js                  404s unknown SIM ids before /sims/[id] renders
+  proxy.js                  sends pages without a session cookie to /login, and
+                            404s unknown SIM ids before /sims/[id] renders
                             (its prerendered shell would otherwise send a 200)
   components/
     landing/    landing sections, landing.css and its motion helpers (used by "/" only)
@@ -65,7 +71,8 @@ src/
     layout/     pill-nav, icon-button, nav-items, theme-toggle, page-header,
                 page-transition, logo
     glass/      glass-card
-    auth/       login-form
+    auth/       login, mfa, mfa-setup and change-password forms, auth-provider,
+                route-guard, sign-out-button, error-summary, qr-code
     ui/         shadcn/ui components (generated, keep edits minimal)
   hooks/
     use-resource.js       load data with loading, error and retry
@@ -77,7 +84,10 @@ src/
     validation.js  phone normalising and SIM form rules (mirrors the backend)
     format.js      dates, KES, numbers, phone numbers, data sizes
     copy.js        every user-facing string
-    api.js         fetch wrapper for when real calls start
+    api.js         fetch wrapper for /api/backend (the wiring step uses it)
+    auth/          core (pure helpers, unit tested), server (cookies, backend
+                   calls) and client (route handler calls)
+    permissions.js which role may open which page and do which action
 ```
 
 ## Mock data layer

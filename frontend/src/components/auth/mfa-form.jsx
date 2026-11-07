@@ -44,7 +44,9 @@ function CodeForm({ recovery, next }) {
   async function handleSubmit(event) {
     event.preventDefault();
     const raw = String(new FormData(event.currentTarget).get("code") ?? "");
-    const code = recovery ? raw.trim().toLowerCase() : raw.replace(/\s+/g, "");
+    // Recovery codes are issued in upper case and the backend compares them
+    // exactly, so a code typed in lower case is upper-cased here.
+    const code = recovery ? raw.trim().toUpperCase() : raw.replace(/\s+/g, "");
     const invalid = validate(code, recovery);
     if (invalid) return show(invalid, null);
 
