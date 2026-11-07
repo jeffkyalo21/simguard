@@ -19,6 +19,7 @@ export const copy = {
     allocations: "Allocations",
     auditLog: "Audit log",
     settings: "Settings",
+    admin: "Admin",
   },
 
   pages: {
@@ -59,6 +60,8 @@ export const copy = {
     searchShortcut: "/",
     notifications: "Notifications",
     account: "Account",
+    signedInAs: "Signed in as",
+    signingOut: "Signing out",
   },
 
   theme: {
@@ -68,10 +71,17 @@ export const copy = {
     system: "System",
   },
 
-  // Placeholder until auth lands in #15.
-  user: {
-    name: "Jeff",
-    initials: "J",
+  // Role labels, keyed by the backend role names.
+  roles: {
+    Admin: "Admin",
+    SecurityOfficer: "Security Officer",
+    Auditor: "Auditor",
+  },
+
+  admin: {
+    title: "Admin",
+    comingSoon: "The Admin area is coming soon.",
+    text: "User management and the system audit trail will live here.",
   },
 
   a11y: {
@@ -900,6 +910,7 @@ export const copy = {
     load: "Could not load data. Try again.",
     network: "Cannot reach the server. Check your connection.",
     validation: "Some fields are invalid. Fix them and retry.",
+    forbidden: "Your role cannot do this.",
     notFound: "That item no longer exists. Refresh the page.",
     conflict: "This clashes with newer data. Refresh and retry.",
     server: "The server had a problem. Try again shortly.",

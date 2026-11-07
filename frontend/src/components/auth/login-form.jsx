@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Info } from "lucide-react";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { BusyButton } from "@/components/shared/busy-button";
 import { FormField } from "@/components/shared/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { authErrorText, authRequest, nextQuery } from "@/lib/auth/client";
+import { authErrorText, authRequest, nextQuery, signOutRequest } from "@/lib/auth/client";
 import { ERROR_CODES } from "@/lib/auth/core";
 import { isEmail } from "@/lib/validation";
 import { copy } from "@/lib/copy";
@@ -23,9 +23,18 @@ function validate({ email, password }) {
   return errors;
 }
 
-/** Why the person landed here (?reason=expired, restart or signedOut). */
+/**
+ * Why the person landed here (?reason=expired, restart or signedOut). An
+ * expired session may leave a cookie the backend no longer accepts, so it
+ * is dropped once here.
+ */
 export function useReasonNotice() {
   const reason = useSearchParams().get("reason");
+
+  useEffect(() => {
+    if (reason === "expired") signOutRequest();
+  }, [reason]);
+
   return Object.hasOwn(copy.login.reasons, reason ?? "") ? copy.login.reasons[reason] : null;
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { useAuth } from "@/components/auth/auth-provider";
 import { IconButton } from "@/components/layout/icon-button";
 import { Logo } from "@/components/layout/logo";
 import { isActive, navItems } from "@/components/layout/nav-items";
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { homeFor } from "@/lib/auth/core";
 import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
@@ -250,25 +252,39 @@ function SearchControl() {
 }
 
 function UserMenu() {
+  const { email, role, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const roleLabel = copy.roles[role] ?? role;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <IconButton label={`${text.account}: ${copy.user.name}`}>
+        <IconButton label={`${text.account}: ${email}, ${roleLabel}`}>
           <Avatar className="size-8">
             <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-              {copy.user.initials}
+              {email.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         </IconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuLabel>{copy.user.name}</DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
+          <span className="text-xs text-muted-foreground">{text.signedInAs}</span>
+          <span className="truncate font-medium">{email}</span>
+          <span className="text-xs text-muted-foreground">{roleLabel}</span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/login">
-            <LogOut aria-hidden="true" />
-            {copy.actions.signOut}
-          </Link>
+        {/* A real button (menu item), not a link: signing out calls the
+            logout route handler, then loads /login. */}
+        <DropdownMenuItem
+          disabled={signingOut}
+          onSelect={() => {
+            setSigningOut(true);
+            signOut();
+          }}
+        >
+          <LogOut aria-hidden="true" />
+          {signingOut ? text.signingOut : copy.actions.signOut}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -280,12 +296,14 @@ function UserMenu() {
  * links (a Menu sheet below 1100px) and a cluster of round controls.
  */
 export function PillNav() {
+  const { role } = useAuth();
+
   return (
     <header className="sticky top-3 z-40 px-4 sm:px-6">
       <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-[1100px]:w-[200px]">
           <Link
-            href="/dashboard"
+            href={homeFor(role)}
             aria-label={copy.app.name}
             className="glass-pill touch-target flex size-11 shrink-0 items-center justify-center"
           >

@@ -1,9 +1,20 @@
+import { loginHref } from "@/lib/auth/client";
 import { copy } from "@/lib/copy";
 
-// Browser calls only work once the backend enables CORS (#20).
-export const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5275"
-).replace(/\/+$/, "");
+// Browser calls go to the forwarding route handler on this site, which adds
+// the session token and passes the backend's status and ProblemDetails body
+// through unchanged. The browser never holds the token.
+export const API_BASE = "/api/backend";
+
+/**
+ * A 401 means the backend rejected the session (the route handler has
+ * already cleared the cookie): send the person to sign in again.
+ */
+function onSessionExpired() {
+  if (typeof window === "undefined") return;
+  const next = `${window.location.pathname}${window.location.search}`;
+  window.location.assign(loginHref({ next, reason: "expired" }));
+}
 
 /**
  * Paged list returned by every list endpoint.
@@ -36,15 +47,16 @@ export class ApiError extends Error {
 }
 
 function buildUrl(path, query) {
-  const url = new URL(`${API_URL}/api${path.startsWith("/") ? path : `/${path}`}`);
+  const params = new URLSearchParams();
 
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, String(value));
+      params.set(key, String(value));
     }
   }
 
-  return url;
+  const search = params.toString();
+  return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}${search ? `?${search}` : ""}`;
 }
 
 async function readBody(response) {
@@ -76,6 +88,8 @@ export async function request(method, path, { body, query, signal, headers } = {
     response = await fetch(buildUrl(path, query), {
       method,
       signal,
+      credentials: "same-origin",
+      cache: "no-store",
       headers: {
         Accept: "application/json",
         ...(body !== undefined && { "Content-Type": "application/json" }),
@@ -95,6 +109,14 @@ export async function request(method, path, { body, query, signal, headers } = {
 
   if (!response.ok) {
     const problem = typeof data === "object" && data !== null ? data : {};
+
+    if (response.status === 401) onSessionExpired();
+
+    // The route handler answers { error: { code: "network" } } when the
+    // backend cannot be reached; report it like a failed fetch.
+    if (problem.error?.code === "network") {
+      throw new ApiError({ status: 0, title: "Network error" });
+    }
 
     throw new ApiError({
       status: response.status,
@@ -123,6 +145,7 @@ export function errorMessage(error) {
 
   if (error.status === 0) return copy.errors.network;
   if (error.status === 400) return copy.errors.validation;
+  if (error.status === 403) return copy.errors.forbidden;
   if (error.status === 404) return copy.errors.notFound;
   if (error.status === 409) return copy.errors.conflict;
   if (error.status >= 500) return copy.errors.server;
