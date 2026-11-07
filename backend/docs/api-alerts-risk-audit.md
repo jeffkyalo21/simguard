@@ -227,8 +227,11 @@ Issue #14 fills `risk_scores` from the ML service: one row per SIM per day
 
 ### GET /api/sims/{id}/risk
 
-Query: `days` (default 90, 1 to 365). History covers the last `days`
-calendar days up to today (UTC), oldest first.
+Query: `days` (default 90, 1 to 365) and `to` (optional date). History
+covers the last `days` calendar days up to `to`, oldest first. Without `to`
+it ends today (UTC); the frontend sends the fleet's as-of date (the latest
+usage date, `asOf` on the dashboard) so demo data that ends on 2025-03-31
+still shows a history.
 
 200:
 
@@ -339,21 +342,32 @@ Query: `days` = `7`, `30` or `90` (default 7). Any other value is 400.
     "other": 0
   },
   "needsReview": [],
-  "tierChanges": [],
-  "dataWaste": null
+  "tierChanges": [{ "recommendation": "downgrade", "count": 14 }, { "recommendation": "upgrade", "count": 6 }],
+  "dataWaste": {
+    "paidMb": 1310720.0, "usedMb": 1004311.4, "unusedMb": 312004.2, "unusedPercent": 24,
+    "departments": [{ "name": "Sales", "unusedMb": 120330.5 }]
+  },
+  "asOf": "2025-03-31"
 }
 ```
+
+The window ends on `asOf`, the latest date in `daily_usage` (never the clock:
+the demo data ends on 2025-03-31). `from` is the start of the first of the
+`days` days (00:00Z) and `to` is the end of `asOf` (23:59:59Z). With no usage
+loaded, `asOf` is null and the window is the last `days` days up to now, as
+before.
 
 | Field | Meaning |
 | ----- | ------- |
 | `activeSims` | SIMs whose status is not `inactive` (now) |
 | `flagged` | alerts with status `flagged` (now, any age) |
 | `toReview` | alerts with status `escalated` (now, any age) |
-| `resolved` | alerts cleared within the window (`resolvedAt` in `from`..`to`) |
-| `alertsByType` | alerts created within the window, by type |
+| `resolved` | alerts detected within the window that are now `cleared` |
+| `alertsByType` | alerts detected within the window, by type (`detectedOn` in `from`..`to`; alerts without `detectedOn` count by `createdAt`) |
 | `needsReview` | the 5 most recent `flagged` or `escalated` alerts, as alert list items (with SIM and reasons) |
-| `tierChanges` | always `[]` for now: needs usage ingestion (later issue) |
-| `dataWaste` | always `null` for now: needs usage ingestion and #14 |
+| `tierChanges` | open tier recommendations, counted by `recommendation` (now) |
+| `dataWaste` | paid against used data over the window: paid is each SIM's tier bundle times `days`/30, unused is paid minus used per SIM (never below 0); `departments` are the 4 with most unused data, by current allocation (`name` null for unallocated SIMs). Null without usage |
+| `asOf` | latest `daily_usage` date, or null |
 
 ## Audit log
 

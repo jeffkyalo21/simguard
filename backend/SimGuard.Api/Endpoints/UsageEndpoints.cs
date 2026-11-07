@@ -3,6 +3,7 @@ using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
+using SimGuard.Api.Usage;
 
 namespace SimGuard.Api.Endpoints;
 
@@ -25,7 +26,86 @@ public static class UsageEndpoints
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        sims.MapGet("/{id:int}/usage/cycle", GetSimCycleUsage)
+            .WithName("GetSimCycleUsage")
+            .Produces<SimCycleUsageResponse>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        routes.MapGet("/usage/analytics", GetUsageAnalytics)
+            .WithTags("Usage")
+            .WithName("GetUsageAnalytics")
+            .RequireAuthorization(AuthPolicies.OrgRead)
+            .Produces<UsageAnalyticsResponse>()
+            .ProducesValidationProblem();
+
+        routes.MapGet("/tiers", GetTiers)
+            .WithTags("Usage")
+            .WithName("GetTiers")
+            .RequireAuthorization(AuthPolicies.OrgRead)
+            .Produces<IReadOnlyList<TierAllowanceResponse>>();
+
         return routes;
+    }
+
+    // The billing cycle that holds the fleet's as-of date, with cumulative
+    // data, voice and SMS against the SIM's tier allowance.
+    private static async Task<IResult> GetSimCycleUsage(
+        int id,
+        SimGuardDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var sim = await db.Sims
+            .Where(s => s.Id == id)
+            .Select(s => new { s.Tier })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (sim is null)
+        {
+            return ApiProblems.NotFound($"SIM {id} was not found.");
+        }
+
+        return TypedResults.Ok(await UsageAnalytics.CycleAsync(db, id, sim.Tier, cancellationToken));
+    }
+
+    // Fleet usage for the `days` days up to the as-of date (the latest
+    // daily_usage date), optionally for one department or one tier.
+    private static async Task<IResult> GetUsageAnalytics(
+        int? days,
+        int? departmentId,
+        string? tier,
+        SimGuardDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var errors = new ValidationErrors();
+        var window = days ?? 30;
+
+        if (!UsageAnalytics.AllowedDays.Contains(window))
+        {
+            errors.Add("days", "days must be 7, 30 or 90.");
+        }
+
+        var matchedTier = Vocabulary.Match("tier", tier, SimTiers.All, errors);
+
+        if (errors.HasErrors)
+        {
+            return errors.ToProblem();
+        }
+
+        return TypedResults.Ok(await UsageAnalytics.AnalyticsAsync(db, window, departmentId, matchedTier, cancellationToken));
+    }
+
+    // The tier allowance table, smallest bundle first.
+    private static async Task<IResult> GetTiers(
+        SimGuardDbContext db,
+        CancellationToken cancellationToken)
+    {
+        var tiers = await db.TierAllowances
+            .AsNoTracking()
+            .OrderBy(t => t.DataMb)
+            .Select(TierAllowanceResponse.Projection)
+            .ToListAsync(cancellationToken);
+
+        return TypedResults.Ok(tiers);
     }
 
     // One row per day that has data, oldest first. Without "to", the range
@@ -95,6 +175,8 @@ public static class UsageEndpoints
             Math.Round(days.Sum(d => d.VoiceMinutesUsed), 3),
             days.Sum(d => d.SmsCount));
 
-        return TypedResults.Ok(new SimUsageResponse(id, firstDay, lastDay.Value, totals, days));
+        var asOf = await UsageAnalytics.AsOfAsync(db, cancellationToken);
+
+        return TypedResults.Ok(new SimUsageResponse(id, firstDay, lastDay.Value, totals, days, asOf));
     }
 }

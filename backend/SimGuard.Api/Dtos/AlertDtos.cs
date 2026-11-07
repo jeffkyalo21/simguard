@@ -159,8 +159,9 @@ public record DashboardSummaryResponse(
     int Resolved,
     IReadOnlyDictionary<string, int> AlertsByType,
     IReadOnlyList<AlertListItem> NeedsReview,
-    IReadOnlyList<object> TierChanges,
-    object? DataWaste);
+    IReadOnlyList<TierChangeCount> TierChanges,
+    DataWasteResponse? DataWaste,
+    DateOnly? AsOf);
 
 public record AuditLogItem(
     int Id,

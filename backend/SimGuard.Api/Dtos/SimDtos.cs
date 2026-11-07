@@ -32,8 +32,23 @@ public record CurrentAllocationResponse(
     string DepartmentName,
     DateTime AssignedAt);
 
+// One tier's bundle per 30-day billing cycle (GET /tiers and SIM responses).
+public record TierAllowanceResponse(
+    string Tier,
+    int DataMb,
+    int VoiceMinutes,
+    int Sms,
+    decimal MonthlyCost)
+{
+    public static readonly Expression<Func<TierAllowance, TierAllowanceResponse>> Projection =
+        t => new TierAllowanceResponse(t.Tier, t.DataMb, t.VoiceMinutes, t.Sms, t.MonthlyCost);
+}
+
 // Operator is the carrier's name, kept so existing screens keep working.
 // Tier is the ML plan tier (field, manager, professional, support) or null.
+// MonthlyCost is the stored cost, or the tier's cost when the stored cost is
+// 0 (imported SIMs carry no cost). Allowance is the tier's bundle, null
+// while the SIM has no tier.
 public record SimResponse(
     int Id,
     string PhoneNumber,
@@ -45,7 +60,8 @@ public record SimResponse(
     string Status,
     string? Tier,
     DateTime CreatedAt,
-    CurrentAllocationResponse? CurrentAllocation)
+    CurrentAllocationResponse? CurrentAllocation,
+    TierAllowanceResponse? Allowance)
 {
     // The current allocation is a correlated subquery, so a page of SIMs
     // is still fetched with a single SQL statement.
@@ -57,7 +73,7 @@ public record SimResponse(
             s.CarrierId,
             s.Carrier.Name,
             s.PlanType,
-            s.MonthlyCost,
+            s.MonthlyCost != 0 || s.TierAllowance == null ? s.MonthlyCost : s.TierAllowance.MonthlyCost,
             s.Status,
             s.Tier,
             s.CreatedAt,
@@ -70,5 +86,13 @@ public record SimResponse(
                     a.Employee.Name,
                     a.Employee.Department.Name,
                     a.AssignmentDate))
-                .FirstOrDefault());
+                .FirstOrDefault(),
+            s.TierAllowance == null
+                ? null
+                : new TierAllowanceResponse(
+                    s.TierAllowance.Tier,
+                    s.TierAllowance.DataMb,
+                    s.TierAllowance.VoiceMinutes,
+                    s.TierAllowance.Sms,
+                    s.TierAllowance.MonthlyCost));
 }

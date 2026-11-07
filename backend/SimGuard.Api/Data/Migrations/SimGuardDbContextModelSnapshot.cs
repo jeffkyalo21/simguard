@@ -1157,11 +1157,81 @@ namespace SimGuard.Api.Data.Migrations
                     b.HasIndex("Status")
                         .HasDatabaseName("idx_sims_status");
 
+                    b.HasIndex("Tier");
+
                     b.ToTable("sims", null, t =>
                         {
                             t.HasCheckConstraint("CK_sims_status", "status IN ('available', 'assigned', 'inactive')");
 
                             t.HasCheckConstraint("CK_sims_tier", "tier IS NULL OR tier IN ('field', 'manager', 'professional', 'support')");
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierAllowance", b =>
+                {
+                    b.Property<string>("Tier")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tier");
+
+                    b.Property<int>("DataMb")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_mb");
+
+                    b.Property<decimal>("MonthlyCost")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("monthly_cost");
+
+                    b.Property<int>("Sms")
+                        .HasColumnType("integer")
+                        .HasColumnName("sms");
+
+                    b.Property<int>("VoiceMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("voice_minutes");
+
+                    b.HasKey("Tier");
+
+                    b.ToTable("tier_allowances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tier_allowances_tier", "tier IN ('field', 'manager', 'professional', 'support')");
+
+                            t.HasCheckConstraint("CK_tier_allowances_values", "data_mb > 0 AND voice_minutes >= 0 AND sms >= 0 AND monthly_cost >= 0");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Tier = "support",
+                            DataMb = 20480,
+                            MonthlyCost = 1500m,
+                            Sms = 70,
+                            VoiceMinutes = 100
+                        },
+                        new
+                        {
+                            Tier = "professional",
+                            DataMb = 40960,
+                            MonthlyCost = 2500m,
+                            Sms = 135,
+                            VoiceMinutes = 200
+                        },
+                        new
+                        {
+                            Tier = "manager",
+                            DataMb = 61440,
+                            MonthlyCost = 3500m,
+                            Sms = 205,
+                            VoiceMinutes = 300
+                        },
+                        new
+                        {
+                            Tier = "field",
+                            DataMb = 102400,
+                            MonthlyCost = 5000m,
+                            Sms = 340,
+                            VoiceMinutes = 500
                         });
                 });
 
@@ -1579,7 +1649,14 @@ namespace SimGuard.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SimGuard.Api.Models.TierAllowance", "TierAllowance")
+                        .WithMany()
+                        .HasForeignKey("Tier")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Carrier");
+
+                    b.Navigation("TierAllowance");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.TierRecommendation", b =>

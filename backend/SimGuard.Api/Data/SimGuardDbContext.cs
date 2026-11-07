@@ -729,6 +729,7 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
 
         ConfigureScoring(modelBuilder);
         ConfigureTierRecommendations(modelBuilder);
+        ConfigureTierAllowances(modelBuilder);
     }
 
     // ASP.NET Core Identity tables. Renamed to app_* with snake_case columns

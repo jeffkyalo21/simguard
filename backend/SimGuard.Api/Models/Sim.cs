@@ -18,6 +18,9 @@ public class Sim
 
     public Carrier Carrier { get; set; } = null!;
 
+    // The allowance of Tier, null while the SIM has no tier.
+    public TierAllowance? TierAllowance { get; set; }
+
     public ICollection<Allocation> Allocations { get; set; }
         = new List<Allocation>();
 

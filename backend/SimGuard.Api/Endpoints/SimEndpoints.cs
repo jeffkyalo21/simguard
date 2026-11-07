@@ -571,11 +571,19 @@ public static class SimEndpoints
             sim.CarrierId,
             sim.Carrier.Name,
             sim.PlanType,
-            sim.MonthlyCost,
+            sim.MonthlyCost != 0 || sim.TierAllowance is null ? sim.MonthlyCost : sim.TierAllowance.MonthlyCost,
             sim.Status,
             sim.Tier,
             sim.CreatedAt,
-            currentAllocation);
+            currentAllocation,
+            sim.TierAllowance is null
+                ? null
+                : new TierAllowanceResponse(
+                    sim.TierAllowance.Tier,
+                    sim.TierAllowance.DataMb,
+                    sim.TierAllowance.VoiceMinutes,
+                    sim.TierAllowance.Sms,
+                    sim.TierAllowance.MonthlyCost));
 
     private sealed record ValidatedSim(
         string PhoneNumber,

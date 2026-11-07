@@ -43,6 +43,7 @@ public static class RiskEndpoints
     private static async Task<IResult> GetSimRisk(
         int id,
         int? days,
+        DateOnly? to,
         SimGuardDbContext db,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
@@ -61,7 +62,9 @@ public static class RiskEndpoints
             return ApiProblems.NotFound($"SIM {id} was not found.");
         }
 
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        // `to` lets the screen end the history on the fleet's as-of date
+        // instead of the clock (the demo data ends on 2025-03-31).
+        var today = to ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var firstDay = today.AddDays(1 - window);
 
         var latest = await db.RiskScores

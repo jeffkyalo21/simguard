@@ -283,7 +283,7 @@ The roles split operator from organisation:
 | `POST /api/departments`, `PUT/DELETE /api/departments/{id}` | no | yes | no | `OrgWrite` |
 | `GET /api/employees`, `/{id}`, `/{id}/allocations` | no | yes | yes | `OrgRead` |
 | `POST /api/employees`, `PUT/DELETE /api/employees/{id}` | no | yes | no | `OrgWrite` |
-| `GET /api/sims`, `/{id}`, `/{id}/allocations`, `/{id}/risk`, `/{id}/activity`, `/{id}/usage` | no | yes | yes | `OrgRead` |
+| `GET /api/sims`, `/{id}`, `/{id}/allocations`, `/{id}/risk`, `/{id}/activity`, `/{id}/usage`, `/{id}/usage/cycle` | no | yes | yes | `OrgRead` |
 | `POST /api/sims`, `PUT/DELETE /api/sims/{id}` | no | yes | no | `OrgWrite` |
 | `PATCH /api/sims/{id}/status` | no | yes | no | `OrgWrite` |
 | `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
@@ -296,6 +296,7 @@ The roles split operator from organisation:
 | `PATCH /api/alerts/{id}/status` | no | yes | no | `OrgWrite` |
 | `GET /api/risk-scores` | no | yes | yes | `OrgRead` |
 | `GET /api/dashboard/summary` | no | yes | yes | `OrgRead` |
+| `GET /api/usage/analytics`, `GET /api/tiers` | no | yes | yes | `OrgRead` |
 | `GET /api/tier-recommendations`, `/settings`, `/status` | no | yes | yes | `OrgRead` |
 | `PUT /api/tier-recommendations/settings`, `POST /api/tier-recommendations/run`, `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
 | `POST /api/admin/scoring/run`, `GET /api/admin/scoring/status` (totals only) | yes | no | no | `AdminOnly` |

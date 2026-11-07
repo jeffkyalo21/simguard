@@ -8,6 +8,8 @@ public record CreateAllocationRequest(
     int? EmployeeId,
     int? AssignedBy);
 
+// DepartmentName (additive, issue #14) is the employee's department.
+// AssignmentDate and ReturnDate are the stored values, unchanged.
 public record AllocationResponse(
     int Id,
     int SimId,
@@ -18,7 +20,8 @@ public record AllocationResponse(
     string AssignedByName,
     DateTime AssignmentDate,
     DateTime? ReturnDate,
-    bool IsActive)
+    bool IsActive,
+    string DepartmentName)
 {
     public static readonly Expression<Func<Allocation, AllocationResponse>> Projection =
         a => new AllocationResponse(
@@ -31,5 +34,6 @@ public record AllocationResponse(
             a.AssignedByEmployee.Name,
             a.AssignmentDate,
             a.ReturnDate,
-            a.ReturnDate == null);
+            a.ReturnDate == null,
+            a.Employee.Department.Name);
 }

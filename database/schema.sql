@@ -339,3 +339,30 @@ CREATE UNIQUE INDEX idx_tier_recs_one_open_per_sim ON tier_recommendations(sim_i
 CREATE INDEX idx_tier_recs_sim_status ON tier_recommendations(sim_id, status);
 CREATE INDEX idx_tier_recs_status ON tier_recommendations(status);
 CREATE INDEX idx_tier_recs_run ON tier_recommendations(run_id);
+
+-- ============================
+-- tier allowances
+-- ============================
+-- What each tier includes per 30-day billing cycle (issue #14). Data bundles
+-- match ml-service TIER_BUNDLE_GB (1 GB = 1024 MB); voice and SMS are the
+-- cycle totals in the demo usage; costs (KES) are demo values. sims.tier
+-- refers to it, so a SIM's monthly cost and allowance come from its tier.
+CREATE TABLE tier_allowances (
+    tier VARCHAR(20) PRIMARY KEY
+        CHECK (tier IN ('field', 'manager', 'professional', 'support')),
+    data_mb INTEGER NOT NULL,
+    voice_minutes INTEGER NOT NULL,
+    sms INTEGER NOT NULL,
+    monthly_cost NUMERIC(10,2) NOT NULL,
+    CHECK (data_mb > 0 AND voice_minutes >= 0 AND sms >= 0 AND monthly_cost >= 0)
+);
+
+INSERT INTO tier_allowances (tier, data_mb, voice_minutes, sms, monthly_cost) VALUES
+    ('support', 20480, 100, 70, 1500),
+    ('professional', 40960, 200, 135, 2500),
+    ('manager', 61440, 300, 205, 3500),
+    ('field', 102400, 500, 340, 5000);
+
+ALTER TABLE sims ADD CONSTRAINT fk_sims_tier
+    FOREIGN KEY (tier) REFERENCES tier_allowances(tier);
+CREATE INDEX idx_sims_tier ON sims(tier);
