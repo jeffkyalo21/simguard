@@ -64,7 +64,7 @@ src/
     tier-recommendations/  tier-recommendations-view
     sims/       sims-view, sim-profile, sim-form-dialog, sim-status-dialog, tier-dialog
     data/       data-table, pagination, filter-select, search-input, kpi-card,
-                section-card, bar-list, line-chart, progress-bar, risk-bar, skeletons
+                section-card, bar-list, bar-chart, progress-bar, risk-bar, skeletons
     shared/     status-badge, form-dialog, confirm-dialog, form-field, busy-button,
                 error-state, empty-state, disabled-reason, page-breadcrumb,
                 not-found-content, glass-backdrop

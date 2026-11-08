@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DataState } from "@/components/data/data-state";
 import { DataTable } from "@/components/data/data-table";
-import { LineChart } from "@/components/data/line-chart";
+import { BarChart } from "@/components/data/bar-chart";
 import { ProgressBar } from "@/components/data/progress-bar";
 import { RiskBar } from "@/components/data/risk-bar";
 import { SectionCard } from "@/components/data/section-card";
@@ -76,6 +76,12 @@ function Details({ sim }) {
 function Usage({ usage }) {
   const hasLimit = usage.data.limit !== null;
   const top = Math.max(Math.ceil(Math.max(usage.data.limit ?? 0, usage.data.used) * 1.15), 1);
+  // One bar per day of the cycle (the running total to that day). Days that
+  // have not happened yet stay empty, so the axis always spans the full cycle.
+  const cycleDays = Array.from({ length: usage.cycleLength }, (_, index) => {
+    const day = index + 1;
+    return usage.series.find((point) => point.day === day) ?? { day, gb: null };
+  });
   const balances = [
     { key: "data", label: text.data, ...usage.data, valueText: hasLimit ? copy.units.ofGb(usage.data.used, usage.data.limit) : copy.units.gb(usage.data.used) },
     { key: "voice", label: text.voice, ...usage.voice, valueText: hasLimit ? copy.units.ofMin(usage.voice.used, usage.voice.limit) : usage.voice.used },
@@ -88,12 +94,10 @@ function Usage({ usage }) {
         {text.cycle(formatDate(usage.cycleStart), formatDate(usage.cycleEnd), formatDate(usage.asOf))}
         {!hasLimit && ` ${text.noAllowance}`}
       </p>
-      <LineChart
-        data={usage.series}
+      <BarChart
+        data={cycleDays}
         xKey="day"
         yKey="gb"
-        xType="number"
-        xDomain={[1, usage.cycleLength]}
         xTicks={[1, usage.cycleLength]}
         label={text.dataThisCycle}
         formatX={copy.units.day}

@@ -6,7 +6,7 @@ import { DataState } from "@/components/data/data-state";
 import { DataTable } from "@/components/data/data-table";
 import { FilterSelect } from "@/components/data/filter-select";
 import { KpiCard } from "@/components/data/kpi-card";
-import { LineChart } from "@/components/data/line-chart";
+import { BarChart } from "@/components/data/bar-chart";
 import { SectionCard } from "@/components/data/section-card";
 import { ChartSkeleton, ListSkeleton } from "@/components/data/skeletons";
 import { PageHeader } from "@/components/layout/page-header";
@@ -50,7 +50,7 @@ function DailyChart({ resource }) {
     <DataState resource={resource} skeleton={<ChartSkeleton height={240} />} isEmpty={(data) => !data.daily.length || data.daily.every((point) => point.dataGb === 0)} emptyMessage={text.noUsage}>
       {(data) => (
         <>
-          <LineChart data={data.daily} xKey="date" yKey="dataGb" label={text.daily} formatX={formatShortDate} formatY={formatGb} height={240} />
+          <BarChart data={data.daily} xKey="date" yKey="dataGb" label={text.daily} formatX={formatShortDate} formatY={formatGb} height={240} />
           <table className="sr-only">
             <caption>{text.daily}</caption>
             <thead><tr><th scope="col">{copy.columns.date}</th><th scope="col">{text.dataUsed}</th></tr></thead>
