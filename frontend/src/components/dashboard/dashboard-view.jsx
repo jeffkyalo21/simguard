@@ -203,7 +203,18 @@ export function DashboardView() {
           />
         </SectionCard>
 
-        <SectionCard title={text.tierChanges}>
+        <SectionCard
+          title={text.tierChanges}
+          action={
+            <Link
+              href="/tier-recommendations"
+              className="link-accent touch-target inline-flex h-10 items-center px-2 text-sm font-medium"
+            >
+              {copy.actions.viewAll}
+              <span className="sr-only">{` ${copy.tierRecommendations.title}`}</span>
+            </Link>
+          }
+        >
           <DataState
             resource={resource}
             skeleton={<ListSkeleton rows={3} />}

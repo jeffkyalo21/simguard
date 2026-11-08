@@ -6,7 +6,7 @@ import { FormDialog } from "@/components/shared/form-dialog";
 import { FormField } from "@/components/shared/form-field";
 import { Input } from "@/components/ui/input";
 import { useOpeningKey } from "@/hooks/use-opening-key";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
 import { addCarrier, renameCarrier } from "@/lib/data";
 import { carrierNameError } from "@/lib/validation";
 import { copy } from "@/lib/copy";
@@ -37,10 +37,12 @@ function CarrierForm({ open, onOpenChange, carrier, carriers }) {
       toast.success(renaming ? copy.settings.carriers.toasts.renamed(saved.name) : copy.settings.carriers.toasts.added(saved.name));
       onOpenChange(false);
     } catch (err) {
-      // 409 and 400 both carry errors.name = [code].
-      const serverCode = err instanceof ApiError ? err.errors?.name?.[0] : null;
-      if (serverCode) fail(serverCode);
-      else toast.error(err instanceof ApiError && err.status === 404 ? copy.errors.notFound : copy.errors.generic);
+      // The backend puts its sentence on errors.name: 409 is a duplicate,
+      // 400 a name the client rules missed. Show our own line for each.
+      const onName = err instanceof ApiError && err.errors?.name;
+      if (onName && err.status === 409) fail("taken");
+      else if (onName) fail(carrierNameError(name, [], carrier?.id) ?? "invalid");
+      else toast.error(errorMessage(err));
     } finally {
       setBusy(false);
     }

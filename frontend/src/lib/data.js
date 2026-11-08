@@ -8,15 +8,13 @@
 // "now": relative ranges come from the as-of date (the latest usage date)
 // that the dashboard and usage responses report.
 //
-// TEMPORARY (part 2): the write functions below the reads still change the
-// mock database in src/lib/mock. Part 2 replaces each body with its API
-// call (see "Writes (part 2)" in the contract).
+// Writes call the API too and bump the data version after they succeed, so
+// every screen on the page reloads what it shows (src/lib/data-version.js).
+// There is no mock data: a screen shows the backend's answer or an error.
 
 import { ApiError, api } from "@/lib/api";
-import { MOCK_USER, PLAN_TYPES, TIERS, fixtures } from "@/lib/mock/fixtures";
-import { dayToUtc, todayDay } from "@/lib/format";
-import { readMockDb, writeMockDb } from "@/lib/mock/db";
-import { carrierNameError, normalizePhone, simFieldErrors } from "@/lib/validation";
+import { bumpDataVersion } from "@/lib/data-version";
+import { normalizePhone } from "@/lib/validation";
 
 const MB_PER_GB = 1024;
 const ALL = 100;
@@ -27,8 +25,6 @@ const ALL = 100;
  * GET /tiers and GET /carriers (src/hooks/use-reference.js).
  */
 export const referenceData = {
-  /** For the SIM form until part 2 wires its write. */
-  planTypes: PLAN_TYPES,
   statuses: ["assigned", "available", "inactive"],
   alertTypes: ["inactiveBilling", "sharing", "reselling", "ghostUsage", "other"],
   periods: [7, 30, 90],
@@ -261,429 +257,164 @@ export function listAuditLogs({ simId, actorEmail, action, from, to, page, pageS
   return api.get("/audit-logs", { query: { simId, actorEmail: actorEmail?.trim(), action, from, to, page, pageSize } });
 }
 
-/* ================================================== Writes (mock, part 2) */
-
-const DELAY_MS = 300;
-
-function wait(ms = DELAY_MS) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const notFound = () => new ApiError({ status: 404 });
-
-function findSim(id) {
-  return readMockDb().sims.find((sim) => sim.id === Number(id));
-}
-
-/** Mock tiers are capitalised ("Support"); the API's are lower case. */
-function mockTier(tier) {
-  const name = String(tier ?? "");
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-/** PATCH /alerts/{id}/status with contract transition and validation rules. */
-export async function setAlertStatus(id, { status, resolution, resolutionNote } = {}) {
-  await wait();
-  const alert = readMockDb().alerts.find((item) => item.id === Number(id));
-  if (!alert) throw notFound();
-  if (!["flagged", "escalated", "cleared"].includes(status)) throw fieldError("status", "invalid");
-  const closing = status === "cleared";
-  if (closing && !["confirmedMisuse", "falsePositive"].includes(resolution)) throw fieldError("resolution", resolution ? "invalid" : "required");
-  if (!closing && (resolution !== undefined || resolutionNote !== undefined)) throw fieldError(resolution !== undefined ? "resolution" : "resolutionNote", "invalid");
-  if (resolutionNote !== undefined && (typeof resolutionNote !== "string" || resolutionNote.length > 500)) throw fieldError("resolutionNote", "tooLong");
-
-  const allowed = (alert.status === "flagged" || alert.status === "escalated") && closing
-    || alert.status === "cleared" && status === "escalated"
-    || alert.status === "escalated" && status === "flagged";
-  if (!allowed) throw new ApiError({ status: 409, body: { currentStatus: alert.status } });
-
-  const at = new Date().toISOString();
-  const updated = {
-    ...alert,
-    status,
-    resolvedAt: closing ? at : null,
-    resolution: closing ? resolution : null,
-    resolutionNote: closing ? (resolutionNote?.trim() || null) : null,
-    resolvedBy: closing ? { id: MOCK_USER.id, name: MOCK_USER.name, email: MOCK_USER.email } : null,
-  };
-  writeMockDb({
-    type: "alert/changed",
-    alert: updated,
-    activity: { id: `alert-${alert.id}-${at}`, simId: alert.simId, at, kind: "alertStatus", detail: { type: alert.type, status, resolution: updated.resolution } },
-    audit: auditRow("alert.status_changed", findSim(alert.simId), alertSnapshot(alert), alertSnapshot(updated), at),
-  });
-  return getAlert(id);
-}
-
-function fieldError(field, code) {
-  return new ApiError({ status: 400, errors: { [field]: [code] } });
-}
+/* ================================================================ Writes */
 
 /**
- * Same rules as the API's SimRequest validation. ApiError.errors maps each
- * field to error codes (required, invalid, tooLong, taken); the form maps
- * codes to copy.
+ * Runs a write and, once it succeeds, tells every screen to reload. A 409
+ * means the screen showed stale data (someone else changed it first), so
+ * the screens reload then too before the error reaches the caller.
  */
-function validateSim(body, excludeId) {
-  const fieldErrors = simFieldErrors(body);
-
-  if (Object.keys(fieldErrors).length) {
-    throw new ApiError({
-      status: 400,
-      errors: Object.fromEntries(Object.entries(fieldErrors).map(([field, code]) => [field, [code]])),
-    });
+async function write(call) {
+  try {
+    const result = await call;
+    bumpDataVersion();
+    return result;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409) bumpDataVersion();
+    throw error;
   }
+}
 
-  const phoneNumber = normalizePhone(body.phoneNumber);
-  const iccid = body.iccid.trim();
-
-  // The API answers 409 for duplicates; the mock names the field.
-  const others = readMockDb().sims.filter((sim) => sim.id !== excludeId);
-  if (others.some((sim) => sim.phoneNumber === phoneNumber)) {
-    throw new ApiError({ status: 409, errors: { phoneNumber: ["taken"] } });
-  }
-  if (others.some((sim) => sim.iccid === iccid)) {
-    throw new ApiError({ status: 409, errors: { iccid: ["taken"] } });
-  }
-
-  const carrierId = Number(body.carrierId);
-  if (!readMockDb().carriers.some((carrier) => carrier.id === carrierId)) {
-    throw fieldError("carrierId", "invalid");
-  }
-
+/** The SimRequest body: E.164 phone, trimmed ICCID, cost in KES. */
+function simBody({ phoneNumber, iccid, carrierId, planType, monthlyCost }) {
   return {
-    phoneNumber,
-    iccid,
-    carrierId,
-    planType: body.planType.trim(),
-    monthlyCost: Math.round(Number(body.monthlyCost) * 100) / 100,
+    phoneNumber: normalizePhone(phoneNumber) ?? String(phoneNumber ?? "").trim(),
+    iccid: String(iccid ?? "").trim(),
+    carrierId: Number(carrierId),
+    planType: String(planType ?? "").trim(),
+    monthlyCost: Math.round(Number(monthlyCost) * 100) / 100,
   };
 }
 
 /**
- * Saves a SIM, logs it in the SIM's activity and, when `audit` is given as
- * { action, oldValues, newValues }, in the audit log.
+ * POST /sims. New SIMs start as "available". A duplicate phone number or
+ * ICCID is a 409 with errors.phoneNumber or errors.iccid.
  */
-function save(sim, kind, detail, audit) {
-  const at = new Date().toISOString();
-  writeMockDb({
-    type: "sim/saved",
-    sim,
-    activity: { id: `e${sim.id}-${at}-${kind}`, simId: sim.id, at, kind, detail },
-    audit: audit && auditRow(audit.action, sim, audit.oldValues, audit.newValues, at),
-  });
-  return sim;
+export function createSim(values) {
+  return write(api.post("/sims", simBody(values)));
 }
 
-/** POST /sims. New SIMs start as "available". */
-export async function createSim(body) {
-  await wait();
-  const values = validateSim(body);
-  const db = readMockDb();
-  const tier = TIERS.Support;
-
-  const sim = {
-    id: Math.max(...db.sims.map((s) => s.id)) + 1,
-    ...values,
-    status: "available",
-    createdAt: new Date().toISOString(),
-    currentAllocation: null,
-    // future field
-    tier: "Support",
-    dataUsedGb: 0,
-    voiceUsed: 0,
-    voiceLimit: tier.voiceMin,
-    smsUsed: 0,
-    smsLimit: tier.sms,
-    riskScore: 0,
-  };
-  return save(sim, "created", undefined, { action: "sim.created", oldValues: null, newValues: simSnapshot(sim) });
+/** PUT /sims/{id}, same body and errors as createSim. */
+export function updateSim(id, values) {
+  return write(api.put(`/sims/${id}`, simBody(values)));
 }
 
-/** PUT /sims/{id}. */
-export async function updateSim(id, body) {
-  await wait();
-  const sim = findSim(id);
-  if (!sim) throw notFound();
-  const updated = { ...sim, ...validateSim(body, sim.id) };
-  return save(updated, "edited", undefined, { action: "sim.updated", oldValues: simSnapshot(sim), newValues: simSnapshot(updated) });
+/** PATCH /sims/{id}/status with "available" or "inactive"; 409 while allocated. */
+export function setSimStatus(id, status) {
+  return write(api.patch(`/sims/${id}/status`, { status }));
 }
 
-/** PATCH /sims/{id}/status with "available" or "inactive". */
-export async function setSimStatus(id, status) {
-  await wait();
-  const sim = findSim(id);
-  if (!sim) throw notFound();
-  if (!["available", "inactive"].includes(status)) throw fieldError("status", "invalid");
-  // Same rule as the API: an allocated SIM must be returned first.
-  if (sim.currentAllocation) throw new ApiError({ status: 409 });
-  return save({ ...sim, status }, status, undefined, { action: "sim.status_changed", oldValues: { status: sim.status }, newValues: { status } });
+/**
+ * PATCH /sims/{id}/tier with a lower-case tier. Returns { simId, tier,
+ * previousTier }; the allowance and cost follow the tier.
+ */
+export function setSimTier(id, tier) {
+  return write(api.patch(`/sims/${id}/tier`, { tier }));
 }
 
-// future field: tier changes have no endpoint yet.
-/** Changes a SIM's tier and its bundle limits. */
-export async function setSimTier(id, tier) {
-  await wait();
-  const sim = findSim(id);
-  if (!sim) throw notFound();
-  const name = mockTier(tier);
-  const limits = TIERS[name];
-  if (!limits) throw fieldError("tier", "invalid");
-
-  // future field: the API has no tier yet, so the audit row records it as a
-  // SIM edit with the tier and the cost it sets.
-  return save(
-    { ...sim, tier: name, voiceLimit: limits.voiceMin, smsLimit: limits.sms, monthlyCost: limits.monthlyCost },
-    "tier",
-    tier,
-    {
-      action: "sim.updated",
-      oldValues: { tier: sim.tier, monthlyCost: sim.monthlyCost },
-      newValues: { tier: name, monthlyCost: limits.monthlyCost },
-    }
+/**
+ * PATCH /alerts/{id}/status. Clearing needs a resolution (confirmedMisuse or
+ * falsePositive) and takes an optional note; 409 when the move is not
+ * allowed from the alert's current status.
+ */
+export function setAlertStatus(id, { status, resolution, resolutionNote } = {}) {
+  const closing = status === "cleared";
+  const note = resolutionNote?.trim();
+  return write(
+    api.patch(`/alerts/${id}/status`, {
+      status,
+      ...(closing && { resolution }),
+      ...(closing && note && { resolutionNote: note }),
+    })
   );
 }
 
-
-/** The AllocationResponse shape, plus the employee's department. */
-function toAllocationResponse(allocation, db = readMockDb()) {
-  const sim = db.sims.find((item) => item.id === allocation.simId);
-  const assigner = db.employees.find((employee) => employee.id === allocation.assignedBy);
-  return {
-    id: allocation.id,
-    simId: allocation.simId,
-    simPhoneNumber: sim?.phoneNumber ?? "",
-    employeeId: allocation.employeeId,
-    employeeName: allocation.employeeName,
-    assignedBy: allocation.assignedBy,
-    assignedByName: assigner?.name ?? "",
-    assignmentDate: allocation.assignedAt,
-    returnDate: allocation.returnedAt,
-    isActive: !allocation.returnedAt,
-    // future field: the API's AllocationResponse has no department yet.
-    departmentName: allocation.departmentName,
-  };
-}
-
-function conflict(detail) {
-  return new ApiError({ status: 409, title: "Conflict", detail });
-}
-
 /**
- * POST /allocations. Same rules as the API: ids are required (400 per
- * field), only an available SIM can be allocated and a SIM has one active
- * allocation at most (409). assignedBy defaults to the signed-in user.
- * future field: assignmentDate ("YYYY-MM-DD", not in the future); the API
- * always uses the time of the request.
+ * POST /allocations. `assignedBy` is the employee who hands the SIM over.
+ * The backend dates the allocation at the time of the request. 409 when
+ * the SIM is not available or already allocated.
  * @param {{ simId: number | string, employeeId: number | string,
- *   assignedBy?: number | string, assignmentDate?: string }} body
+ *   assignedBy: number | string }} body
  */
-export async function createAllocation({ simId, employeeId, assignedBy = fixtures.assignerId, assignmentDate } = {}) {
-  await wait();
-  const db = readMockDb();
-  const errors = {};
-  const ids = { simId: Number(simId), employeeId: Number(employeeId), assignedBy: Number(assignedBy) };
-
-  for (const [field, value] of Object.entries(ids)) {
-    if (!Number.isInteger(value) || value <= 0) errors[field] = ["required"];
-  }
-
-  const now = new Date();
-  const today = dayToUtc(todayDay(now), "start");
-  const start = assignmentDate ? dayToUtc(assignmentDate, "start") : null;
-  if (assignmentDate !== undefined && !start) errors.assignmentDate = ["invalid"];
-  else if (start && start > today) errors.assignmentDate = ["future"];
-
-  const sim = db.sims.find((item) => item.id === ids.simId);
-  const employee = db.employees.find((item) => item.id === ids.employeeId);
-  if (!errors.simId && !sim) errors.simId = ["invalid"];
-  if (!errors.employeeId && !employee) errors.employeeId = ["invalid"];
-  if (!errors.assignedBy && !db.employees.some((item) => item.id === ids.assignedBy)) errors.assignedBy = ["invalid"];
-  if (Object.keys(errors).length) throw new ApiError({ status: 400, errors });
-
-  if (sim.status !== "available") {
-    throw conflict(`SIM ${sim.id} is '${sim.status}' and cannot be assigned. Only available SIMs can be assigned.`);
-  }
-  if (db.allocations.some((item) => item.simId === sim.id && !item.returnedAt)) {
-    throw conflict(`SIM ${sim.id} already has an active allocation.`);
-  }
-
-  // A start date of today uses the current time, like the API.
-  const assignedAt = !start || start === today ? now.toISOString() : new Date(Date.parse(start) + 9 * 3_600_000).toISOString();
-  const allocation = {
-    id: Math.max(0, ...db.allocations.map((item) => item.id)) + 1,
-    simId: sim.id,
-    employeeId: employee.id,
-    employeeName: employee.name,
-    departmentName: employee.departmentName,
-    assignedAt,
-    returnedAt: null,
-    assignedBy: ids.assignedBy,
-  };
-  const updatedSim = {
-    ...sim,
-    status: "assigned",
-    currentAllocation: {
-      allocationId: allocation.id,
-      employeeId: employee.id,
-      employeeName: employee.name,
-      departmentName: employee.departmentName,
-      assignedAt,
-    },
-  };
-
-  writeMockDb({
-    type: "allocation/saved",
-    allocation,
-    sim: updatedSim,
-    audit: auditRow(
-      "allocation.created",
-      sim,
-      { simStatus: sim.status },
-      { allocationId: allocation.id, employeeId: employee.id, assignedBy: ids.assignedBy, assignmentDate: assignedAt, simStatus: "assigned" }
-    ),
-  });
-  return toAllocationResponse(allocation);
+export function createAllocation({ simId, employeeId, assignedBy }) {
+  return write(
+    api.post("/allocations", { simId: Number(simId), employeeId: Number(employeeId), assignedBy: Number(assignedBy) })
+  );
 }
 
-/**
- * POST /allocations/{id}/return. 404 when unknown, 409 when already ended.
- * The SIM becomes available again unless it is inactive.
- */
-export async function endAllocation(id) {
-  await wait();
-  const db = readMockDb();
-  const allocation = db.allocations.find((item) => item.id === Number(id));
-  if (!allocation) throw notFound();
-  if (allocation.returnedAt) {
-    throw conflict(`Allocation ${allocation.id} was already returned on ${allocation.returnedAt}.`);
-  }
-
-  const sim = db.sims.find((item) => item.id === allocation.simId);
-  const returnedAt = new Date().toISOString();
-  const ended = { ...allocation, returnedAt };
-  const status = sim.status === "inactive" ? "inactive" : "available";
-  const updatedSim = { ...sim, status, currentAllocation: null };
-
-  writeMockDb({
-    type: "allocation/saved",
-    allocation: ended,
-    sim: updatedSim,
-    audit: auditRow(
-      "allocation.returned",
-      sim,
-      { allocationId: allocation.id, returnDate: null, simStatus: sim.status },
-      { allocationId: allocation.id, returnDate: returnedAt, simStatus: status }
-    ),
-  });
-  return toAllocationResponse(ended);
+/** POST /allocations/{id}/return. 409 when already returned. */
+export function endAllocation(id) {
+  return write(api.post(`/allocations/${id}/return`));
 }
 
 /* -------------------------------------------------------------- Carriers */
 
-// future endpoints: carriers are not in the backend yet. Names follow
-// carrierNameError: required, trimmed, 2 to 40 characters, unique ignoring
-// case. Errors are ApiError 400 with errors.name = [code]; a duplicate is
-// a 409 with errors.name = ["taken"].
-
-function carrierName(name, excludeId) {
-  const code = carrierNameError(name, readMockDb().carriers, excludeId);
-  if (code === "taken") {
-    throw new ApiError({ status: 409, title: "Conflict", errors: { name: ["taken"] } });
-  }
-  if (code) throw fieldError("name", code);
-  return name.trim();
+/** POST /carriers. A duplicate name is a 409 with errors.name. */
+export function addCarrier(name) {
+  return write(api.post("/carriers", { name: String(name ?? "").trim() }));
 }
 
-function findCarrier(id) {
-  return readMockDb().carriers.find((carrier) => carrier.id === Number(id));
-}
-
-/** Number of SIMs on a carrier. */
-function simsUsing(id) {
-  return readMockDb().sims.filter((sim) => sim.carrierId === Number(id)).length;
-}
-
-
-/** POST /carriers. New carriers start as "not connected". */
-export async function addCarrier(name) {
-  await wait();
-  const carriers = readMockDb().carriers;
-  const carrier = {
-    id: Math.max(0, ...carriers.map((c) => c.id)) + 1,
-    name: carrierName(name),
-    status: "not connected",
-    createdAt: new Date().toISOString(),
-  };
-  writeMockDb({ type: "carrier/saved", carrier });
-  return carrier;
-}
-
-/** PATCH /carriers/{id} with a new name. */
-export async function renameCarrier(id, name) {
-  await wait();
-  const carrier = findCarrier(id);
-  if (!carrier) throw notFound();
-  const renamed = { ...carrier, name: carrierName(name, carrier.id) };
-  writeMockDb({ type: "carrier/saved", carrier: renamed });
-  return renamed;
+/** PUT /carriers/{id} with a new name; errors as addCarrier. */
+export function renameCarrier(id, name) {
+  return write(api.put(`/carriers/${id}`, { name: String(name ?? "").trim() }));
 }
 
 /**
- * DELETE /carriers/{id}. Blocked while any SIM uses the carrier.
- * @returns {Promise<{ removed: boolean, simCount: number }>} simCount is the
- *   number of SIMs on the carrier, so the UI can say why it was kept.
+ * DELETE /carriers/{id}. A carrier that SIMs still use is a 409 whose
+ * extensions.simCount says how many.
  */
-export async function removeCarrier(id) {
-  await wait();
-  const carrier = findCarrier(id);
-  if (!carrier) throw notFound();
-  const simCount = simsUsing(carrier.id);
-  if (simCount > 0) return { removed: false, simCount };
-  writeMockDb({ type: "carrier/removed", id: carrier.id });
-  return { removed: true, simCount: 0 };
+export function removeCarrier(id) {
+  return write(api.delete(`/carriers/${id}`));
 }
 
-/* ------------------------------------------------------------- Audit log */
+/* ---------------------------------------------------- Tier recommendations */
 
-/** The SIM fields the API records for sim.* actions. */
-function simSnapshot(sim) {
-  return {
-    id: sim.id,
-    phoneNumber: sim.phoneNumber,
-    iccid: sim.iccid,
-    operator: readMockDb().carriers.find((carrier) => carrier.id === sim.carrierId)?.name ?? null,
-    planType: sim.planType,
-    monthlyCost: sim.monthlyCost,
-    status: sim.status,
-  };
+/**
+ * GET /tier-recommendations, newest first.
+ * @param {{ status?: "open" | "dismissed" | "applied", page?: number,
+ *   pageSize?: number }} [query]
+ */
+export function listTierRecommendations({ status, page, pageSize } = {}) {
+  return api.get("/tier-recommendations", { query: { status, page, pageSize } });
 }
 
-/** The alert fields the API records for alert.status_changed. */
-function alertSnapshot(alert) {
-  return {
-    alertId: alert.id,
-    status: alert.status,
-    resolution: alert.resolution ?? null,
-    resolutionNote: alert.resolutionNote ?? null,
-    resolvedAt: alert.resolvedAt ?? null,
-    resolvedByUserId: alert.resolvedBy?.id ?? null,
-  };
+/** GET /tier-recommendations/status: last run, interval and whether one runs. */
+export function getTierRecommendationStatus() {
+  return api.get("/tier-recommendations/status");
 }
 
-/** One GET /audit-logs item written by the signed-in user. */
-function auditRow(action, sim, oldValues, newValues, timestamp = new Date().toISOString()) {
-  const rows = readMockDb().audit;
-  return {
-    id: Math.max(0, ...rows.map((row) => row.id)) + 1,
-    timestamp,
-    actorUserId: MOCK_USER.id,
-    actorEmail: MOCK_USER.email,
-    employeeId: null,
-    action,
-    affectedSimId: sim?.id ?? null,
-    affectedSimPhoneNumber: sim?.phoneNumber ?? null,
-    oldValues,
-    newValues,
-  };
+/**
+ * POST /tier-recommendations/run. 202 with { runId }; 409 while a run is in
+ * progress or before the interval has passed (extensions.nextAllowedRunDate).
+ */
+export function runTierRecommendations() {
+  return write(api.post("/tier-recommendations/run"));
+}
+
+/** POST /tier-recommendations/{id}/apply: sets the SIM to the recommended tier. */
+export function applyTierRecommendation(id) {
+  return write(api.post(`/tier-recommendations/${id}/apply`));
+}
+
+/** POST /tier-recommendations/{id}/dismiss. 409 when no longer open. */
+export function dismissTierRecommendation(id) {
+  return write(api.post(`/tier-recommendations/${id}/dismiss`));
+}
+
+/* ------------------------------------------------------- Scoring (Admin) */
+
+/**
+ * GET /admin/scoring/status: schedule, ML service health, totals and the
+ * last runs. Totals only, never SIM-level data. Admin only.
+ */
+export function getScoringStatus() {
+  return api.get("/admin/scoring/status");
+}
+
+/**
+ * POST /admin/scoring/run. 202 with { runId, merged }; merged is true when
+ * a queued run already covers the request.
+ */
+export function runScoring() {
+  return write(api.post("/admin/scoring/run"));
 }

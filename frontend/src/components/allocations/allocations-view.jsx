@@ -12,9 +12,11 @@ import { Pagination } from "@/components/data/pagination";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { DisabledReason } from "@/components/shared/disabled-reason";
 import { Button } from "@/components/ui/button";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
 import { endAllocation, listAllocations } from "@/lib/data";
 import { formatDate, formatPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -68,6 +70,7 @@ export function AllocationsView() {
   // The confirm dialog keeps the allocation it opened with while closing.
   const [ending, setEnding] = useState({ open: false, allocation: null });
   const [busy, setBusy] = useState(false);
+  const editing = usePermission("allocations.edit");
 
   async function confirmEnd() {
     const { allocation } = ending;
@@ -76,8 +79,7 @@ export function AllocationsView() {
       await endAllocation(allocation.id);
       toast.success(text.toasts.ended(formatPhone(allocation.simPhoneNumber)));
     } catch (error) {
-      const status = error instanceof ApiError ? error.status : 0;
-      toast.error(status === 409 ? text.toasts.alreadyEnded : status === 404 ? copy.errors.notFound : copy.errors.generic);
+      toast.error(errorMessage(error, { 409: text.toasts.alreadyEnded }));
     } finally {
       setBusy(false);
       setEnding((current) => ({ ...current, open: false }));
@@ -115,17 +117,20 @@ export function AllocationsView() {
       srOnlyHeader: true,
       className: "w-24 pr-3 text-right",
       cell: (item) => item.isActive && (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 px-3"
-          onClick={() => setEnding({ open: true, allocation: item })}
-        >
-          <Undo2 aria-hidden="true" />
-          {text.end}
-          <span className="sr-only">{text.endFor(formatPhone(item.simPhoneNumber), item.employeeName)}</span>
-        </Button>
+        <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 px-3"
+            disabled={!editing.allowed}
+            onClick={() => setEnding({ open: true, allocation: item })}
+          >
+            <Undo2 aria-hidden="true" />
+            {text.end}
+            <span className="sr-only">{text.endFor(formatPhone(item.simPhoneNumber), item.employeeName)}</span>
+          </Button>
+        </DisabledReason>
       ),
     },
   ];
@@ -137,10 +142,12 @@ export function AllocationsView() {
       <PageHeader
         title={copy.pages.allocations.title}
         actions={
-          <Button onClick={() => setFormOpen(true)} size="lg" className="h-10 px-4">
-            <Plus aria-hidden="true" />
-            {text.add}
-          </Button>
+          <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+            <Button onClick={() => setFormOpen(true)} size="lg" className="h-10 px-4" disabled={!editing.allowed}>
+              <Plus aria-hidden="true" />
+              {text.add}
+            </Button>
+          </DisabledReason>
         }
       />
 

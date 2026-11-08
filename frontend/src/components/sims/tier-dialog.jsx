@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useOpeningKey } from "@/hooks/use-opening-key";
 import { useTiers } from "@/hooks/use-reference";
 import { FormDialog } from "@/components/shared/form-dialog";
+import { errorMessage } from "@/lib/api";
 import { setSimTier, toGb } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
@@ -23,8 +24,8 @@ function TierForm({ sim, open, onOpenChange }) {
       await setSimTier(sim.id, tier);
       toast.success(copy.sims.toasts.tierChanged(copy.tiers[tier] ?? tier));
       onOpenChange(false);
-    } catch {
-      toast.error(copy.errors.generic);
+    } catch (error) {
+      toast.error(errorMessage(error));
     } finally {
       setBusy(false);
     }

@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
 import { useCarriers } from "@/hooks/use-reference";
 import { listSims, referenceData, toGb } from "@/lib/data";
@@ -50,11 +51,22 @@ function writeQuery(pathname, current, changes, { replace = false } = {}) {
   else window.history.pushState(null, "", url);
 }
 
-function RowActions({ sim, onEdit, onStatus }) {
+function RowActions({ sim, onEdit, onStatus, denied }) {
   const number = formatPhone(sim.phoneNumber);
   const target = nextStatus(sim);
   const blocked = !canChangeStatus(sim);
   const StatusIcon = target === "inactive" ? PowerOff : Power;
+
+  // A role that cannot change SIMs sees the menu button disabled, with why.
+  if (denied) {
+    return (
+      <DisabledReason reason={denied} disabled>
+        <Button variant="ghost" size="icon" className="touch-target size-9" disabled aria-label={`${copy.actions.rowActions(number)}. ${denied}`}>
+          <MoreHorizontal aria-hidden="true" />
+        </Button>
+      </DisabledReason>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -111,6 +123,7 @@ export function SimsView() {
   const carriers = useCarriers();
   const operatorOptions = carriers.map((carrier) => ({ value: String(carrier.id), label: carrier.name }));
   const result = resource.data;
+  const editing = usePermission("sims.edit");
 
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
   const [form, setForm] = useState({ open: false, sim: null });
@@ -150,6 +163,7 @@ export function SimsView() {
           sim={sim}
           onEdit={(target) => setForm({ open: true, sim: target })}
           onStatus={(target) => setStatus({ open: true, sim: target })}
+          denied={editing.reason}
         />
       ),
     },
@@ -160,10 +174,12 @@ export function SimsView() {
       <PageHeader
         title={copy.pages.sims.title}
         actions={
-          <Button onClick={() => setForm({ open: true, sim: null })} size="lg" className="h-10 px-4">
-            <Plus aria-hidden="true" />
-            {copy.sims.add}
-          </Button>
+          <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+            <Button onClick={() => setForm({ open: true, sim: null })} size="lg" className="h-10 px-4" disabled={!editing.allowed}>
+              <Plus aria-hidden="true" />
+              {copy.sims.add}
+            </Button>
+          </DisabledReason>
         }
       />
 

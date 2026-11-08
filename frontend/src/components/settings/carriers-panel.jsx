@@ -7,6 +7,7 @@ import { DataTable } from "@/components/data/data-table";
 import { GlassCard } from "@/components/glass/glass-card";
 import { CarrierFormDialog } from "@/components/settings/carrier-form-dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { DisabledReason } from "@/components/shared/disabled-reason";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,9 +18,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
 import { useReturnFocus } from "@/hooks/use-return-focus";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
 import { listCarriers, removeCarrier } from "@/lib/data";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -58,6 +60,7 @@ export function CarriersPanel() {
   const [removing, setRemoving] = useState({ open: false, carrier: null });
   const [blocked, setBlocked] = useState({ open: false, carrier: null });
   const [busy, setBusy] = useState(false);
+  const editing = usePermission("carriers.edit");
 
   function askRemove(carrier) {
     if (carrier.simCount > 0) setBlocked({ open: true, carrier });
@@ -68,13 +71,15 @@ export function CarriersPanel() {
     const { carrier } = removing;
     setBusy(true);
     try {
-      const result = await removeCarrier(carrier.id);
+      await removeCarrier(carrier.id);
       setRemoving((current) => ({ ...current, open: false }));
-      if (result.removed) toast.success(text.toasts.removed(carrier.name));
-      else setBlocked({ open: true, carrier: { ...carrier, simCount: result.simCount } });
+      toast.success(text.toasts.removed(carrier.name));
     } catch (error) {
       setRemoving((current) => ({ ...current, open: false }));
-      toast.error(error instanceof ApiError && error.status === 404 ? copy.errors.notFound : copy.errors.generic);
+      // 409: SIMs were moved onto the carrier after the list loaded.
+      const simCount = error instanceof ApiError && error.status === 409 ? Number(error.extensions.simCount) : NaN;
+      if (Number.isFinite(simCount)) setBlocked({ open: true, carrier: { ...carrier, simCount } });
+      else toast.error(errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -91,16 +96,20 @@ export function CarriersPanel() {
       className: "w-56 pr-3 text-right",
       cell: (carrier) => (
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" className="h-9 px-3" onClick={() => setForm({ open: true, carrier })}>
-            <Pencil aria-hidden="true" />
-            {text.rename}
-            <span className="sr-only">{text.rowContext(carrier.name)}</span>
-          </Button>
-          <Button type="button" variant="outline" size="sm" className="h-9 px-3" onClick={() => askRemove(carrier)}>
-            <Trash2 aria-hidden="true" />
-            {text.remove}
-            <span className="sr-only">{text.rowContext(carrier.name)}</span>
-          </Button>
+          <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+            <Button type="button" variant="outline" size="sm" className="h-9 px-3" disabled={!editing.allowed} onClick={() => setForm({ open: true, carrier })}>
+              <Pencil aria-hidden="true" />
+              {text.rename}
+              <span className="sr-only">{text.rowContext(carrier.name)}</span>
+            </Button>
+          </DisabledReason>
+          <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+            <Button type="button" variant="outline" size="sm" className="h-9 px-3" disabled={!editing.allowed} onClick={() => askRemove(carrier)}>
+              <Trash2 aria-hidden="true" />
+              {text.remove}
+              <span className="sr-only">{text.rowContext(carrier.name)}</span>
+            </Button>
+          </DisabledReason>
         </div>
       ),
     },
@@ -114,10 +123,12 @@ export function CarriersPanel() {
         <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
           {carriers ? text.count(carriers.length) : " "}
         </p>
-        <Button onClick={() => setForm({ open: true, carrier: null })} className="h-10 px-4">
-          <Plus aria-hidden="true" />
-          {text.add}
-        </Button>
+        <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+          <Button onClick={() => setForm({ open: true, carrier: null })} className="h-10 px-4" disabled={!editing.allowed}>
+            <Plus aria-hidden="true" />
+            {text.add}
+          </Button>
+        </DisabledReason>
       </div>
 
       <GlassCard variant="strong" className="flex flex-col gap-0 overflow-hidden p-0">

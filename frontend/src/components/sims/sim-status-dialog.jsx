@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { errorMessage } from "@/lib/api";
 import { setSimStatus } from "@/lib/data";
 import { formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
@@ -36,8 +37,9 @@ export function SimStatusDialog({ sim, open, onOpenChange }) {
       await setSimStatus(sim.id, target);
       toast.success(inactive ? copy.sims.toasts.inactive(number) : copy.sims.toasts.available(number));
       onOpenChange(false);
-    } catch {
-      toast.error(copy.errors.conflict);
+    } catch (error) {
+      // 409: the SIM was allocated in the meantime.
+      toast.error(errorMessage(error, { 409: copy.sims.toasts.statusBlocked }));
     } finally {
       setBusy(false);
     }

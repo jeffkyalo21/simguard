@@ -33,9 +33,10 @@ function onSessionExpired() {
 export class ApiError extends Error {
   /**
    * @param {{ status: number, title?: string, detail?: string,
-   *   errors?: Record<string, string[]>, cause?: unknown }} problem
+   *   errors?: Record<string, string[]>, extensions?: Record<string, unknown>,
+   *   cause?: unknown }} problem
    */
-  constructor({ status, title, detail, errors, cause }) {
+  constructor({ status, title, detail, errors, extensions, cause }) {
     super(detail || title || `Request failed with status ${status}`, { cause });
     this.name = "ApiError";
     /** 0 when the request never reached the server. */
@@ -43,6 +44,8 @@ export class ApiError extends Error {
     this.title = title ?? "";
     this.detail = detail ?? "";
     this.errors = errors ?? {};
+    /** Other ProblemDetails members, for example simCount on a 409. */
+    this.extensions = extensions ?? {};
   }
 }
 
@@ -118,11 +121,14 @@ export async function request(method, path, { body, query, signal, headers } = {
       throw new ApiError({ status: 0, title: "Network error" });
     }
 
+    const { type: _type, title, status: _status, detail, instance: _instance, errors, ...extensions } = problem;
+
     throw new ApiError({
       status: response.status,
-      title: problem.title,
-      detail: problem.detail ?? (typeof data === "string" ? data : undefined),
-      errors: problem.errors,
+      title,
+      detail: detail ?? (typeof data === "string" ? data : undefined),
+      errors,
+      extensions,
     });
   }
 
@@ -137,12 +143,19 @@ export const api = {
   delete: (path, options) => request("DELETE", path, options),
 };
 
-/** Short, user-facing message for an error. Never shows status codes. */
-export function errorMessage(error) {
+/**
+ * Short, user-facing message for a failed write. Never shows status codes
+ * or the backend's developer sentences. `messages` gives the action's own
+ * line for a status, for example { 409: "Return the SIM first." }.
+ * @param {unknown} error
+ * @param {Record<number, string>} [messages]
+ */
+export function errorMessage(error, messages = {}) {
   if (!(error instanceof ApiError)) {
     return copy.errors.generic;
   }
 
+  if (messages[error.status]) return messages[error.status];
   if (error.status === 0) return copy.errors.network;
   if (error.status === 400) return copy.errors.validation;
   if (error.status === 403) return copy.errors.forbidden;

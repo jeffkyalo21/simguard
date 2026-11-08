@@ -16,16 +16,17 @@ import { NotFoundContent } from "@/components/shared/not-found-content";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { activityText } from "@/components/sims/activity-text";
+import { activityText, activityTime } from "@/components/sims/activity-text";
 import { SimStatusDialog, canChangeStatus } from "@/components/sims/sim-status-dialog";
 import { TierDialog } from "@/components/sims/tier-dialog";
 import { Button } from "@/components/ui/button";
+import { usePermission } from "@/hooks/use-permission";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
 import { getSim, getSimUsage, listSimActivity, listSimAlerts, listSimAllocations } from "@/lib/data";
-import { formatDate, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
+import { formatDate, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.simProfile;
@@ -45,7 +46,7 @@ const allocationColumns = [
 ];
 
 const activityColumns = [
-  { key: "time", header: copy.columns.time, cell: (e) => formatDateTime(e.occurredAt) },
+  { key: "time", header: copy.columns.time, cell: activityTime },
   { key: "action", header: copy.columns.action, cell: activityText },
 ];
 
@@ -158,6 +159,8 @@ export function SimProfile({ id }) {
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
   const [tierDialog, setTierDialog] = useState({ open: false, sim: null });
   const [statusDialog, setStatusDialog] = useState({ open: false, sim: null });
+  const tierPermission = usePermission("sims.changeTier");
+  const statusPermission = usePermission("sims.changeStatus");
 
   const sim = simResource.data;
 
@@ -176,7 +179,9 @@ export function SimProfile({ id }) {
   if (!sim) return <ProfileSkeleton />;
 
   const number = formatPhone(sim.phoneNumber);
-  const blocked = !canChangeStatus(sim);
+  // The role reason wins: an Auditor cannot change any SIM.
+  const statusReason = statusPermission.reason ?? (canChangeStatus(sim) ? null : copy.sims.allocatedReason);
+  const blocked = statusReason !== null;
   const statusLabel = sim.status === "inactive" ? text.activate : text.suspend;
 
   return (
@@ -188,10 +193,17 @@ export function SimProfile({ id }) {
         badge={<StatusBadge status={sim.status} />}
         actions={
           <>
-            <Button variant="outline" className="touch-target h-10 px-4" onClick={() => setTierDialog({ open: true, sim })}>
-              {text.changeTier}
-            </Button>
-            <DisabledReason reason={copy.sims.allocatedReason} disabled={blocked}>
+            <DisabledReason reason={tierPermission.reason ?? ""} disabled={!tierPermission.allowed}>
+              <Button
+                variant="outline"
+                className="touch-target h-10 px-4"
+                disabled={!tierPermission.allowed}
+                onClick={() => setTierDialog({ open: true, sim })}
+              >
+                {text.changeTier}
+              </Button>
+            </DisabledReason>
+            <DisabledReason reason={statusReason ?? ""} disabled={blocked}>
               <Button
                 variant="outline"
                 className="touch-target h-10 px-4"

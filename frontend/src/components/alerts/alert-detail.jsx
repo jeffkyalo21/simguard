@@ -17,10 +17,11 @@ import { FormDialog } from "@/components/shared/form-dialog";
 import { NotFoundContent } from "@/components/shared/not-found-content";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
-import { activityText } from "@/components/sims/activity-text";
+import { activityText, activityTime } from "@/components/sims/activity-text";
 import { Button } from "@/components/ui/button";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
 import { getAlert, getSimRisk, listSimActivity, setAlertStatus } from "@/lib/data";
 import { GATE_BANDS, formatDate, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
@@ -62,6 +63,19 @@ function ReasonList({ reasons }) {
   );
 }
 
+/** One review button; `reason` says why it is disabled, null when it is not. */
+function AlertAction({ reason, busy, onClick, children }) {
+  const disabled = reason !== null || busy;
+  return (
+    <DisabledReason reason={reason ?? ""} disabled={reason !== null}>
+      <Button variant="outline" className="touch-target h-10 px-3" disabled={disabled} onClick={onClick}>{children}</Button>
+    </DisabledReason>
+  );
+}
+
+// 409: someone else moved the alert first; the page reloads it.
+const writeMessages = { 409: text.toasts.conflict };
+
 function Investigation({ alert }) {
   // The history ends on the alert's last detection day, not today: the demo
   // scores are in 2025.
@@ -73,6 +87,9 @@ function Investigation({ alert }) {
   const canClose = alert.status === "flagged" || alert.status === "escalated";
   const canReopen = alert.status === "cleared";
   const canConfirm = alert.status === "escalated";
+  const review = usePermission("alerts.review");
+  // The role reason wins over the status reason.
+  const reasonFor = (allowedNow) => review.reason ?? (allowedNow ? null : text.actionUnavailable);
 
   async function closeWithResolution(event) {
     event.preventDefault();
@@ -84,8 +101,8 @@ function Investigation({ alert }) {
       await setAlertStatus(alert.id, { status: "cleared", resolution: dialog.resolution, ...(resolutionNote ? { resolutionNote } : {}) });
       toast.success(dialog.resolution === "confirmedMisuse" ? text.toasts.confirmed : text.toasts.falsePositive);
       setDialog({ open: false, resolution: null });
-    } catch {
-      toast.error(copy.errors.generic);
+    } catch (error) {
+      toast.error(errorMessage(error, writeMessages));
     } finally {
       setBusy(false);
     }
@@ -96,8 +113,8 @@ function Investigation({ alert }) {
     try {
       await setAlertStatus(alert.id, { status });
       toast.success(status === "escalated" ? text.toasts.reopened : text.toasts.flagged);
-    } catch {
-      toast.error(copy.errors.generic);
+    } catch (error) {
+      toast.error(errorMessage(error, writeMessages));
     } finally {
       setBusy(false);
     }
@@ -112,7 +129,7 @@ function Investigation({ alert }) {
     { key: "status", header: copy.columns.status, cell: (item) => <RiskBadge level={item.status} /> },
   ];
   const activityColumns = [
-    { key: "time", header: copy.columns.time, cell: (entry) => formatDateTime(entry.occurredAt) },
+    { key: "time", header: copy.columns.time, cell: activityTime },
     { key: "action", header: copy.columns.action, cell: activityText },
   ];
 
@@ -124,18 +141,10 @@ function Investigation({ alert }) {
         badge={<div className="flex flex-wrap items-center gap-2"><RiskBadge level={alert.status} /><span className="text-sm text-muted-foreground">{text.riskLevel}: {copy.alerts.riskLevel[alert.riskLevel] ?? alert.riskLevel}</span><RiskBar score={alert.riskScore} /></div>}
         actions={
           <>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canClose || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canClose || busy} onClick={() => setDialog({ open: true, resolution: "confirmedMisuse" })}>{text.confirmedMisuse}</Button>
-            </DisabledReason>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canClose || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canClose || busy} onClick={() => setDialog({ open: true, resolution: "falsePositive" })}>{text.falsePositive}</Button>
-            </DisabledReason>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canReopen || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canReopen || busy} onClick={() => changeStatus("escalated")}>{text.reopen}</Button>
-            </DisabledReason>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canConfirm || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canConfirm || busy} onClick={() => changeStatus("flagged")}>{text.confirmFlagged}</Button>
-            </DisabledReason>
+            <AlertAction reason={reasonFor(canClose)} busy={busy} onClick={() => setDialog({ open: true, resolution: "confirmedMisuse" })}>{text.confirmedMisuse}</AlertAction>
+            <AlertAction reason={reasonFor(canClose)} busy={busy} onClick={() => setDialog({ open: true, resolution: "falsePositive" })}>{text.falsePositive}</AlertAction>
+            <AlertAction reason={reasonFor(canReopen)} busy={busy} onClick={() => changeStatus("escalated")}>{text.reopen}</AlertAction>
+            <AlertAction reason={reasonFor(canConfirm)} busy={busy} onClick={() => changeStatus("flagged")}>{text.confirmFlagged}</AlertAction>
           </>
         }
       />
