@@ -35,7 +35,18 @@ function RunStatus({ status }) {
 }
 
 const columns = [
-  { key: "type", header: text.type, cell: (run) => copy.imports.types[run.type] ?? run.type },
+  {
+    key: "type",
+    header: text.type,
+    cell: (run) => (
+      <span className="flex flex-col">
+        <span>{copy.imports.types[run.type] ?? run.type}</span>
+        {run.source === "carrier feed" && (
+          <span className="text-xs text-muted-foreground">{text.carrierFeed(run.carrierName ?? copy.common.noValue)}</span>
+        )}
+      </span>
+    ),
+  },
   { key: "file", header: text.file, cell: (run) => <span className="block max-w-56 truncate" title={run.fileName}>{run.fileName}</span> },
   { key: "uploader", header: text.uploader, cell: (run) => run.uploadedByEmail ?? copy.common.noValue },
   { key: "time", header: text.time, cell: (run) => formatDateTime(run.startedAt) },
@@ -45,12 +56,19 @@ const columns = [
     cell: (run) => (
       <span className="flex flex-col">
         <span className="tabular-nums">{text.rows(run.totalRows, run.inserted, run.updated, run.unchanged)}</span>
-        {(run.errorCount > 0 || run.skipInvalid) && (
-          <span className="text-xs text-muted-foreground">
-            {[run.errorCount > 0 && text.errorCount(run.errorCount), run.skipInvalid && text.skipped]
-              .filter(Boolean)
-              .join(", ")}
-          </span>
+        {run.source === "carrier feed" ? (
+          <>
+            {run.invalidRows > 0 && <span className="text-xs text-muted-foreground">{text.rejected(run.invalidRows)}</span>}
+            {run.status === "failed" && run.message && <span className="max-w-72 text-xs text-muted-foreground">{run.message}</span>}
+          </>
+        ) : (
+          (run.errorCount > 0 || run.skipInvalid) && (
+            <span className="text-xs text-muted-foreground">
+              {[run.errorCount > 0 && text.errorCount(run.errorCount), run.skipInvalid && text.skipped]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+          )
         )}
       </span>
     ),
