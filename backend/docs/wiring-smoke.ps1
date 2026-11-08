@@ -12,7 +12,10 @@
       allowance table; the billing cycle of one SIM; the fleet analytics
       with its filters and 400s; the as-of date on the dashboard and the
       SIM usage; allowance and monthly cost on SIM responses; the risk
-      history `to` date; departmentName on allocations.
+      history `to` date; departmentName on allocations. Part 2: the
+      field named on a duplicate SIM 409, occurredOn on alert activity, and
+      applying a tier recommendation (runs one with ?force=true, needs the
+      ML service).
 
     The allocation check creates a department, an employee and one
     allocation of an available SIM, then returns the SIM. The per-SIM
@@ -302,5 +305,51 @@ Check-True 'Allocation response has the department name' ($allocation.Data.depar
 $listed = @((Invoke-Api GET "/api/allocations?employeeId=$($employee.Data.id)&active=true" $null $auditor).Data.items | Where-Object { $_.id -eq $allocation.Data.id })
 Check-True 'Allocation list item has the department name' (($listed.Count -eq 1) -and ($listed[0].departmentName -eq "Wiring Dept $runId"))
 Check 'Officer returns the SIM' 200 (Invoke-Api POST "/api/allocations/$($allocation.Data.id)/return" $null $officer)
+
+# --- SIM duplicate fields (part 2) ------------------------------------------
+$dupPhone = Invoke-Api POST '/api/sims' @{ phoneNumber = $sim.phoneNumber; iccid = "89254$runId".PadRight(19, '7'); carrierId = $sim.carrierId; planType = 'support'; monthlyCost = 0 } $officer
+Check 'Duplicate phone number' 409 $dupPhone
+Check-True 'Duplicate phone 409 names the phoneNumber field' ($null -ne $dupPhone.Data.errors.phoneNumber)
+$dupIccid = Invoke-Api POST '/api/sims' @{ phoneNumber = '+254799' + ("$runId".Substring("$runId".Length - 6)); iccid = $sim.iccid; carrierId = $sim.carrierId; planType = 'support'; monthlyCost = 0 } $officer
+Check 'Duplicate ICCID' 409 $dupIccid
+Check-True 'Duplicate ICCID 409 names the iccid field' ($null -ne $dupIccid.Data.errors.iccid)
+
+# --- Activity occurredOn (part 2) -------------------------------------------
+$alert = @((Invoke-Api GET '/api/alerts?pageSize=1' $null $officer).Data.items) | Select-Object -First 1
+$activity = @((Invoke-Api GET "/api/sims/$($alert.simId)/activity?pageSize=100" $null $officer).Data.items)
+$opened = @($activity | Where-Object { $_.kind -eq 'alertOpened' -and $_.referenceId -eq $alert.id }) | Select-Object -First 1
+Check-True 'alertOpened activity carries the detection date as occurredOn' ($null -ne $opened -and $opened.occurredOn -eq $alert.detectedOn) "occurredOn=$($opened.occurredOn) detectedOn=$($alert.detectedOn)"
+Check-True 'Other activity rows have no occurredOn' (@($activity | Where-Object { $_.kind -ne 'alertOpened' -and $null -ne $_.occurredOn }).Count -eq 0)
+
+# --- Tier recommendation apply (part 2) -------------------------------------
+# ?force=true skips the run interval (Development only), so the check can
+# repeat on the same database.
+$run = Invoke-Api POST '/api/tier-recommendations/run?force=true' $null $officer
+Check-True 'Officer starts a tier recommendation run' (@(202, 409) -contains $run.Status) "status=$($run.Status)"
+for ($i = 0; $i -lt 60; $i++) {
+    $tierStatus = (Invoke-Api GET '/api/tier-recommendations/status' $null $officer).Data
+    if (-not $tierStatus.running) { break }
+    Start-Sleep -Seconds 2
+}
+Check-True 'Tier recommendation run finished' (-not $tierStatus.running) "status=$($tierStatus.lastRun.status)"
+$open = @((Invoke-Api GET '/api/tier-recommendations?status=open&pageSize=5' $null $auditor).Data.items)
+Check-True 'Open tier recommendations exist' ($open.Count -gt 0) "open=$($open.Count)"
+if ($open.Count -gt 0) {
+    $target = $open[0]
+    Check 'Auditor cannot apply' 403 (Invoke-Api POST "/api/tier-recommendations/$($target.id)/apply" $null $auditor)
+    Check 'Admin cannot apply' 403 (Invoke-Api POST "/api/tier-recommendations/$($target.id)/apply" $null $admin)
+    $applied = Invoke-Api POST "/api/tier-recommendations/$($target.id)/apply" $null $officer
+    Check 'Officer applies a recommendation' 200 $applied
+    Check-True 'Applied recommendation has status applied and appliedAt' (($applied.Data.status -eq 'applied') -and ($null -ne $applied.Data.appliedAt))
+    $after = (Invoke-Api GET "/api/sims/$($target.simId)" $null $officer).Data
+    Check-True 'SIM is now on the recommended tier' ($after.tier -eq $target.recommendedTier) "tier=$($after.tier)"
+    Check 'Applying again' 409 (Invoke-Api POST "/api/tier-recommendations/$($target.id)/apply" $null $officer)
+    Check 'Dismissing an applied recommendation' 409 (Invoke-Api POST "/api/tier-recommendations/$($target.id)/dismiss" $null $officer)
+    $appliedList = @((Invoke-Api GET '/api/tier-recommendations?status=applied&pageSize=100' $null $auditor).Data.items | Where-Object { $_.id -eq $target.id })
+    Check-True 'Applied filter lists it' ($appliedList.Count -eq 1)
+    $audit = @((Invoke-Api GET '/api/audit-logs?action=tier_recommendation.applied&pageSize=5' $null $auditor).Data.items)
+    Check-True 'Apply is in the audit log' ($audit.Count -gt 0)
+}
+Check 'Apply unknown recommendation' 404 (Invoke-Api POST '/api/tier-recommendations/999999/apply' $null $officer)
 
 Write-Results
