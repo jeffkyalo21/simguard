@@ -100,9 +100,12 @@ and body come back unchanged (problem details included), with the
 - Backend down or timed out (30 s; the `/api/auth` routes wait 15 s): 502
   `{ error: { code: "network" } }`.
 - Cross-origin write: 403 `{ error: { code: "cross_origin" } }`.
-- Paths with `..` or empty segments, and `auth/*` (except `GET auth/events`,
-  the auth event log) are refused with 404 `{ error: { code: "not_found" } }`,
-  so tokens can only be issued through the routes above.
+- Paths with `..` or empty segments, and `auth/*` except four routes that
+  return no token, are refused with 404 `{ error: { code: "not_found" } }`, so
+  tokens can only be issued through the routes above. The four are
+  `GET auth/events` (the auth event log), `PUT auth/me` (own name),
+  `POST auth/mfa/recovery-codes` and `POST auth/me/delete` (see Profile below).
+  The list is `FORWARDED_AUTH_ROUTES` in `src/lib/auth/core.js`.
 
 `src/lib/api.js` uses it: requests go to `/api/backend/...` with
 `credentials: "same-origin"`; a 401 sends the browser to
@@ -141,7 +144,8 @@ false` to each page silences them.
 | Dashboard            |       |       yes        |   yes   |
 | SIMs, Allocations    |       |       yes        |   yes   |
 | Alerts, Usage        |       |       yes        |   yes   |
-| Settings (carriers, departments) | |    yes        |   yes   |
+| Settings: Carriers tab |       |       yes        |   yes   |
+| Settings: Profile tab  |  yes  |       yes        |   yes   |
 | Imports              |       |       yes        |         |
 | Tier recommendations |       |       yes        |         |
 | Audit log            |  yes  |                  |   yes   |
@@ -159,6 +163,30 @@ false` to each page silences them.
   the map are not guarded.
 - `can(role, action)` and `deniedReason(role, action)` are for disabled
   buttons with a reason ("Auditors have read-only access").
+
+## Profile (Settings, Profile tab)
+
+Every role has it; the Admin sees only this tab. It holds four sections.
+
+- **Your details:** name (editable, `PUT auth/me`), email and role (read only).
+- **Password:** the existing `/api/auth/change-password` route handler; the
+  new token replaces the session, so the user stays signed in.
+- **Two-factor:** shows that it is on (it cannot be turned off) and makes 10
+  new recovery codes after the password and a current 6 digit code
+  (`POST auth/mfa/recovery-codes`). The codes are shown once in a dialog that
+  does not close on Escape or an outside click; "Copy codes" and "I have saved
+  them" are its buttons.
+- **Delete my account** (separate danger area): a dialog lists what happens and
+  says it cannot be undone, then asks for the password and a current code
+  (`POST auth/me/delete`). On success the session cookies are dropped and the
+  browser does a full page load of the landing page. A wrong password or code
+  shows on the field (400); a 409 shows the last Admin message. An Admin gets
+  the button disabled with the reason in plain text next to it.
+
+The password and code dialog is `confirm-identity-dialog.jsx`: Radix Dialog
+(focus is trapped and returns to the button that opened it, Escape and Cancel
+close it), the password field first, the error summary takes focus after a
+failed try. Its text is in `copy.settings.profile`.
 
 ## Running it locally
 
