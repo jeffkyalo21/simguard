@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Play } from "lucide-react";
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -26,6 +27,7 @@ const text = copy.admin;
 // While a run is queued or running the page checks again this often.
 const POLL_MS = 3000;
 const ACTIVE = new Set(["queued", "running"]);
+const TAB_KEYS = Object.keys(text.tabs);
 
 function Fact({ label, children }) {
   return (
@@ -56,7 +58,14 @@ export function AdminView() {
   const running = usePermission("scoring.run");
   const resource = useResource(() => getScoringStatus(), []);
   const [busy, setBusy] = useState(false);
-  const [tab, setTab] = useState("scoring");
+  // ?tab= opens a tab directly (the top bar bell links to ?tab=requests).
+  const requested = useSearchParams().get("tab");
+  const [tab, setTab] = useState(TAB_KEYS.includes(requested) ? requested : "scoring");
+  const [seenRequest, setSeenRequest] = useState(requested);
+  if (requested !== seenRequest) {
+    setSeenRequest(requested);
+    if (TAB_KEYS.includes(requested)) setTab(requested);
+  }
   const data = resource.data;
   const active = Boolean(data?.runs.some((run) => ACTIVE.has(run.status)));
 

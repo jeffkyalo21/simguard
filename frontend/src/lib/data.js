@@ -127,6 +127,19 @@ export function listAlerts({ status, type, simId, minScore, sort, order, page, p
   return api.get("/alerts", { query: { status, type, simId, minScore, sort, order, page, pageSize } });
 }
 
+/**
+ * How many alerts are open (flagged or escalated, not cleared), for the top
+ * bar. Two single-row reads of GET /alerts; only the totals are used.
+ * @returns {Promise<number>}
+ */
+export async function countOpenAlerts() {
+  const [flagged, escalated] = await Promise.all([
+    listAlerts({ status: "flagged", pageSize: 1 }),
+    listAlerts({ status: "escalated", pageSize: 1 }),
+  ]);
+  return flagged.total + escalated.total;
+}
+
 /** GET /alerts/{id}, with the SIM, current allocation and recent alerts. */
 export function getAlert(id) {
   return api.get(`/alerts/${id}`);
@@ -479,6 +492,15 @@ export function runScoring() {
  */
 export function listAccessRequests({ status, page, pageSize } = {}) {
   return api.get("/access-requests", { query: { status, page, pageSize } });
+}
+
+/**
+ * How many access requests wait for a decision, for the top bar. Admin only.
+ * @returns {Promise<number>}
+ */
+export async function countPendingAccessRequests() {
+  const page = await listAccessRequests({ status: "pending", pageSize: 1 });
+  return page.total;
 }
 
 /**
