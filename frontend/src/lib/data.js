@@ -367,6 +367,38 @@ export function removeCarrier(id) {
   return write(api.delete(`/carriers/${id}`));
 }
 
+/* ------------------------------------------------------- Carrier usage feed */
+
+/**
+ * PUT /carriers/{id}/feed. `apiKey` is optional: leave it out to keep the
+ * saved key. The key is never returned, only `feedKeySet`.
+ * @param {number} id
+ * @param {{ baseUrl: string, enabled: boolean, startDate?: string, apiKey?: string }} settings
+ */
+export function saveCarrierFeed(id, { baseUrl, enabled, startDate, apiKey }) {
+  const body = { baseUrl: String(baseUrl ?? "").trim(), enabled: Boolean(enabled) };
+  if (startDate) body.startDate = startDate;
+  if (apiKey) body.apiKey = apiKey;
+  return write(api.put(`/carriers/${id}/feed`, body));
+}
+
+/**
+ * POST /carriers/{id}/feed/test. Always 200 when the call was made:
+ * `{ ok, message, date }` says how the carrier answered. Typed values are
+ * tried without saving them; a missing one comes from the saved settings.
+ */
+export function testCarrierFeed(id, { baseUrl, apiKey } = {}) {
+  const body = {};
+  if (baseUrl) body.baseUrl = String(baseUrl).trim();
+  if (apiKey) body.apiKey = apiKey;
+  return api.post(`/carriers/${id}/feed/test`, body);
+}
+
+/** POST /carriers/{id}/feed/sync: starts a run (202); 409 when one is running. */
+export function syncCarrierFeed(id) {
+  return write(api.post(`/carriers/${id}/feed/sync`));
+}
+
 /* ---------------------------------------------------- Tier recommendations */
 
 /**
