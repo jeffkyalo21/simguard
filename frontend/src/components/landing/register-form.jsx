@@ -119,7 +119,7 @@ export function RegisterForm({ doneAction, idPrefix = "register" }) {
   if (done) {
     return (
       <div ref={successRef} tabIndex={-1} role="status" className="lead-success flex flex-col items-start gap-4 outline-none">
-        <CircleCheck className="size-8 text-risk-cleared-foreground" aria-hidden="true" />
+        <CircleCheck className="size-8 text-foreground" aria-hidden="true" />
         <p className="text-lg font-medium">{text.success}</p>
         <p className="text-sm text-muted-foreground">{text.successNote}</p>
         {doneAction}

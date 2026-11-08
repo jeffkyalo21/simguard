@@ -115,7 +115,7 @@ export function LeadForm({ kind = "contact", submitLabel, wide = false }) {
   if (done) {
     return (
       <div ref={successRef} tabIndex={-1} className="lead-success flex flex-col items-start gap-4 outline-none">
-        <CircleCheck className="size-8 text-risk-cleared-foreground" aria-hidden="true" />
+        <CircleCheck className="size-8 text-foreground" aria-hidden="true" />
         <p className="text-lg font-medium">{text.success}</p>
         <Button type="button" variant="outline" onClick={reset} className="h-11 px-5">
           {copy.landing.contact.again}
