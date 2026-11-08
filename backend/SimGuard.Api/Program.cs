@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
+using SimGuard.Api.Email;
 using SimGuard.Api.Endpoints;
 using SimGuard.Api.Ml;
 using SimGuard.Api.Scoring;
@@ -27,6 +28,9 @@ builder.Services.AddMlServiceClient(builder.Configuration);
 // Scoring runs: queue, runner and the background worker.
 builder.Services.AddScoringPipeline(builder.Configuration);
 builder.Services.AddTierRecommendations(builder.Configuration);
+
+// Transactional email through Brevo. See backend/docs/access-requests.md.
+builder.Services.AddEmail(builder.Configuration);
 
 // Identity, JWT bearer, authorization policies, CORS, rate limiting and
 // Swagger with a Bearer scheme. See backend/docs/auth.md.

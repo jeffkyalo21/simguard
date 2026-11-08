@@ -51,17 +51,48 @@ emailed: the Admin passes the temporary password on.
 ## Reviewing
 
 `PATCH /api/access-requests/{id}/status` with `{ "status": "approved" }` or
-`{ "status": "declined" }`. Only a pending request can be reviewed (else
+`{ "status": "declined" }`. With `approved` the body may also carry
+`"temporaryPassword"` (at most 128 characters): see Email below. Only a pending request can be reviewed (else
 409). Approving does not create the account: it records that the Admin
 dealt with the request. The review writes the audit entry
 `user.access_request_reviewed` (category `system`, so the Admin sees it)
 with `oldValues` `{ accessRequestId, status }` and `newValues`
 `{ accessRequestId, status, email, role }`.
 
+## Email
+
+Sent through Brevo's transactional API (`POST /v3/smtp/email`), from
+`no-reply@mail.sim-guard.app` by default (the domain must be verified in
+Brevo). Three emails:
+
+| When | To | Content |
+| ---- | -- | ------- |
+| A new request is stored | the visitor | request received (not sent for a repeated pending email) |
+| `approved` with `temporaryPassword` | the visitor | sign-in link, email and temporary password. Sent only when an account with that email exists. The password is never stored or audited |
+| `declined` | the visitor | short notice, no reason |
+
+An email never fails the request. The review response gets an additive
+`emailSent`: `true` or `false` when an email was due, `null` when not (no
+password given). `false` means the Admin should pass the details on by hand.
+Without `Brevo:ApiKey` nothing is sent and `emailSent` is `false`.
+
+| Setting | Default | Note |
+| ------- | ------- | ---- |
+| `Brevo:ApiKey` | none | user-secrets or `Brevo__ApiKey`; never committed |
+| `Brevo:SenderEmail` | `no-reply@mail.sim-guard.app` | verified sender in Brevo |
+| `Brevo:SenderName` | `SimGuard` | |
+| `Brevo:SignInUrl` | `http://localhost:3000/login` | link in the account-ready email; set it to the real site |
+| `Brevo:BaseUrl` | `https://api.brevo.com` | override only to test against a stub |
+| `Brevo:TimeoutSeconds` | 10 | |
+
+The received email goes out in the background, so the form answers at the
+same speed for a new and a repeated email. Each address can still trigger
+one email per pending request, within the rate limit above.
+
 ## Smoke test
 
 [access-requests-smoke.ps1](access-requests-smoke.ps1) checks this contract
-against a running Development API on a throwaway database. Start the API with
+against a running Development API on a throwaway database without a Brevo key. Start the API with
 `RateLimiting__Auth__PermitLimit=1000` and
 `RateLimiting__AccessRequests__PermitLimit=1000`, then run it with the same
 credentials setup as [roles-smoke.ps1](roles-smoke.ps1). Run it again with

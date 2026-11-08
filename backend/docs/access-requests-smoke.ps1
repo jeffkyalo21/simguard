@@ -15,6 +15,11 @@
       - the review writes a user.access_request_reviewed audit row that the
         Admin can read
       - the request form is rate limited (429) with -RateLimitOnly
+      - emails: by default the API has no Brevo key and reports emailSent
+        false. With -EmailStubLog <file> the API must run with Brevo__ApiKey
+        set and Brevo__BaseUrl pointing at a stub that appends one JSON line
+        per request ({ apiKey, body }) to that file; the script then checks
+        the three emails and that the password is in the account email
 
     Accounts are found like imports-smoke.ps1 does. Start the API with
     RateLimiting__Auth__PermitLimit=1000 and
@@ -29,7 +34,8 @@ param(
     [string]$AdminSecretsFile = (Join-Path $env:TEMP 'simguard-smoke-admin.json'),
     [string]$OfficerSecretsFile = (Join-Path $env:TEMP 'simguard-smoke-officer.json'),
     [string]$AuditorSecretsFile = (Join-Path $env:TEMP 'simguard-smoke-auditor.json'),
-    [switch]$RateLimitOnly
+    [switch]$RateLimitOnly,
+    [string]$EmailStubLog = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -332,6 +338,38 @@ Check 'Second review of the same request' 409 (Invoke-Api PATCH "/api/access-req
 $b = @($mine | Where-Object { $_.email -like 'visitor.b.*' })[0]
 $declined = Invoke-Api PATCH "/api/access-requests/$($b.id)/status" @{ status = 'declined' } $admin
 Check-True 'Admin declines' (($declined.Status -eq 200) -and ($declined.Data.status -eq 'declined')) "status=$($declined.Status)"
+
+# Email (the API runs without Brevo:ApiKey here, so nothing is really sent).
+Check-True 'Approve without a password: emailSent is null' (($done.Data.PSObject.Properties.Name -contains 'emailSent') -and ($null -eq $done.Data.emailSent))
+$stub = [bool]$EmailStubLog
+Check-True 'Decline reports whether the email was sent' ($declined.Data.emailSent -eq $stub) "emailSent=$($declined.Data.emailSent)"
+$c = New-Body 'c'
+Check 'Third request' 202 (Invoke-Api POST '/api/access-requests' $c)
+$cId = @((Invoke-Api GET '/api/access-requests?status=pending&pageSize=100' $null $admin).Data.items | Where-Object { $_.email -eq $c.email.ToLowerInvariant() })[0].id
+Check 'Password longer than 128 characters' 400 (Invoke-Api PATCH "/api/access-requests/$cId/status" @{ status = 'approved'; temporaryPassword = ('p' * 129) } $admin)
+$withPw = Invoke-Api PATCH "/api/access-requests/$cId/status" @{ status = 'approved'; temporaryPassword = 'Temp-pass-12345' } $admin
+Check-True 'Approve with a password but no account: reviewed, emailSent false' (($withPw.Status -eq 200) -and ($withPw.Data.status -eq 'approved') -and ($withPw.Data.emailSent -eq $false)) "status=$($withPw.Status)"
+
+# An approval for an email that has an account (the Officer) sends the sign-in email.
+$d = New-Body 'd'
+$d.email = $officerAccount.Email
+Check 'Request from an existing account email' 202 (Invoke-Api POST '/api/access-requests' $d)
+$dId = @((Invoke-Api GET '/api/access-requests?status=pending&pageSize=100' $null $admin).Data.items | Where-Object { $_.email -eq $d.email.ToLowerInvariant() })[0].id
+$sent = Invoke-Api PATCH "/api/access-requests/$dId/status" @{ status = 'approved'; temporaryPassword = 'Temp-pass-67890' } $admin
+Check-True 'Approve with a password for an existing account: emailSent matches the setup' (($sent.Status -eq 200) -and ($sent.Data.emailSent -eq $stub)) "emailSent=$($sent.Data.emailSent)"
+
+if ($stub) {
+    Start-Sleep -Milliseconds 500
+    $calls = @(Get-Content $EmailStubLog | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
+    $received = @($calls | Where-Object { $_.body.subject -like 'We received*' -and $_.body.to[0].email -eq $first.email.ToLowerInvariant() })
+    Check-True 'Received email: one per new request, not for the repeated email' ($received.Count -eq 1) "count=$($received.Count)"
+    $ready = @($calls | Where-Object { $_.body.subject -like 'Your SimGuard account*' })
+    Check-True 'Account email: one, to the Officer, with sign-in link, email and password' (($ready.Count -eq 1) -and ($ready[0].body.to[0].email -eq $officerAccount.Email.ToLowerInvariant()) -and ($ready[0].body.textContent -like '*Temp-pass-67890*') -and ($ready[0].body.textContent -like '*/login*') -and ($ready[0].body.htmlContent -like '*Temp-pass-67890*')) "count=$($ready.Count)"
+    Check-True 'No email carries the password of the visitor without an account' (@($calls | Where-Object { $_.body.textContent -like '*Temp-pass-12345*' }).Count -eq 0)
+    $decl = @($calls | Where-Object { $_.body.subject -like 'About your SimGuard*' })
+    Check-True 'Decline email sent to the declined visitor' (($decl.Count -eq 1) -and ($decl[0].body.to[0].email -like 'visitor.b.*'))
+    Check-True 'Sent from the verified sender with the API key header' (($ready[0].body.sender.email -eq 'no-reply@mail.sim-guard.app') -and ($ready[0].apiKey -eq 'test-key'))
+}
 
 # A reviewed email can ask again.
 Check 'After a decision the same email can ask again' 202 (Invoke-Api POST '/api/access-requests' $first)
