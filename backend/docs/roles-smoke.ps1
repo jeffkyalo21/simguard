@@ -372,7 +372,14 @@ $failEvents = Invoke-Api GET "/api/auth/events?type=login_failed&from=$from&page
 $sumOk = ($d.signInsPerDay | Measure-Object -Property succeeded -Sum).Sum
 $sumFail = ($d.signInsPerDay | Measure-Object -Property failed -Sum).Sum
 Check-True 'Sign-in totals match the auth events' (($sumOk -eq $okEvents.Data.total) -and ($sumFail -eq $failEvents.Data.total)) "status ok=$sumOk failed=$sumFail; events ok=$($okEvents.Data.total) failed=$($failEvents.Data.total)"
-$runs = Invoke-Api GET '/api/admin/scoring/status' $null $officer
+# Wait until no run is queued or running, then read both views again, so a run
+# that finishes between the two reads cannot make the counts differ.
+for ($i = 0; $i -lt 60; $i++) {
+    $runs = Invoke-Api GET '/api/admin/scoring/status' $null $officer
+    if (-not @($runs.Data.runs | Where-Object { $_.status -in @('queued', 'running') })) { break }
+    Start-Sleep -Seconds 1
+}
+$d = (Invoke-Api GET '/api/admin/system-status' $null $admin).Data
 $sinceDay = [datetime]::Parse($d.scoringRunsPerDay[0].date).ToUniversalTime()
 $finished = @($runs.Data.runs | Where-Object { $_.status -in @('succeeded', 'failed', 'partial') -and [datetime]$_.requestedAt -ge $sinceDay })
 $sumRunsOk = ($d.scoringRunsPerDay | Measure-Object -Property succeeded -Sum).Sum
