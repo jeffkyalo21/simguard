@@ -95,7 +95,7 @@ function AccountSection() {
             />
           )}
         </FormField>
-        <FormField id="profile-email" label={t.email} hint={t.readOnly}>
+        <FormField id="profile-email" label={t.email} hint={role === ROLES.admin ? t.readOnlyAdmin : t.readOnly}>
           {(field) => <Input {...field} value={email ?? ""} readOnly className="h-10" />}
         </FormField>
         <FormField id="profile-role" label={t.role}>
