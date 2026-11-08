@@ -17,7 +17,6 @@ import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { activityText, activityTime } from "@/components/sims/activity-text";
-import { SimStatusDialog, canChangeStatus } from "@/components/sims/sim-status-dialog";
 import { TierDialog } from "@/components/sims/tier-dialog";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/use-permission";
@@ -162,9 +161,7 @@ export function SimProfile({ id }) {
 
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
   const [tierDialog, setTierDialog] = useState({ open: false, sim: null });
-  const [statusDialog, setStatusDialog] = useState({ open: false, sim: null });
   const tierPermission = usePermission("sims.changeTier");
-  const statusPermission = usePermission("sims.changeStatus");
 
   const sim = simResource.data;
 
@@ -183,10 +180,6 @@ export function SimProfile({ id }) {
   if (!sim) return <ProfileSkeleton />;
 
   const number = formatPhone(sim.phoneNumber);
-  // The role reason wins: an Auditor cannot change any SIM.
-  const statusReason = statusPermission.reason ?? (canChangeStatus(sim) ? null : copy.sims.allocatedReason);
-  const blocked = statusReason !== null;
-  const statusLabel = sim.status === "inactive" ? text.activate : text.suspend;
 
   return (
     <>
@@ -194,7 +187,7 @@ export function SimProfile({ id }) {
 
       <PageHeader
         title={number}
-        badge={<StatusBadge status={sim.status} />}
+        badge={<StatusBadge status={sim.status} hint={copy.sims.statusHint} />}
         actions={
           <>
             <DisabledReason reason={tierPermission.reason ?? ""} disabled={!tierPermission.allowed}>
@@ -205,16 +198,6 @@ export function SimProfile({ id }) {
                 onClick={() => setTierDialog({ open: true, sim })}
               >
                 {text.changeTier}
-              </Button>
-            </DisabledReason>
-            <DisabledReason reason={statusReason ?? ""} disabled={blocked}>
-              <Button
-                variant="outline"
-                className="touch-target h-10 px-4"
-                disabled={blocked}
-                onClick={() => setStatusDialog({ open: true, sim })}
-              >
-                {statusLabel}
               </Button>
             </DisabledReason>
           </>
@@ -269,11 +252,6 @@ export function SimProfile({ id }) {
         sim={tierDialog.sim}
         open={tierDialog.open}
         onOpenChange={(open) => setTierDialog((current) => ({ ...current, open }))}
-      />
-      <SimStatusDialog
-        sim={statusDialog.sim}
-        open={statusDialog.open}
-        onOpenChange={(open) => setStatusDialog((current) => ({ ...current, open }))}
       />
     </>
   );

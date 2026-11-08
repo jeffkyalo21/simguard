@@ -312,11 +312,6 @@ export function updateSim(id, values) {
   return write(api.put(`/sims/${id}`, simBody(values)));
 }
 
-/** PATCH /sims/{id}/status with "available" or "inactive"; 409 while allocated. */
-export function setSimStatus(id, status) {
-  return write(api.patch(`/sims/${id}/status`, { status }));
-}
-
 /**
  * PATCH /sims/{id}/tier with a lower-case tier. Returns { simId, tier,
  * previousTier }; the allowance and cost follow the tier.

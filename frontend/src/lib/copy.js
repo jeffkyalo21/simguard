@@ -306,6 +306,7 @@ export const copy = {
     },
     rowContext: (number) => `for ${number}`,
     apply: "Apply",
+    carrierNote: "Accepting updates the tier in SimGuard. Ask your carrier to change the bundle.",
     dismiss: "Dismiss",
     run: "Run now",
     running: "A run is in progress. This page updates when it finishes.",
@@ -318,7 +319,8 @@ export const copy = {
     runStatus: { running: "running", succeeded: "finished", partial: "partly done", failed: "failed" },
     confirm: {
       applyTitle: "Apply this recommendation?",
-      applyText: (number, from, to) => `${number} moves from ${from} to ${to}. The change is recorded in the audit log.`,
+      applyText: (number, from, to) =>
+        `${number} moves from ${from} to ${to}. The change is recorded in the audit log. Accepting updates the tier in SimGuard. Ask your carrier to change the bundle.`,
       dismissTitle: "Dismiss this recommendation?",
       dismissText: (number) => `${number} keeps its tier. The same change is not suggested again for 90 days.`,
     },
@@ -773,7 +775,7 @@ export const copy = {
     confirmFlagged: "Confirm as flagged",
     actionUnavailable: "This action is not available for the current alert status.",
     noteLabel: "Resolution note (optional)",
-    noteHint: "Up to 500 characters.",
+    noteHint: "Record what you did, for example the suspension reference from your carrier.",
     confirmTitle: "Confirm misuse?",
     falseTitle: "Mark as false positive?",
     confirmText: "This alert will be cleared as confirmed misuse.",
@@ -1043,9 +1045,8 @@ export const copy = {
     count: (total) => `${total.toLocaleString("en-KE")} ${total === 1 ? "SIM" : "SIMs"}`,
     noMatch: "No SIMs match.",
     unassigned: "Unassigned",
-    setInactive: "Set inactive",
-    setAvailable: "Set available",
-    allocatedReason: "Return the SIM first",
+    // SIM status is read only: it comes from imports, the carrier feed and allocations.
+    statusHint: "Status comes from your carrier data.",
     form: {
       addTitle: "Add SIM",
       editTitle: "Edit SIM",
@@ -1073,26 +1074,15 @@ export const copy = {
         costInvalid: "Enter 0 or more.",
       },
     },
-    confirm: {
-      inactiveTitle: "Set SIM inactive?",
-      inactiveText: (number) => `${number} stops working until reactivated.`,
-      availableTitle: "Set SIM available?",
-      availableText: (number) => `${number} can be allocated again.`,
-    },
     toasts: {
       added: (number) => `${number} added.`,
       saved: (number) => `${number} saved.`,
-      inactive: (number) => `${number} set inactive.`,
-      available: (number) => `${number} set available.`,
       tierChanged: (tier) => `Tier changed to ${tier}.`,
-      statusBlocked: "This SIM is allocated now. Return it first.",
     },
   },
 
   simProfile: {
     changeTier: "Change tier",
-    suspend: "Suspend",
-    activate: "Activate",
     tierTitle: "Change tier",
     tierOption: (tier, gb) => `${tier}, ${gb} GB`,
     details: "Details",

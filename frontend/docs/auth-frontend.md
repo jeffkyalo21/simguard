@@ -152,7 +152,7 @@ false` to each page silences them.
 
 | Action                                                                 | Allowed for      |
 | ---------------------------------------------------------------------- | ---------------- |
-| `sims.edit`, `sims.changeStatus`, `sims.changeTier`, `allocations.edit`, `alerts.review`, `carriers.edit`, `departments.edit`, `employees.edit`, `imports.run`, `tierRecommendations.edit`, `settings.edit` | Security Officer |
+| `sims.edit`, `sims.changeTier`, `allocations.edit`, `alerts.review`, `carriers.edit`, `departments.edit`, `employees.edit`, `imports.run`, `tierRecommendations.edit`, `settings.edit` | Security Officer |
 | `auditLog.view`                                                        | Admin, Auditor   |
 | `users.manage`                                                         | Admin            |
 | `scoring.run` (Refresh scores on the Dashboard)                        | Security Officer |

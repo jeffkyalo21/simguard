@@ -44,7 +44,6 @@ export const PAGE_PATHS = Object.freeze({
 /** Action key -> roles that may perform it. */
 export const ACTIONS = Object.freeze({
   "sims.edit": [OFFICER],
-  "sims.changeStatus": [OFFICER],
   "sims.changeTier": [OFFICER],
   "allocations.edit": [OFFICER],
   "alerts.review": [OFFICER],

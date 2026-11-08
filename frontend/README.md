@@ -62,7 +62,7 @@ src/
     dashboard/  dashboard-view
     admin/      admin-view, system-health (status tiles and charts)
     tier-recommendations/  tier-recommendations-view
-    sims/       sims-view, sim-profile, sim-form-dialog, sim-status-dialog, tier-dialog
+    sims/       sims-view, sim-profile, sim-form-dialog, tier-dialog
     data/       data-table, pagination, filter-select, search-input, kpi-card,
                 section-card, bar-list, bar-chart, progress-bar, risk-bar, skeletons
     shared/     status-badge, form-dialog, confirm-dialog, form-field, busy-button,
@@ -95,7 +95,7 @@ src/
 
 Screens never call `fetch` themselves. They call functions in
 `src/lib/data.js` (`listSims`, `getSim`, `getDashboard`, `createSim`,
-`setSimStatus` and so on), which call the backend through `/api/backend` and
+`setSimTier` and so on), which call the backend through `/api/backend` and
 return its response shapes (`{ items, page, pageSize, total }` for lists).
 A failed call throws `ApiError` with the status, the field `errors` map and
 any extra ProblemDetails fields in `extensions`. Show it with

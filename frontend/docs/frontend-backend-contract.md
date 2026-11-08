@@ -61,7 +61,6 @@ sentence. Buttons for actions the role cannot do are disabled with a reason.
 | -------- | -------- | ----------------- |
 | `createSim` | `POST /sims` | The form picks a tier (imports use the tier as plan type), then calls `setSimTier`. 400 maps each field to a form line; 409 now carries `errors.phoneNumber` or `errors.iccid` (backend addition) and marks that field. |
 | `updateSim` | `PUT /sims/{id}` | Same as `createSim`; the plan type shows read only and the tier changes through `setSimTier`. |
-| `setSimStatus` | `PATCH /sims/{id}/status` | 409 (allocated SIM) shows a "end the allocation first" line. |
 | `setSimTier` | `PATCH /sims/{id}/tier` | Lower-case tiers; the screen reloads the SIM. |
 | `setAlertStatus` | `PATCH /alerts/{id}/status` | Sends `resolution` and the trimmed note only when clearing. 409 shows a "status changed meanwhile" line. |
 | `createAllocation` | `POST /allocations` | No date field: the backend uses the request time. "Handed over by" is an employee search that fills `assignedBy`. 409 marks the SIM as unavailable. |
