@@ -271,6 +271,13 @@ if ($RateLimitOnly) {
     $codes = @()
     for ($i = 1; $i -le 7; $i++) { $codes += (Invoke-Api POST '/api/access-requests' (New-Body "rl$i")).Status }
     Check-True 'Rate limit: 5 accepted, then 429' ((@($codes | Where-Object { $_ -eq 202 }).Count -eq 5) -and ($codes[5] -eq 429) -and ($codes[6] -eq 429)) ($codes -join ',')
+
+    # A call from a trusted proxy (this script runs on loopback) is counted per
+    # visitor address in X-Forwarded-For.
+    $other = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Post, "$BaseUrl/api/access-requests")
+    $other.Headers.Add('X-Forwarded-For', '203.0.113.77')
+    $other.Content = New-Object System.Net.Http.StringContent((New-Body 'xff' | ConvertTo-Json -Compress), [System.Text.Encoding]::UTF8, 'application/json')
+    Check 'Another visitor address (X-Forwarded-For) has its own limit' 202 (Read-Response ($client.SendAsync($other).GetAwaiter().GetResult()))
     Write-Results
     return
 }

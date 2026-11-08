@@ -32,7 +32,11 @@ emailed: the Admin passes the temporary password on.
 - The response does not say whether the email already has an account.
 - Rate limit: 5 requests per hour per client address
   (`RateLimiting:AccessRequests:PermitLimit` and `WindowSeconds`). Over the
-  limit gives 429.
+  limit gives 429. The web site calls this API for every visitor and sends
+  the visitor's address in `X-Forwarded-For`. The API uses it only when the
+  call comes from loopback or from an address listed in
+  `ForwardedHeaders:KnownProxies` (an array of IPs); otherwise every visitor
+  would share one limit. The same address is used for the sign-in limit.
 
 ## AccessRequest
 

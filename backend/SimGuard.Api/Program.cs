@@ -1,4 +1,6 @@
 
+using System.Net;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
@@ -30,6 +32,23 @@ builder.Services.AddTierRecommendations(builder.Configuration);
 // Swagger with a Bearer scheme. See backend/docs/auth.md.
 builder.AddSimGuardSecurity();
 
+// The Next.js server calls this API for every visitor, so the client address
+// (used by the rate limits) comes from X-Forwarded-For. It is trusted only
+// from loopback and the proxies listed in ForwardedHeaders:KnownProxies.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 1;
+
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (IPAddress.TryParse(proxy, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+    }
+});
+
 var app = builder.Build();
 
 if (app.Services.GetRequiredService<JwtSettings>().UsesEphemeralKey)
@@ -40,6 +59,7 @@ if (app.Services.GetRequiredService<JwtSettings>().UsesEphemeralKey)
 
 await IdentitySeeder.SeedAsync(app.Services);
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
