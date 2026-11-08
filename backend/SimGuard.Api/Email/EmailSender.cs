@@ -15,7 +15,7 @@ public sealed class BrevoOptions
     public string? ApiKey { get; set; }
 
     // Must be a sender on a domain verified in Brevo.
-    public string SenderEmail { get; set; } = "no-reply@mail.sim-guard.app";
+    public string SenderEmail { get; set; } = "no-reply@sim-guard.app";
 
     public string SenderName { get; set; } = "SimGuard";
 
