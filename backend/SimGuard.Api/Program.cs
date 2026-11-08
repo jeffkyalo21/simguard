@@ -66,6 +66,19 @@ if (app.Services.GetRequiredService<JwtSettings>().UsesEphemeralKey)
         "Jwt:Key is not set. Using a random signing key; tokens stop working when the API restarts.");
 }
 
+// Off by default. With Database:MigrateOnStartup=true (environment variable
+// Database__MigrateOnStartup) pending EF migrations are applied before
+// anything else, using the API's own connection. A failure stops the start so
+// a half migrated database is never served. dotnet ef is unaffected.
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    var migrationDb = migrationScope.ServiceProvider.GetRequiredService<SimGuardDbContext>();
+    var pending = (await migrationDb.Database.GetPendingMigrationsAsync()).Count();
+    app.Logger.LogInformation("Database:MigrateOnStartup is on. {Pending} pending migration(s).", pending);
+    await migrationDb.Database.MigrateAsync();
+}
+
 await IdentitySeeder.SeedAsync(app.Services);
 
 app.UseForwardedHeaders();
