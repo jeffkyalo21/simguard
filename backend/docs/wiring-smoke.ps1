@@ -302,9 +302,15 @@ $available = @((Invoke-Api GET '/api/sims?status=available&pageSize=5' $null $of
 $allocation = Invoke-Api POST '/api/allocations' @{ simId = $available.id; employeeId = $employee.Data.id; assignedBy = $employee.Data.id } $officer
 Check 'Officer allocates an available SIM' 201 $allocation
 Check-True 'Allocation response has the department name' ($allocation.Data.departmentName -eq "Wiring Dept $runId")
+$byName = @((Invoke-Api GET "/api/sims?search=Wiring Employee $runId" $null $officer).Data.items | Where-Object { $_.id -eq $available.id })
+Check-True 'SIM search finds the SIM by its holder name' ($byName.Count -eq 1)
+$byEmail = @((Invoke-Api GET "/api/sims?search=wiring-employee-$runId@" $null $officer).Data.items | Where-Object { $_.id -eq $available.id })
+Check-True 'SIM search finds the SIM by its holder email' ($byEmail.Count -eq 1)
 $listed = @((Invoke-Api GET "/api/allocations?employeeId=$($employee.Data.id)&active=true" $null $auditor).Data.items | Where-Object { $_.id -eq $allocation.Data.id })
 Check-True 'Allocation list item has the department name' (($listed.Count -eq 1) -and ($listed[0].departmentName -eq "Wiring Dept $runId"))
 Check 'Officer returns the SIM' 200 (Invoke-Api POST "/api/allocations/$($allocation.Data.id)/return" $null $officer)
+$afterReturn = @((Invoke-Api GET "/api/sims?search=Wiring Employee $runId" $null $officer).Data.items)
+Check-True 'SIM search no longer finds a returned SIM by its old holder' ($afterReturn.Count -eq 0)
 
 # --- SIM duplicate fields (part 2) ------------------------------------------
 $dupPhone = Invoke-Api POST '/api/sims' @{ phoneNumber = $sim.phoneNumber; iccid = "89254$runId".PadRight(19, '7'); carrierId = $sim.carrierId; planType = 'support'; monthlyCost = 0 } $officer

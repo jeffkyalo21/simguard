@@ -108,6 +108,9 @@ Feed rows never contain the API key. They are `organisation` rows.
   all its SIMs.
 - `GET /api/sims` takes `carrierId=` as a filter. The existing `operator=`
   filter matches the carrier name.
+- `GET /api/sims?search=` matches part of the phone number or ICCID, or the
+  name or email of the employee who holds the SIM now (an open allocation; a
+  returned one does not count). It is not case sensitive.
 - The SIM audit snapshots (`sim.created`, `sim.updated`, `sim.deleted`) carry
   `carrierId` and `operator`.
 - SIM responses add `allowance` (issue #14): the tier allowance of the SIM's

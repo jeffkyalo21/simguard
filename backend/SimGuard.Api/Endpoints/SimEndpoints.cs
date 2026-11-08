@@ -151,9 +151,15 @@ public static class SimEndpoints
             // Phone numbers are stored as +254..., so a search typed as 0712... is converted first.
             var phonePattern = SearchPattern.Contains(PhoneNumbers.ToSearchTerm(search)) ?? searchPattern;
 
+            // Also the name or email of the employee who holds the SIM now.
             query = query.Where(s =>
                 EF.Functions.ILike(s.PhoneNumber, phonePattern, SearchPattern.EscapeCharacter)
-                || EF.Functions.ILike(s.Iccid, searchPattern, SearchPattern.EscapeCharacter));
+                || EF.Functions.ILike(s.Iccid, searchPattern, SearchPattern.EscapeCharacter)
+                || db.Allocations.Any(a =>
+                    a.SimId == s.Id
+                    && a.ReturnDate == null
+                    && (EF.Functions.ILike(a.Employee.Name, searchPattern, SearchPattern.EscapeCharacter)
+                        || EF.Functions.ILike(a.Employee.Email, searchPattern, SearchPattern.EscapeCharacter))));
         }
 
         var result = await query
