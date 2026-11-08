@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { BookDemoButton } from "@/components/landing/demo-dialog";
+import { RegisterButton } from "@/components/landing/register-dialog";
 import { FooterWordmark } from "@/components/landing/footer-wordmark";
 import { InView } from "@/components/landing/in-view";
 import { ScrollLink } from "@/components/landing/scroll-link";
@@ -73,7 +73,7 @@ export function LandingFooter() {
                   </ScrollLink>
                 </li>
                 <li>
-                  <BookDemoButton className={linkClass}>{text.bookDemo}</BookDemoButton>
+                  <RegisterButton className={linkClass}>{text.registerLabel}</RegisterButton>
                 </li>
                 <li>
                   <Link href="/login" className={linkClass}>

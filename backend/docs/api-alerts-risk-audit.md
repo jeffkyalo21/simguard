@@ -33,24 +33,30 @@ change does not change it.
 `riskScore` (alerts) is a number from 0 to 1 with two decimals.
 `probability` (risk scores) is a number from 0 to 1 with up to four decimals.
 
-A reason explains one feature's share of a score:
+A reason explains one feature's share of a score. `feature` is the real ML
+feature name (for example `hotspot_sessions`, `billing_gap_mb`, `total_mb`),
+`value` is the scaled value the model saw, and `contribution` its SHAP
+contribution; the ML direction `increases_risk` is stored as `up` and
+`decreases_risk` as `down`. Scoring stores the top 5 reasons:
 
 ```json
-{ "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+{ "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
 ```
 
 ## Roles
 
 | Endpoint | Admin | SecurityOfficer | Auditor | Policy |
 | -------- | :---: | :-------------: | :-----: | ------ |
-| `GET /api/alerts`, `GET /api/alerts/{id}` | yes | yes | yes | `CanRead` |
-| `PATCH /api/alerts/{id}/status` | yes | yes | no | `CanReviewAlerts` |
-| `GET /api/sims/{id}/risk` | yes | yes | yes | `CanRead` |
-| `GET /api/risk-scores` | yes | yes | yes | `CanRead` |
-| `GET /api/sims/{id}/activity` | yes | yes | yes | `CanRead` |
-| `GET /api/dashboard/summary` | yes | yes | yes | `CanRead` |
-| `GET /api/audit-logs` | yes | no | yes | `CanReadAudit` |
-| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `CanUseDevTools` |
+| `GET /api/alerts`, `GET /api/alerts/{id}` | no | yes | yes | `OrgRead` |
+| `PATCH /api/alerts/{id}/status` | no | yes | no | `OrgWrite` |
+| `GET /api/sims/{id}/risk` | no | yes | yes | `OrgRead` |
+| `GET /api/risk-scores` | no | yes | yes | `OrgRead` |
+| `GET /api/sims/{id}/activity` | no | yes | yes | `OrgRead` |
+| `GET /api/dashboard/summary` | no | yes | yes | `OrgRead` |
+| `GET /api/audit-logs` | system entries only | no | yes | `AuditRead` |
+| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `DevTools` |
+
+The full matrix is in [auth.md](auth.md).
 
 ## Alerts
 
@@ -59,6 +65,14 @@ A reason explains one feature's share of a score:
 Returned by `GET /api/alerts` and in `needsReview` on the dashboard.
 `employeeName` and `departmentName` are the SIM's current allocation, or
 null when the SIM is not allocated.
+
+`detectedOn` and `lastDetectedOn` (additive, issue #14) are as-of dates
+(`YYYY-MM-DD`, UTC) of the scored usage days: the first sustained day that
+raised the alert and the latest one that updated it. `createdAt` stays the
+real time the alert was stored, so after a backfill `createdAt` is today
+while `detectedOn` can be months earlier. Both are null for alerts that
+were not raised by the scoring pipeline (for example the demo seed). How
+alerts are raised, typed and cooled down: [scoring-pipeline.md](scoring-pipeline.md).
 
 ```json
 {
@@ -72,12 +86,14 @@ null when the SIM is not allocated.
   "createdAt": "2026-11-02T14:05:00Z",
   "resolvedAt": null,
   "reasons": [
-    { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" },
-    { "feature": "distinctCellsPerDay", "value": 19, "contribution": 0.22, "direction": "up" }
+    { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" },
+    { "feature": "hotspot_sum_7d", "value": 1.92, "contribution": 0.52, "direction": "up" }
   ],
-  "modelVersion": "2026.10.1",
+  "modelVersion": "v1-3f9a1c2b7d4e",
   "employeeName": "Jane Wanjiru",
-  "departmentName": "Field Sales"
+  "departmentName": "Field Sales",
+  "detectedOn": "2025-03-12",
+  "lastDetectedOn": "2025-03-31"
 }
 ```
 
@@ -116,9 +132,9 @@ Query:
   "createdAt": "2026-11-02T14:05:00Z",
   "resolvedAt": "2026-11-03T08:30:00Z",
   "reasons": [
-    { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+    { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
   ],
-  "modelVersion": "2026.10.1",
+  "modelVersion": "v1-3f9a1c2b7d4e",
   "resolution": "falsePositive",
   "resolutionNote": "Device swap approved by IT.",
   "resolvedBy": { "id": 2, "name": "Smoke Officer", "email": "officer@simguard.local" },
@@ -147,7 +163,9 @@ Query:
       "createdAt": "2026-10-05T10:00:00Z",
       "resolvedAt": null
     }
-  ]
+  ],
+  "detectedOn": "2025-03-12",
+  "lastDetectedOn": "2025-03-31"
 }
 ```
 
@@ -200,17 +218,20 @@ Issue #14 fills `risk_scores` from the ML service: one row per SIM per day
   "bucket": "flag",
   "riskLevel": "high",
   "reasons": [
-    { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+    { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
   ],
-  "modelVersion": "2026.10.1",
+  "modelVersion": "v1-3f9a1c2b7d4e",
   "createdAt": "2026-11-03T02:00:00Z"
 }
 ```
 
 ### GET /api/sims/{id}/risk
 
-Query: `days` (default 90, 1 to 365). History covers the last `days`
-calendar days up to today (UTC), oldest first.
+Query: `days` (default 90, 1 to 365) and `to` (optional date). History
+covers the last `days` calendar days up to `to`, oldest first. Without `to`
+it ends today (UTC); the frontend sends the fleet's as-of date (the latest
+usage date, `asOf` on the dashboard) so demo data that ends on 2025-03-31
+still shows a history.
 
 200:
 
@@ -224,9 +245,9 @@ calendar days up to today (UTC), oldest first.
     "bucket": "flag",
     "riskLevel": "high",
     "reasons": [
-      { "feature": "distinctDevices7d", "value": 4, "contribution": 0.31, "direction": "up" }
+      { "feature": "hotspot_sessions", "value": 2.41, "contribution": 1.37, "direction": "up" }
     ],
-    "modelVersion": "2026.10.1",
+    "modelVersion": "v1-3f9a1c2b7d4e",
     "createdAt": "2026-11-03T02:00:00Z"
   },
   "history": [
@@ -264,7 +285,8 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
       "actorEmail": "officer@simguard.local",
       "action": null,
       "referenceType": "alert",
-      "referenceId": 17
+      "referenceId": 17,
+      "occurredOn": null
     },
     {
       "kind": "audit",
@@ -273,7 +295,8 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
       "actorEmail": "admin@simguard.local",
       "action": "sim.status_changed",
       "referenceType": "auditLog",
-      "referenceId": 88
+      "referenceId": 88,
+      "occurredOn": null
     }
   ],
   "page": 1,
@@ -284,7 +307,7 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
 
 | `kind` | Source | `referenceType` |
 | ------ | ------ | --------------- |
-| `alertOpened` | alert `createdAt` | `alert` |
+| `alertOpened` | alert `createdAt`; `occurredOn` is the alert's `detectedOn` | `alert` |
 | `alertCleared` | alert `resolvedAt` (cleared alerts) | `alert` |
 | `allocationStarted` | allocation `assignmentDate` | `allocation` |
 | `allocationEnded` | allocation `returnDate` | `allocation` |
@@ -294,6 +317,9 @@ Audit rows whose action starts with `alert.` or `allocation.` are left out
 because the alert and allocation entries already show them. `actorEmail` is
 the user who cleared the alert, or the acting user of the audit row; for
 allocations it is null (the assigner is an employee, named in `summary`).
+`occurredOn` (additive, issue #14) is set on `alertOpened` rows only: the
+scored day the alert was detected, which for backfilled alerts is long
+before the row was stored. Screens show it in place of `occurredAt`.
 404: unknown SIM.
 
 ## Dashboard
@@ -321,21 +347,32 @@ Query: `days` = `7`, `30` or `90` (default 7). Any other value is 400.
     "other": 0
   },
   "needsReview": [],
-  "tierChanges": [],
-  "dataWaste": null
+  "tierChanges": [{ "recommendation": "downgrade", "count": 14 }, { "recommendation": "upgrade", "count": 6 }],
+  "dataWaste": {
+    "paidMb": 1310720.0, "usedMb": 1004311.4, "unusedMb": 312004.2, "unusedPercent": 24,
+    "departments": [{ "name": "Sales", "unusedMb": 120330.5 }]
+  },
+  "asOf": "2025-03-31"
 }
 ```
+
+The window ends on `asOf`, the latest date in `daily_usage` (never the clock:
+the demo data ends on 2025-03-31). `from` is the start of the first of the
+`days` days (00:00Z) and `to` is the end of `asOf` (23:59:59Z). With no usage
+loaded, `asOf` is null and the window is the last `days` days up to now, as
+before.
 
 | Field | Meaning |
 | ----- | ------- |
 | `activeSims` | SIMs whose status is not `inactive` (now) |
 | `flagged` | alerts with status `flagged` (now, any age) |
 | `toReview` | alerts with status `escalated` (now, any age) |
-| `resolved` | alerts cleared within the window (`resolvedAt` in `from`..`to`) |
-| `alertsByType` | alerts created within the window, by type |
+| `resolved` | alerts detected within the window that are now `cleared` |
+| `alertsByType` | alerts detected within the window, by type (`detectedOn` in `from`..`to`; alerts without `detectedOn` count by `createdAt`) |
 | `needsReview` | the 5 most recent `flagged` or `escalated` alerts, as alert list items (with SIM and reasons) |
-| `tierChanges` | always `[]` for now: needs usage ingestion (later issue) |
-| `dataWaste` | always `null` for now: needs usage ingestion and #14 |
+| `tierChanges` | open tier recommendations, counted by `recommendation` (now) |
+| `dataWaste` | paid against used data over the window: paid is each SIM's tier bundle times `days`/30, unused is paid minus used per SIM (never below 0); `departments` are the 4 with most unused data, by current allocation (`name` null for unallocated SIMs). Null without usage |
+| `asOf` | latest `daily_usage` date, or null |
 
 ## Audit log
 
@@ -348,15 +385,22 @@ stays readable if the account is later changed. `oldValues` and `newValues`
 are the relevant fields before and after (null for create or delete). No
 passwords, password hashes, tokens or MFA secrets are ever stored.
 
+Every row also has a `category` and an `actorRole`. `category` is `system`
+for actions that start with `user`, `auth` or `role` (user management) and
+`organisation` for everything else, including `dev.demo_seeded`.
+`actorRole` is the caller's role from the access token when the row was
+written (`Admin`, `SecurityOfficer` or `Auditor`).
+
 | Action | Endpoint | `affectedSimId` |
 | ------ | -------- | --------------- |
 | `department.created`, `department.updated`, `department.deleted` | `/api/departments` | null |
 | `employee.created`, `employee.updated`, `employee.deleted` | `/api/employees` | null |
-| `sim.created`, `sim.updated`, `sim.status_changed` | `/api/sims` | the SIM |
+| `sim.created`, `sim.updated`, `sim.status_changed`, `sim.tier_changed` | `/api/sims` | the SIM |
 | `sim.deleted` | `DELETE /api/sims/{id}` | null (the SIM is gone; its id is in `oldValues`) |
 | `allocation.created`, `allocation.returned` | `/api/allocations` | the SIM |
 | `alert.status_changed` | `PATCH /api/alerts/{id}/status` | the alert's SIM |
 | `user.created`, `user.role_changed`, `user.disabled`, `user.enabled`, `user.mfa_reset`, `user.password_reset` | `/api/users` | null |
+| `import.committed` | `POST /api/imports/{type}?mode=commit` ([imports.md](imports.md)) | null |
 | `dev.demo_seeded` | `POST /api/dev/seed-demo` | null |
 
 Sign-in, MFA enrolment and a user's own password change are recorded in the
@@ -364,7 +408,9 @@ auth event log (`GET /api/auth/events`), not here.
 
 ### GET /api/audit-logs
 
-Admin or Auditor (SecurityOfficer gets 403). Query: `simId`, `actorEmail`
+Admin or Auditor (SecurityOfficer gets 403). Auditor sees every row. Admin,
+the SimGuard operator, sees only rows with `category` `system`; the other
+filters apply on top of that. Query: `simId`, `actorEmail`
 (case-insensitive, exact), `action` (exact), `from`, `to` (timestamps,
 inclusive), `page`, `pageSize`. Newest first.
 
@@ -378,8 +424,10 @@ inclusive), `page`, `pageSize`. Newest first.
       "timestamp": "2026-11-03T08:30:00Z",
       "actorUserId": 2,
       "actorEmail": "officer@simguard.local",
+      "actorRole": "SecurityOfficer",
       "employeeId": null,
       "action": "alert.status_changed",
+      "category": "organisation",
       "affectedSimId": 4,
       "affectedSimPhoneNumber": "+254712345678",
       "oldValues": { "alertId": 17, "status": "flagged", "resolution": null, "resolutionNote": null, "resolvedAt": null, "resolvedByUserId": null },
@@ -394,7 +442,9 @@ inclusive), `page`, `pageSize`. Newest first.
 
 `employeeId` is the legacy `audit_logs.user_id` column (an Employee id). It is
 kept for older rows and is null on rows written by the API.
-`affectedSimPhoneNumber` is null when the row has no SIM. 400: `from` after
+`affectedSimPhoneNumber` is null when the row has no SIM. `actorRole` is
+null on rows written before the AddAuditCategory migration (the role at the
+time was not recorded) and when the token had no role claim. 400: `from` after
 `to`, bad paging.
 
 ## Demo data (Development only)
@@ -456,3 +506,12 @@ Migration `AddAlertsRiskAndAudit`:
   `app_users`, set to null if the user is deleted) and `actor_email`;
   `affected_sim_id` is set to null when its SIM is deleted, so audit history
   survives a SIM deletion.
+
+Migration `AddAlertDetectedOn` (issue #14): `alerts` gets `detected_on` and
+`last_detected_on` (date, nullable) and index `idx_alerts_detected_on`.
+
+Migration `AddAuditCategory`: `audit_logs` gets `category` (varchar 20, not
+null, check `system` or `organisation`, indexed) and `actor_role` (varchar
+20, nullable). Existing rows are backfilled: `system` when `action` starts
+with `user`, `auth` or `role`, `organisation` otherwise; `actor_role` stays
+null.

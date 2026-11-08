@@ -4,9 +4,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { useAuth } from "@/components/auth/auth-provider";
 import { IconButton } from "@/components/layout/icon-button";
 import { Logo } from "@/components/layout/logo";
-import { isActive, navItems } from "@/components/layout/nav-items";
+import { isActive, navItemsFor } from "@/components/layout/nav-items";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { homeFor } from "@/lib/auth/core";
+import { canOpen } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
@@ -40,13 +43,14 @@ function visiblePageSearch() {
 }
 
 /**
- * The seven links in a glass pill. A shared ink indicator slides to the
+ * The role's links (seven at most) in a glass pill. A shared ink indicator slides to the
  * active link (FLIP: the new size is set at once, then a transform eases
  * from the old position, so only transform animates). Until it is
  * measured, and without JavaScript, the active link draws its own pill.
  */
 function CentreNav() {
   const pathname = usePathname();
+  const items = navItemsFor(useAuth().role);
   const navRef = useRef(null);
   const indicatorRef = useRef(null);
   const previous = useRef(null);
@@ -99,7 +103,7 @@ function CentreNav() {
       {/* No "relative" here: link offsets must be measured from the nav, the
           same origin the indicator is placed from. */}
       <ul className="flex items-center gap-0.5">
-        {navItems.map(({ href, label }) => (
+        {items.map(({ href, label }) => (
           <li key={href}>
             <Link
               href={href}
@@ -118,6 +122,7 @@ function CentreNav() {
 /** Below 1100px the links move into a sheet behind a "Menu" button. */
 function MenuSheet() {
   const pathname = usePathname();
+  const items = navItemsFor(useAuth().role);
   const [open, setOpen] = useState(false);
 
   return (
@@ -138,7 +143,7 @@ function MenuSheet() {
         </SheetHeader>
         <nav aria-label={copy.nav.label} className="px-3">
           <ul className="flex flex-col gap-1">
-            {navItems.map(({ href, label, Icon }) => {
+            {items.map(({ href, label, Icon }) => {
               const active = isActive(pathname, href);
               return (
                 <li key={href}>
@@ -250,25 +255,39 @@ function SearchControl() {
 }
 
 function UserMenu() {
+  const { email, role, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const roleLabel = copy.roles[role] ?? role;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <IconButton label={`${text.account}: ${copy.user.name}`}>
+        <IconButton label={`${text.account}: ${email}, ${roleLabel}`}>
           <Avatar className="size-8">
             <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-              {copy.user.initials}
+              {email.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         </IconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuLabel>{copy.user.name}</DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
+          <span className="text-xs text-muted-foreground">{text.signedInAs}</span>
+          <span className="truncate font-medium">{email}</span>
+          <span className="text-xs text-muted-foreground">{roleLabel}</span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/login">
-            <LogOut aria-hidden="true" />
-            {copy.actions.signOut}
-          </Link>
+        {/* A real button (menu item), not a link: signing out calls the
+            logout route handler, then loads /login. */}
+        <DropdownMenuItem
+          disabled={signingOut}
+          onSelect={() => {
+            setSigningOut(true);
+            signOut();
+          }}
+        >
+          <LogOut aria-hidden="true" />
+          {signingOut ? text.signingOut : copy.actions.signOut}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -280,12 +299,14 @@ function UserMenu() {
  * links (a Menu sheet below 1100px) and a cluster of round controls.
  */
 export function PillNav() {
+  const { role } = useAuth();
+
   return (
     <header className="sticky top-3 z-40 px-4 sm:px-6">
       <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-[1100px]:w-[200px]">
           <Link
-            href="/dashboard"
+            href={homeFor(role)}
             aria-label={copy.app.name}
             className="glass-pill touch-target flex size-11 shrink-0 items-center justify-center"
           >
@@ -298,7 +319,7 @@ export function PillNav() {
 
         <div className="flex justify-end min-[1100px]:w-[200px]">
           <div className="glass-pill relative flex items-center gap-0.5 p-0.5">
-            <SearchControl />
+            {canOpen(role, "sims") && <SearchControl />}
             <IconButton label={text.notifications} className="hidden sm:inline-flex">
               <Bell aria-hidden="true" />
               <span className="notify-dot" aria-hidden="true" />

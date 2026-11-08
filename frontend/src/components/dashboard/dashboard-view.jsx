@@ -12,11 +12,12 @@ import { SectionCard } from "@/components/data/section-card";
 import { ListSkeleton } from "@/components/data/skeletons";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
+import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { ErrorState } from "@/components/shared/error-state";
 import { Button } from "@/components/ui/button";
 import { useResource } from "@/hooks/use-resource";
 import { getDashboard, referenceData } from "@/lib/data";
-import { formatNumber, formatPhone, formatShortDate } from "@/lib/format";
+import { formatDate, formatNumber, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.dashboard;
@@ -29,11 +30,11 @@ const periodOptions = referenceData.periods.map((days) => ({
 }));
 
 const reviewColumns = [
-  { key: "sim", header: copy.columns.sim, link: true, cell: (row) => formatPhone(row.phoneNumber) },
+  { key: "sim", header: copy.columns.sim, link: true, cell: (row) => formatPhone(row.simPhoneNumber) },
   { key: "employee", header: copy.columns.employee, cell: (row) => row.employeeName ?? copy.sims.unassigned },
   { key: "risk", header: copy.columns.risk, cell: (row) => <RiskBar score={row.riskScore} /> },
-  { key: "type", header: copy.columns.type, cell: (row) => copy.alertTypes[row.type] },
-  { key: "date", header: copy.columns.date, cell: (row) => formatShortDate(row.createdAt) },
+  { key: "type", header: copy.columns.type, cell: (row) => copy.alertTypes[row.type] ?? row.type },
+  { key: "date", header: copy.columns.detected, cell: (row) => formatShortDate(row.detectedOn ?? row.createdAt) },
 ];
 
 function Kpis({ data }) {
@@ -85,7 +86,7 @@ function DataWaste({ waste }) {
       <div className="flex flex-col gap-3">
         <h3 className="text-sm font-medium text-muted-foreground">{text.topDepartments}</h3>
         <BarList
-          items={departments.map(({ name, unusedGb: value }) => ({ key: name, label: name, value }))}
+          items={departments.map(({ name, unusedGb: value }) => ({ key: name ?? "none", label: name ?? copy.sims.unassigned, value }))}
           formatValue={formatGb}
         />
       </div>
@@ -97,7 +98,6 @@ function TierChanges({ tiers }) {
   const rows = [
     { key: "upgrade", label: text.tierUpgrade, value: tiers.upgrade },
     { key: "downgrade", label: text.tierDowngrade, value: tiers.downgrade },
-    { key: "keep", label: text.tierKeep, value: tiers.keep },
   ];
 
   return (
@@ -138,9 +138,13 @@ export function DashboardView() {
         }
       />
 
+      {data?.asOf && <p className="-mt-2 text-sm text-muted-foreground">{text.asOf(formatDate(data.asOf))}</p>}
+
+      <SetupChecklist />
+
       {resource.error ? (
         <GlassCard>
-          <ErrorState onRetry={resource.retry} className="py-6" />
+          <ErrorState error={resource.error} onRetry={resource.retry} className="py-6" />
         </GlassCard>
       ) : (
         <Kpis data={data} />
@@ -169,7 +173,7 @@ export function DashboardView() {
               <BarList
                 items={d.alertsByType.map(({ type, count }) => ({
                   key: type,
-                  label: copy.alertTypes[type],
+                  label: copy.alertTypes[type] ?? type,
                   value: count,
                 }))}
               />
@@ -202,11 +206,22 @@ export function DashboardView() {
           />
         </SectionCard>
 
-        <SectionCard title={text.tierChanges}>
+        <SectionCard
+          title={text.tierChanges}
+          action={
+            <Link
+              href="/tier-recommendations"
+              className="link-accent touch-target inline-flex h-10 items-center px-2 text-sm font-medium"
+            >
+              {copy.actions.viewAll}
+              <span className="sr-only">{` ${copy.tierRecommendations.title}`}</span>
+            </Link>
+          }
+        >
           <DataState
             resource={resource}
             skeleton={<ListSkeleton rows={3} />}
-            isEmpty={(d) => d.tierChanges.keep + d.tierChanges.upgrade + d.tierChanges.downgrade === 0}
+            isEmpty={(d) => d.tierChanges.upgrade + d.tierChanges.downgrade === 0}
             emptyMessage={text.emptyTiers}
           >
             {(d) => <TierChanges tiers={d.tierChanges} />}

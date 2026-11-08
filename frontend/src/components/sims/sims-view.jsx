@@ -6,7 +6,6 @@ import { MoreHorizontal, Pencil, Plus, Power, PowerOff } from "lucide-react";
 import { DataTable } from "@/components/data/data-table";
 import { FilterSelect } from "@/components/data/filter-select";
 import { Pagination } from "@/components/data/pagination";
-import { ProgressBar } from "@/components/data/progress-bar";
 import { SearchInput } from "@/components/data/search-input";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
@@ -21,18 +20,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
-import { listSims, referenceData } from "@/lib/data";
-import { formatPhone } from "@/lib/format";
-import { useCarriers } from "@/lib/mock/store";
+import { useCarriers } from "@/hooks/use-reference";
+import { listSims, referenceData, toGb } from "@/lib/data";
+import { formatKes, formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const SEARCH_DELAY_MS = 250;
-const FILTER_KEYS = ["q", "status", "tier", "department", "operator"];
+const FILTER_KEYS = ["q", "status", "operator"];
 
 const statusOptions = referenceData.statuses.map((value) => ({ value, label: copy.simStatus[value] }));
-const tierOptions = referenceData.tiers.map(({ name }) => ({ value: name, label: copy.tiers[name] }));
-const departmentOptions = referenceData.departments.map((name) => ({ value: name, label: name }));
 
 /**
  * Writes the query to the URL with the History API, which Next.js syncs
@@ -53,11 +51,22 @@ function writeQuery(pathname, current, changes, { replace = false } = {}) {
   else window.history.pushState(null, "", url);
 }
 
-function RowActions({ sim, onEdit, onStatus }) {
+function RowActions({ sim, onEdit, onStatus, denied }) {
   const number = formatPhone(sim.phoneNumber);
   const target = nextStatus(sim);
   const blocked = !canChangeStatus(sim);
   const StatusIcon = target === "inactive" ? PowerOff : Power;
+
+  // A role that cannot change SIMs sees the menu button disabled, with why.
+  if (denied) {
+    return (
+      <DisabledReason reason={denied} disabled>
+        <Button variant="ghost" size="icon" className="touch-target size-9" disabled aria-label={`${copy.actions.rowActions(number)}. ${denied}`}>
+          <MoreHorizontal aria-hidden="true" />
+        </Button>
+      </DisabledReason>
+    );
+  }
 
   return (
     <DropdownMenu>
@@ -108,12 +117,13 @@ export function SimsView() {
   }, [search, urlQ, pathname]);
 
   const resource = useResource(
-    () => listSims({ ...query, carrierId: query.operator, page }),
-    [query.q, query.status, query.tier, query.department, query.operator, page]
+    () => listSims({ q: query.q, status: query.status, carrierId: query.operator, page }),
+    [query.q, query.status, query.operator, page]
   );
   const carriers = useCarriers();
   const operatorOptions = carriers.map((carrier) => ({ value: String(carrier.id), label: carrier.name }));
   const result = resource.data;
+  const editing = usePermission("sims.edit");
 
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
   const [form, setForm] = useState({ open: false, sim: null });
@@ -134,26 +144,14 @@ export function SimsView() {
     { key: "number", header: copy.columns.number, link: true, cell: (sim) => formatPhone(sim.phoneNumber) },
     { key: "employee", header: copy.columns.employee, cell: (sim) => sim.currentAllocation?.employeeName ?? <span className="text-muted-foreground">{copy.sims.unassigned}</span> },
     { key: "department", header: copy.columns.department, cell: (sim) => sim.currentAllocation?.departmentName ?? copy.common.noValue },
-    { key: "tier", header: copy.columns.tier, cell: (sim) => copy.tiers[sim.tier] },
+    { key: "tier", header: copy.columns.tier, cell: (sim) => copy.tiers[sim.tier ?? "none"] ?? sim.tier },
     {
-      key: "data",
-      header: copy.columns.dataUsed,
-      cell: (sim) => {
-        const limit = referenceData.tiers.find((t) => t.name === sim.tier).bundleGb;
-        return (
-          <div className="flex min-w-36 items-center gap-2">
-            <ProgressBar
-              value={sim.dataUsedGb}
-              max={limit}
-              label={copy.columns.dataUsed}
-              valueText={copy.units.ofGb(sim.dataUsedGb, limit)}
-              className="w-20"
-            />
-            <span className="text-muted-foreground tabular-nums">{copy.units.gb(sim.dataUsedGb)}</span>
-          </div>
-        );
-      },
+      key: "bundle",
+      header: copy.columns.bundle,
+      className: "tabular-nums",
+      cell: (sim) => (sim.allowance ? copy.units.gb(toGb(sim.allowance.dataMb)) : copy.common.noValue),
     },
+    { key: "cost", header: copy.columns.monthlyCost, className: "tabular-nums", cell: (sim) => formatKes(sim.monthlyCost) },
     { key: "status", header: copy.columns.status, cell: (sim) => <StatusBadge status={sim.status} /> },
     {
       key: "actions",
@@ -165,6 +163,7 @@ export function SimsView() {
           sim={sim}
           onEdit={(target) => setForm({ open: true, sim: target })}
           onStatus={(target) => setStatus({ open: true, sim: target })}
+          denied={editing.reason}
         />
       ),
     },
@@ -175,10 +174,12 @@ export function SimsView() {
       <PageHeader
         title={copy.pages.sims.title}
         actions={
-          <Button onClick={() => setForm({ open: true, sim: null })} size="lg" className="h-10 px-4">
-            <Plus aria-hidden="true" />
-            {copy.sims.add}
-          </Button>
+          <DisabledReason reason={editing.reason ?? ""} disabled={!editing.allowed}>
+            <Button onClick={() => setForm({ open: true, sim: null })} size="lg" className="h-10 px-4" disabled={!editing.allowed}>
+              <Plus aria-hidden="true" />
+              {copy.sims.add}
+            </Button>
+          </DisabledReason>
         }
       />
 
@@ -191,8 +192,6 @@ export function SimsView() {
           className="w-full sm:w-72"
         />
         <FilterSelect label={copy.simStatus.label} value={query.status} options={statusOptions} onChange={setFilter("status")} />
-        <FilterSelect label={copy.tiers.label} value={query.tier} options={tierOptions} onChange={setFilter("tier")} />
-        <FilterSelect label={copy.sims.department} value={query.department} options={departmentOptions} onChange={setFilter("department")} />
         <FilterSelect label={copy.sims.operator} value={query.operator} options={operatorOptions} onChange={setFilter("operator")} />
         <p className="ml-auto text-sm text-muted-foreground tabular-nums" aria-live="polite">
           {result ? copy.sims.count(result.total) : " "}

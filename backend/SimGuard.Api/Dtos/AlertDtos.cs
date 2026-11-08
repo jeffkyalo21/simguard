@@ -22,7 +22,9 @@ public record AlertListItem(
     JsonDocument Reasons,
     string? ModelVersion,
     string? EmployeeName,
-    string? DepartmentName)
+    string? DepartmentName,
+    DateOnly? DetectedOn,
+    DateOnly? LastDetectedOn)
 {
     // Employee and department come from the SIM's current allocation as
     // correlated subqueries, so a page is one SQL statement.
@@ -48,7 +50,9 @@ public record AlertListItem(
                 .Where(x => x.ReturnDate == null)
                 .OrderByDescending(x => x.AssignmentDate)
                 .Select(x => x.Employee.Department.Name)
-                .FirstOrDefault());
+                .FirstOrDefault(),
+            a.DetectedOn,
+            a.LastDetectedOn);
 }
 
 public record UserReference(int Id, string Name, string? Email);
@@ -87,7 +91,9 @@ public record AlertDetailResponse(
     UserReference? ResolvedBy,
     AlertSimSummary Sim,
     CurrentAllocationResponse? CurrentAllocation,
-    IReadOnlyList<RecentAlertItem> RecentAlerts);
+    IReadOnlyList<RecentAlertItem> RecentAlerts,
+    DateOnly? DetectedOn,
+    DateOnly? LastDetectedOn);
 
 public record RiskScoreItem(
     long Id,
@@ -141,7 +147,10 @@ public record ActivityItem(
     string? ActorEmail,
     string? Action,
     string ReferenceType,
-    int ReferenceId);
+    int ReferenceId,
+    // Additive (issue #14): the day an opened alert was detected, which for
+    // scored alerts is not the day the row was stored (occurredAt).
+    DateOnly? OccurredOn = null);
 
 public record DashboardSummaryResponse(
     int Days,
@@ -153,16 +162,19 @@ public record DashboardSummaryResponse(
     int Resolved,
     IReadOnlyDictionary<string, int> AlertsByType,
     IReadOnlyList<AlertListItem> NeedsReview,
-    IReadOnlyList<object> TierChanges,
-    object? DataWaste);
+    IReadOnlyList<TierChangeCount> TierChanges,
+    DataWasteResponse? DataWaste,
+    DateOnly? AsOf);
 
 public record AuditLogItem(
     int Id,
     DateTime Timestamp,
     int? ActorUserId,
     string? ActorEmail,
+    string? ActorRole,
     int? EmployeeId,
     string Action,
+    string Category,
     int? AffectedSimId,
     string? AffectedSimPhoneNumber,
     JsonDocument? OldValues,

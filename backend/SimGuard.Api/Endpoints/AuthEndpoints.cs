@@ -90,7 +90,7 @@ public static class AuthEndpoints
 
         group.MapGet("/events", GetAuthEvents)
             .WithName("GetAuthEvents")
-            .RequireAuthorization(AuthPolicies.CanReadAudit)
+            .RequireAuthorization(AuthPolicies.AuditRead)
             .Produces<PagedResult<AuthEventResponse>>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status401Unauthorized)

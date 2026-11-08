@@ -1,0 +1,17 @@
+namespace SimGuard.Api.Imports;
+
+// The import types the API knows, by type name.
+public static class ImportHandlers
+{
+    private static readonly IImportHandler[] All =
+    [
+        new DepartmentImportHandler(),
+        new EmployeeImportHandler(),
+        new SimImportHandler(),
+        new UsageImportHandler(),
+        new AllocationImportHandler()
+    ];
+
+    public static readonly IReadOnlyDictionary<string, IImportHandler> ByType =
+        All.ToDictionary(h => h.Type, StringComparer.Ordinal);
+}

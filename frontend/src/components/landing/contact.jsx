@@ -6,7 +6,7 @@ import { copy } from "@/lib/copy";
 
 const text = copy.landing.contact;
 
-/** Contact form. Also the no-JavaScript target of every Book a demo link. */
+/** Contact form: general questions. Requests for an account use Register. */
 export function Contact() {
   return (
     <InView as="section" id="contact" aria-labelledby="contact-title" threshold={0.1} className="px-4 pb-24 sm:px-6">

@@ -1,9 +1,15 @@
 
+using System.Net;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
+using SimGuard.Api.Email;
 using SimGuard.Api.Endpoints;
+using SimGuard.Api.Ml;
+using SimGuard.Api.Scoring;
+using SimGuard.Api.TierRecommendations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,9 +22,36 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddEndpointsApiExplorer();
 
+// Typed client for the ML service. See backend/docs/scoring-pipeline.md.
+builder.Services.AddMlServiceClient(builder.Configuration);
+
+// Scoring runs: queue, runner and the background worker.
+builder.Services.AddScoringPipeline(builder.Configuration);
+builder.Services.AddTierRecommendations(builder.Configuration);
+
+// Transactional email through Brevo. See backend/docs/access-requests.md.
+builder.Services.AddEmail(builder.Configuration);
+
 // Identity, JWT bearer, authorization policies, CORS, rate limiting and
 // Swagger with a Bearer scheme. See backend/docs/auth.md.
 builder.AddSimGuardSecurity();
+
+// The Next.js server calls this API for every visitor, so the client address
+// (used by the rate limits) comes from X-Forwarded-For. It is trusted only
+// from loopback and the proxies listed in ForwardedHeaders:KnownProxies.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+    options.ForwardLimit = 1;
+
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (IPAddress.TryParse(proxy, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+    }
+});
 
 var app = builder.Build();
 
@@ -30,6 +63,7 @@ if (app.Services.GetRequiredService<JwtSettings>().UsesEphemeralKey)
 
 await IdentitySeeder.SeedAsync(app.Services);
 
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -54,6 +88,17 @@ app.MapGet("/", () => Results.Ok(new
 .WithName("GetApiStatus")
 .AllowAnonymous();
 
+// For hosting probes: anonymous, checks only the database, says nothing
+// about the ML service or the data.
+app.MapGet("/health", async (
+    SimGuardDbContext db,
+    CancellationToken cancellationToken) =>
+    await db.Database.CanConnectAsync(cancellationToken)
+        ? Results.Ok(new { status = "healthy" })
+        : Results.Json(new { status = "unhealthy" }, statusCode: StatusCodes.Status503ServiceUnavailable))
+.WithName("GetHealth")
+.AllowAnonymous();
+
 app.MapGet("/health/database", async (
     SimGuardDbContext db,
     CancellationToken cancellationToken) =>
@@ -67,7 +112,7 @@ app.MapGet("/health/database", async (
         : Results.Problem("Database connection failed.", statusCode: StatusCodes.Status503ServiceUnavailable);
 })
 .WithName("CheckDatabaseHealth")
-.RequireAuthorization(AuthPolicies.CanRead);
+.RequireAuthorization(AuthPolicies.AnyRole);
 
 var api = app.MapGroup("/api");
 
@@ -83,6 +128,10 @@ api.MapRiskEndpoints();
 api.MapUsageEndpoints();
 api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
+api.MapImportEndpoints();
+api.MapAccessRequestEndpoints();
+api.MapTierRecommendationEndpoints();
+api.MapAdminScoringEndpoints();
 
 // Demo data tools exist only in Development; elsewhere the routes are not
 // mapped at all, so they return 404.

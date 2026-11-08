@@ -16,7 +16,7 @@ public static class RiskEndpoints
     {
         var sims = routes.MapGroup("/sims")
             .WithTags("Risk")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         sims.MapGet("/{id:int}/risk", GetSimRisk)
             .WithName("GetSimRisk")
@@ -33,7 +33,7 @@ public static class RiskEndpoints
         routes.MapGet("/risk-scores", GetRiskScores)
             .WithTags("Risk")
             .WithName("GetRiskScores")
-            .RequireAuthorization(AuthPolicies.CanRead)
+            .RequireAuthorization(AuthPolicies.OrgRead)
             .Produces<PagedResult<RiskScoreItem>>()
             .ProducesValidationProblem();
 
@@ -43,6 +43,7 @@ public static class RiskEndpoints
     private static async Task<IResult> GetSimRisk(
         int id,
         int? days,
+        DateOnly? to,
         SimGuardDbContext db,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
@@ -61,7 +62,9 @@ public static class RiskEndpoints
             return ApiProblems.NotFound($"SIM {id} was not found.");
         }
 
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        // `to` lets the screen end the history on the fleet's as-of date
+        // instead of the clock (the demo data ends on 2025-03-31).
+        var today = to ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var firstDay = today.AddDays(1 - window);
 
         var latest = await db.RiskScores
@@ -174,6 +177,7 @@ public static class RiskEndpoints
                 a.RiskScore,
                 a.Status,
                 a.CreatedAt,
+                a.DetectedOn,
                 a.ResolvedAt,
                 a.Resolution,
                 ResolvedByEmail = a.ResolvedByUser == null ? null : a.ResolvedByUser.Email
@@ -213,7 +217,8 @@ public static class RiskEndpoints
                 null,
                 null,
                 "alert",
-                a.Id));
+                a.Id,
+                a.DetectedOn));
 
             if (a.Status == AlertStatuses.Cleared && a.ResolvedAt is { } resolvedAt)
             {

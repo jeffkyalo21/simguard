@@ -250,25 +250,75 @@ Passwords, tokens and codes are never stored.
 
 ## Role matrix
 
+The roles split operator from organisation:
+
+- **Admin** is the SimGuard operator. It manages user accounts and reads
+  the system audit trail. It does not see or change the organisation's
+  data (403 on every organisation endpoint).
+- **SecurityOfficer** manages the organisation: departments, employees,
+  SIMs, carriers, allocations, SIM status and tier, and alert reviews. It
+  cannot manage users or read the audit logs.
+- **Auditor** is read-only: every organisation read, the full audit log and
+  the auth event log. It never writes.
+
+| Policy | Roles |
+| ------ | ----- |
+| `OrgRead` | SecurityOfficer, Auditor |
+| `OrgWrite` | SecurityOfficer |
+| `AdminOnly` | Admin |
+| `AuditRead` | Admin, Auditor |
+| `AnyRole` | Admin, SecurityOfficer, Auditor |
+| `DevTools` | Admin (Development only) |
+| `SignedIn` | any full access token, also before the forced password change |
+| `MfaEnrollment` | MFA enrolment token |
+
 | Endpoint | Admin | SecurityOfficer | Auditor | Policy |
 | -------- | :---: | :-------------: | :-----: | ------ |
 | `GET /`, `POST /api/auth/login`, `POST /api/auth/mfa/verify` | anonymous | anonymous | anonymous | none |
-| `POST /api/auth/mfa/enroll/*` | enrolment token | enrolment token | enrolment token | `MfaEnrollment` |
+| `POST /api/auth/mfa/enroll/start`, `POST /api/auth/mfa/enroll/confirm` | enrolment token | enrolment token | enrolment token | `MfaEnrollment` |
 | `GET /api/auth/me`, `POST /api/auth/change-password` | yes | yes | yes | `SignedIn` |
-| `GET /health/database` | yes | yes | yes | `CanRead` |
-| `GET` departments, employees, SIMs, allocations, carriers | yes | yes | yes | `CanRead` |
-| `POST/PUT/DELETE /api/carriers` | yes | no | no | `CanManageCarriers` |
-| `POST/PUT/DELETE /api/departments` | yes | no | no | `CanManageOrganisation` |
-| `POST/PUT/DELETE /api/employees` | yes | no | no | `CanManageOrganisation` |
-| `POST/PUT/DELETE /api/sims` | yes | no | no | `CanManageSims` |
-| `PATCH /api/sims/{id}/status` | yes | yes | no | `CanChangeSimStatus` |
-| `POST /api/allocations`, `POST /api/allocations/{id}/return` | yes | yes | no | `CanManageAllocations` |
-| `/api/users/*` | yes | no | no | `CanManageUsers` |
-| `GET /api/auth/events` | yes | no | yes | `CanReadAudit` |
-| `GET` alerts, risk scores, SIM risk and activity, dashboard summary | yes | yes | yes | `CanRead` |
-| `PATCH /api/alerts/{id}/status` | yes | yes | no | `CanReviewAlerts` |
-| `GET /api/audit-logs` | yes | no | yes | `CanReadAudit` |
-| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `CanUseDevTools` |
+| `GET /health` (database check only, for hosting) | anonymous | anonymous | anonymous | none |
+| `POST /api/access-requests` (landing page form, rate limited, see [access-requests.md](access-requests.md)) | anonymous | anonymous | anonymous | none |
+| `GET /api/access-requests`, `PATCH /api/access-requests/{id}/status` | yes | no | no | `AdminOnly` |
+| `GET /health/database` | yes | yes | yes | `AnyRole` |
+| `GET /api/departments`, `/{id}`, `/{id}/employees` | no | yes | yes | `OrgRead` |
+| `POST /api/departments`, `PUT/DELETE /api/departments/{id}` | no | yes | no | `OrgWrite` |
+| `GET /api/employees`, `/{id}`, `/{id}/allocations` | no | yes | yes | `OrgRead` |
+| `POST /api/employees`, `PUT/DELETE /api/employees/{id}` | no | yes | no | `OrgWrite` |
+| `GET /api/sims`, `/{id}`, `/{id}/allocations`, `/{id}/risk`, `/{id}/activity`, `/{id}/usage`, `/{id}/usage/cycle` | no | yes | yes | `OrgRead` |
+| `POST /api/sims`, `PUT/DELETE /api/sims/{id}` | no | yes | no | `OrgWrite` |
+| `PATCH /api/sims/{id}/status` | no | yes | no | `OrgWrite` |
+| `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
+| `GET /api/carriers` | no | yes | yes | `OrgRead` |
+| `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
+| `GET /api/imports`, `GET /api/imports/{type}/template`, `POST /api/imports/{type}` | no | yes | no | `OrgWrite` |
+| `GET /api/allocations`, `/{id}` | no | yes | yes | `OrgRead` |
+| `POST /api/allocations`, `POST /api/allocations/{id}/return` | no | yes | no | `OrgWrite` |
+| `GET /api/alerts`, `/{id}` | no | yes | yes | `OrgRead` |
+| `PATCH /api/alerts/{id}/status` | no | yes | no | `OrgWrite` |
+| `GET /api/risk-scores` | no | yes | yes | `OrgRead` |
+| `GET /api/dashboard/summary` | no | yes | yes | `OrgRead` |
+| `GET /api/usage/analytics`, `GET /api/tiers` | no | yes | yes | `OrgRead` |
+| `GET /api/tier-recommendations`, `/settings`, `/status` | no | yes | yes | `OrgRead` |
+| `PUT /api/tier-recommendations/settings`, `POST /api/tier-recommendations/run`, `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
+| `POST /api/admin/scoring/run`, `GET /api/admin/scoring/status` (totals only) | yes | no | no | `AdminOnly` |
+| `/api/users/*` (list, get, create, role, disable, enable, MFA reset, password reset) | yes | no | no | `AdminOnly` |
+| `GET /api/audit-logs` | `system` rows only | no | all rows | `AuditRead` |
+| `GET /api/auth/events` | yes | no | yes | `AuditRead` |
+| `POST /api/dev/seed-demo` (Development only) | yes | no | no | `DevTools` |
+
+"no" is 403 for a signed-in caller; without a token every endpoint except
+the anonymous ones is 401. A token issued before the forced password change
+only passes `SignedIn` endpoints (403 elsewhere).
+
+`GET /api/audit-logs` filters by role: Admin sees only rows with `category`
+`system` (user management), the Auditor sees every row. See
+[api-alerts-risk-audit.md](api-alerts-risk-audit.md).
+
+`POST /api/dev/seed-demo` is the one exception to "Admin sees no
+organisation data": it writes demo alerts and risk scores for existing
+SIMs. It is a Development tool, mapped only when `ASPNETCORE_ENVIRONMENT`
+is `Development`, and does not exist in other environments (404).
 
 Policies are defined in `SimGuard.Api/Common/Authorization/AuthPolicies.cs`.
 A fallback policy requires a full access token for any endpoint that does
@@ -302,6 +352,8 @@ not declare its own policy, so a new endpoint is protected by default.
 | `SimGuard:Seed:AdminEmail` | first run only | | |
 | `SimGuard:Seed:AdminPassword` | first run only | | at least 12 characters |
 | `SimGuard:Seed:AdminName` | no | `Administrator` | |
+| `SimGuard:Seed:OfficerEmail`, `OfficerPassword`, `OfficerName` | no (Development only) | name `Security Officer` | test SecurityOfficer |
+| `SimGuard:Seed:AuditorEmail`, `AuditorPassword`, `AuditorName` | no (Development only) | name `Auditor` | test Auditor |
 
 Keep secrets out of `appsettings*.json`. In Development use user-secrets;
 elsewhere use environment variables (`Jwt__Key`, `SimGuard__Seed__AdminPassword`,
@@ -334,6 +386,26 @@ the Admin exists, remove the seed password:
 dotnet user-secrets remove "SimGuard:Seed:AdminPassword"
 ```
 
+### Test accounts (Development only)
+
+Admin cannot read or change organisation data, so local testing also needs
+a SecurityOfficer and an Auditor. When `ASPNETCORE_ENVIRONMENT` is
+`Development`, each startup also creates them from these settings if they
+are set and no account has that email yet:
+
+```bash
+dotnet user-secrets set "SimGuard:Seed:OfficerEmail" "officer@simguard.local"
+dotnet user-secrets set "SimGuard:Seed:OfficerPassword" "<temporary password, 12+ characters>"
+dotnet user-secrets set "SimGuard:Seed:AuditorEmail" "auditor@simguard.local"
+dotnet user-secrets set "SimGuard:Seed:AuditorPassword" "<temporary password, 12+ characters>"
+```
+
+There are no default passwords: an unset email or password means the
+account is not created. Like the first Admin, each account must enrol MFA
+and change its password at first sign-in (the smoke scripts do this with
+`Complete-FirstSignIn`). Outside Development these settings are ignored;
+create accounts through `POST /api/users` instead.
+
 ## Database
 
 Migration `AddAuthentication` adds:
@@ -351,6 +423,19 @@ Migration `AddAuthentication` adds:
 `backend/docs/auth-smoke.ps1` runs the whole flow against a running API and
 prints each step's expected and real status code. See the header of the
 script for how to run it.
+
+`backend/docs/roles-smoke.ps1` checks the role matrix: for each role one
+endpoint per group (organisation read and write, SIM status and tier
+change, users, audit logs, auth events, health) with the expected 2xx or
+403, the tier endpoint and the audit log filtering by role. It uses the
+Development test accounts above when `SIMGUARD_SMOKE_OFFICER_EMAIL`,
+`SIMGUARD_SMOKE_OFFICER_PASSWORD` and the `AUDITOR` equivalents are set,
+otherwise it creates throwaway accounts. The alerts and carriers smoke
+scripts do every organisation action as a Security Officer.
+
+Run all four on a throwaway database, not on your dev database: auth-smoke
+signs in the seeded Admin for the first time and the others leave test
+accounts and audit rows behind.
 
 ## Out of scope
 

@@ -3,14 +3,17 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useOpeningKey } from "@/hooks/use-opening-key";
+import { useTiers } from "@/hooks/use-reference";
 import { FormDialog } from "@/components/shared/form-dialog";
-import { referenceData, setSimTier } from "@/lib/data";
+import { errorMessage } from "@/lib/api";
+import { setSimTier, toGb } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
 function TierForm({ sim, open, onOpenChange }) {
   const [tier, setTier] = useState(sim.tier);
   const [busy, setBusy] = useState(false);
+  const tiers = useTiers();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -19,10 +22,10 @@ function TierForm({ sim, open, onOpenChange }) {
     setBusy(true);
     try {
       await setSimTier(sim.id, tier);
-      toast.success(copy.sims.toasts.tierChanged(copy.tiers[tier]));
+      toast.success(copy.sims.toasts.tierChanged(copy.tiers[tier] ?? tier));
       onOpenChange(false);
-    } catch {
-      toast.error(copy.errors.generic);
+    } catch (error) {
+      toast.error(errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -39,7 +42,7 @@ function TierForm({ sim, open, onOpenChange }) {
     >
       <fieldset className="flex flex-col gap-2">
         <legend className="sr-only">{copy.tiers.label}</legend>
-        {referenceData.tiers.map(({ name, bundleGb }) => (
+        {tiers.map(({ tier: name, dataMb }) => (
           <label
             key={name}
             className={cn(
@@ -55,7 +58,7 @@ function TierForm({ sim, open, onOpenChange }) {
               onChange={() => setTier(name)}
               className="size-4 accent-[var(--foreground)]"
             />
-            {copy.simProfile.tierOption(copy.tiers[name], bundleGb)}
+            {copy.simProfile.tierOption(copy.tiers[name] ?? name, toGb(dataMb))}
           </label>
         ))}
       </fieldset>

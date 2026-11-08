@@ -26,12 +26,18 @@ venv/Scripts/python -m pip install -r requirements.txt
 | `ML_PROPHET_CHECKPOINTS` | `data/prophet_checkpoints.parquet` | Precomputed checkpoint forecasts, parquet reader only. |
 | `ML_USE_PRECOMPUTED_PROPHET` | `1` | `0` always fits Prophet instead of reading the precomputed forecasts. |
 | `ML_PROPHET_N_JOBS` | `-1` | joblib workers for Prophet fits (`-1` is all cores). |
+| `ML_SHARED_SECRET` | none | Secret the backend sends in the `X-SimGuard-ML-Secret` header (`MlService:SharedSecret` in the backend). Every route except `/health` returns `401` without it. Never commit it. |
+| `ML_ENVIRONMENT` | `Production` | `Development` lets the service start without `ML_SHARED_SECRET`: the check is then off and a warning is logged. In any other environment the service refuses to start without it. |
 
 ### Run
 
 ```bash
-venv/Scripts/python -m uvicorn app.main:app --port 8001
+ML_ENVIRONMENT=Development venv/Scripts/python -m uvicorn app.main:app --port 8001
 ```
+
+For the backend scoring pipeline run it against the backend database with
+`READER=postgres`, `ML_DATABASE_URL` and `ML_SHARED_SECRET` set (see
+`backend/docs/scoring-pipeline.md`).
 
 Interactive docs are at `http://localhost:8001/docs`.
 
@@ -53,8 +59,39 @@ JSON field names are camelCase. Errors are JSON with `title`, `status` and
 | `GET /health` | | `200` with `status: ok` when artifacts and data are loaded, `503` otherwise. |
 | `GET /version` | | Model file names, sizes and sha256, and library versions. |
 
+Every route except `/health` (including `/docs`) needs the
+`X-SimGuard-ML-Secret` header when `ML_SHARED_SECRET` is set; a missing or
+wrong value is `401`.
+
 Status codes: `422` for bad input (empty list, too many SIMs, bad date,
 unknown field), `503` when artifacts are missing.
+
+## Demo import files
+
+`scripts/make_import_files.py` turns the generator output into files for the
+backend CSV import (`backend/docs/imports.md`):
+
+```
+venv/Scripts/python scripts/make_import_files.py
+```
+
+It writes `departments.csv`, `employees.csv`, `sims.csv`, `usage.csv`
+(the 90,000 generator rows), `usage_perf_100k.csv` (100,000 more rows for the
+timing test) and `sim_mapping.csv` into `data/import_samples/`, which is
+git-ignored. Import them in that order.
+
+The generator has no department, employee or carrier data, so the script
+assigns them:
+
+- Departments by tier: field = Field Operations, manager = Management,
+  professional = Professional Services, support = Customer Support.
+- One employee per SIM ("Demo Employee 0042",
+  `demo.employee.0042@simguard.local`) in the SIM's tier department, with a
+  job role by tier. SIMs are not allocated to them.
+- Carrier by `sim_id` modulo 3: Safaricom, Airtel, Telkom.
+- Fake ICCID `8925400` + `sim_id` (11 digits) + a Luhn digit, and phone
+  `+2547` + `10000000 + sim_id`. Both are kept in `sim_mapping.csv` and
+  reused when it exists, so they never change between runs.
 
 ## Known limitations
 

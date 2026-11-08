@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { FormField } from "@/components/shared/form-field";
@@ -8,31 +8,31 @@ import { SelectField } from "@/components/sims/sim-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useOpeningKey } from "@/hooks/use-opening-key";
+import { useDepartments } from "@/hooks/use-reference";
 import { useResource } from "@/hooks/use-resource";
-import { ApiError } from "@/lib/api";
-import { createAllocation, listEmployees, listSims, referenceData } from "@/lib/data";
-import { formatPhone, todayDay } from "@/lib/format";
+import { ApiError, errorMessage } from "@/lib/api";
+import { createAllocation, listEmployees, listSims } from "@/lib/data";
+import { formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.allocations.form;
-const FIELD_ORDER = ["simId", "departmentId", "employeeId", "assignmentDate"];
+const FIELD_ORDER = ["simId", "departmentId", "employeeId", "assignedBy"];
+const SEARCH_DELAY_MS = 250;
 
-// Error codes from the data layer, mapped per field.
-const messages = {
-  simId: { required: text.errors.simRequired, invalid: text.errors.simUnavailable },
-  employeeId: { required: text.errors.employeeRequired, invalid: text.errors.employeeRequired },
-  assignmentDate: { invalid: text.errors.dateRequired, future: text.errors.dateFuture },
+// The backend answers 400 with sentences per field; each field shows its
+// own line instead.
+const serverMessages = {
+  simId: text.errors.simUnavailable,
+  employeeId: text.errors.employeeRequired,
+  assignedBy: text.errors.assignerRequired,
 };
 
-const departmentOptions = referenceData.departmentItems.map(({ id, name }) => ({ value: String(id), label: name }));
-
-function validate(values, today) {
+function validate(values) {
   const errors = {};
   if (!values.simId) errors.simId = text.errors.simRequired;
   if (!values.departmentId) errors.departmentId = text.errors.departmentRequired;
   else if (!values.employeeId) errors.employeeId = text.errors.employeeRequired;
-  if (!values.assignmentDate) errors.assignmentDate = text.errors.dateRequired;
-  else if (values.assignmentDate > today) errors.assignmentDate = text.errors.dateFuture;
+  if (!values.assignedBy) errors.assignedBy = text.errors.assignerRequired;
   return errors;
 }
 
@@ -43,10 +43,17 @@ function focusFirstError(errors) {
 
 /** The fields. Keyed by the caller, so each opening starts fresh. */
 function AllocationForm({ open, onOpenChange }) {
-  const today = todayDay();
-  const [values, setValues] = useState({ simId: "", departmentId: "", employeeId: "", assignmentDate: today });
+  const [values, setValues] = useState({ simId: "", departmentId: "", employeeId: "", assignedBy: "" });
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  // The person who hands the SIM over is any employee: search by name.
+  const [assignerSearch, setAssignerSearch] = useState("");
+  const [assignerQuery, setAssignerQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setAssignerQuery(assignerSearch.trim()), SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [assignerSearch]);
 
   // Only available SIMs can be allocated (the API answers 409 otherwise).
   const sims = useResource(() => listSims({ status: "available", pageSize: 100 }), ["available"]);
@@ -55,8 +62,28 @@ function AllocationForm({ open, onOpenChange }) {
     [values.departmentId]
   );
 
+  const assigners = useResource(
+    () => (assignerQuery.length >= 2 ? listEmployees({ search: assignerQuery, pageSize: 20 }) : Promise.resolve(null)),
+    [assignerQuery]
+  );
+  const assignerOptions = (assigners.data?.items ?? [])
+    .map((employee) => ({
+      value: String(employee.id),
+      label: employee.departmentName ? `${employee.name}, ${employee.departmentName}` : employee.name,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const assignerPlaceholder = assignerQuery.length < 2
+    ? text.assignerFirst
+    : assigners.error
+      ? text.assignerPlaceholder
+      : !assigners.data ? text.loading : assignerOptions.length ? text.assignerPlaceholder : text.noAssigners;
+
+  const departmentOptions = useDepartments().map(({ id, name }) => ({ value: String(id), label: name }));
   const simOptions = (sims.data?.items ?? []).map((sim) => ({ value: String(sim.id), label: formatPhone(sim.phoneNumber) }));
-  const employeeOptions = (employees.data?.items ?? []).map((employee) => ({ value: String(employee.id), label: employee.name }));
+  // The API lists employees by id; the form shows them by name.
+  const employeeOptions = (employees.data?.items ?? [])
+    .map((employee) => ({ value: String(employee.id), label: employee.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const simPlaceholder = sims.error
     ? text.simPlaceholder
@@ -72,7 +99,7 @@ function AllocationForm({ open, onOpenChange }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    const fieldErrors = validate(values, today);
+    const fieldErrors = validate(values);
     setErrors(fieldErrors);
     if (Object.keys(fieldErrors).length) return focusFirstError(fieldErrors);
 
@@ -81,31 +108,33 @@ function AllocationForm({ open, onOpenChange }) {
       const allocation = await createAllocation({
         simId: values.simId,
         employeeId: values.employeeId,
-        assignmentDate: values.assignmentDate,
+        assignedBy: values.assignedBy,
       });
       toast.success(copy.allocations.toasts.created(formatPhone(allocation.simPhoneNumber), allocation.employeeName));
       onOpenChange(false);
     } catch (error) {
       let serverErrors = {};
       if (error instanceof ApiError && error.status === 409) {
+        // The SIM was allocated or deactivated after the list loaded; the
+        // list reloads (every 409 refreshes the screens).
         serverErrors = { simId: text.errors.simUnavailable };
       } else if (error instanceof ApiError && error.status === 400) {
         serverErrors = Object.fromEntries(
-          Object.entries(error.errors).map(([field, codes]) => [field, messages[field]?.[codes[0]] ?? copy.errors.validation])
+          Object.keys(error.errors).filter((field) => serverMessages[field]).map((field) => [field, serverMessages[field]])
         );
       }
       if (Object.keys(serverErrors).length) {
         setErrors(serverErrors);
         focusFirstError(serverErrors);
       } else {
-        toast.error(copy.errors.generic);
+        toast.error(errorMessage(error));
       }
     } finally {
       setBusy(false);
     }
   }
 
-  const loadFailed = sims.error || employees.error;
+  const loadFailed = sims.error || employees.error || assigners.error;
 
   return (
     <FormDialog
@@ -126,6 +155,7 @@ function AllocationForm({ open, onOpenChange }) {
             onClick={() => {
               if (sims.error) sims.retry();
               if (employees.error) employees.retry();
+              if (assigners.error) assigners.retry();
             }}
           >
             {copy.actions.tryAgain}
@@ -161,18 +191,32 @@ function AllocationForm({ open, onOpenChange }) {
         placeholder={employeePlaceholder}
         disabled={!employeeOptions.length}
       />
-      <FormField id="allocation-assignmentDate" label={text.startDate} error={errors.assignmentDate}>
+      <FormField id="allocation-assignerSearch" label={text.assignerSearch} hint={text.assignerHint}>
         {(field) => (
           <Input
             {...field}
-            type="date"
-            max={today}
-            value={values.assignmentDate}
-            onChange={(event) => set("assignmentDate")(event.target.value)}
+            type="search"
+            value={assignerSearch}
+            onChange={(event) => {
+              setAssignerSearch(event.target.value);
+              set("assignedBy")("");
+            }}
+            placeholder={text.assignerSearchPlaceholder}
+            autoComplete="off"
             className="h-10"
           />
         )}
       </FormField>
+      <SelectField
+        id="allocation-assignedBy"
+        label={text.assigner}
+        value={values.assignedBy}
+        options={assignerOptions}
+        error={errors.assignedBy}
+        onChange={set("assignedBy")}
+        placeholder={assignerPlaceholder}
+        disabled={!assignerOptions.length}
+      />
     </FormDialog>
   );
 }

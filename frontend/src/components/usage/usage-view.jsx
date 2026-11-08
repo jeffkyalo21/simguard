@@ -11,28 +11,29 @@ import { SectionCard } from "@/components/data/section-card";
 import { ChartSkeleton, ListSkeleton } from "@/components/data/skeletons";
 import { PageHeader } from "@/components/layout/page-header";
 import { ErrorState } from "@/components/shared/error-state";
+import { useDepartments, useTiers } from "@/hooks/use-reference";
 import { useResource } from "@/hooks/use-resource";
 import { getUsageAnalytics, referenceData } from "@/lib/data";
-import { formatNumber, formatPhone, formatShortDate } from "@/lib/format";
+import { formatDate, formatNumber, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.usageAnalytics;
 const periodOptions = referenceData.periods.map((days) => ({ value: String(days), label: copy.dashboard.periods[days] }));
-const departmentOptions = referenceData.departments.map((name) => ({ value: name, label: name }));
-const planOptions = referenceData.planTypes.map((name) => ({ value: name, label: name }));
 const formatGb = (value) => `${formatNumber(Number(value.toFixed(1)))} GB`;
+const tierLabel = (tier) => copy.tiers[tier ?? "none"] ?? tier;
+const groupItems = (rows, label) => rows.map((row) => ({ key: row.name ?? "none", label: label(row.name), value: row.dataUsedGb }));
 
 const simColumns = [
   { key: "sim", header: copy.columns.sim, link: true, cell: (row) => formatPhone(row.phoneNumber) },
   { key: "employee", header: copy.columns.employee, cell: (row) => row.employeeName ?? copy.sims.unassigned },
   { key: "department", header: copy.columns.department, cell: (row) => row.departmentName ?? copy.common.noValue },
-  { key: "plan", header: text.plan, cell: (row) => row.planType },
+  { key: "tier", header: text.tier, cell: (row) => tierLabel(row.tier) },
   { key: "usage", header: text.dataUsed, cell: (row) => formatGb(row.dataUsedGb) },
   { key: "utilisation", header: text.utilisation, cell: (row) => copy.units.percent(row.utilisationPercent) },
 ];
 
 function Kpis({ resource }) {
-  if (resource.error) return <ErrorState onRetry={resource.retry} />;
+  if (resource.error) return <ErrorState error={resource.error} onRetry={resource.retry} />;
   const totals = resource.data?.totals;
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -79,8 +80,14 @@ function UsageTable({ resource, rowsKey, title, emptyMessage }) {
 }
 
 export function UsageView() {
-  const [filters, setFilters] = useState({ days: "30", department: "", plan: "" });
-  const resource = useResource(() => getUsageAnalytics({ days: Number(filters.days), department: filters.department, plan: filters.plan }), [filters.days, filters.department, filters.plan]);
+  const [filters, setFilters] = useState({ days: "30", departmentId: "", tier: "" });
+  const resource = useResource(
+    () => getUsageAnalytics({ days: Number(filters.days), departmentId: filters.departmentId, tier: filters.tier }),
+    [filters.days, filters.departmentId, filters.tier]
+  );
+  const departmentOptions = useDepartments().map(({ id, name }) => ({ value: String(id), label: name }));
+  const tierOptions = useTiers().map(({ tier }) => ({ value: tier, label: tierLabel(tier) }));
+  const data = resource.data;
   const setFilter = (key) => (value) => setFilters((current) => ({ ...current, [key]: value }));
 
   return (
@@ -90,8 +97,11 @@ export function UsageView() {
         actions={<FilterSelect label={text.period} value={filters.days} options={periodOptions} includeAll={false} onChange={setFilter("days")} className="min-w-36" />}
       />
       <div className="flex flex-wrap items-center gap-2">
-        <FilterSelect label={text.department} value={filters.department} options={departmentOptions} onChange={setFilter("department")} />
-        <FilterSelect label={text.plan} value={filters.plan} options={planOptions} onChange={setFilter("plan")} />
+        <FilterSelect label={text.department} value={filters.departmentId} options={departmentOptions} onChange={setFilter("departmentId")} />
+        <FilterSelect label={text.tier} value={filters.tier} options={tierOptions} onChange={setFilter("tier")} />
+        {data?.asOf && (
+          <p className="ml-auto text-sm text-muted-foreground">{text.asOf(formatDate(data.from), formatDate(data.to))}</p>
+        )}
       </div>
       <Kpis resource={resource} />
       <SectionCard title={text.daily}>
@@ -100,12 +110,12 @@ export function UsageView() {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title={text.byDepartment}>
           <DataState resource={resource} skeleton={<ListSkeleton rows={5} />} isEmpty={(data) => !data.byDepartment.length} emptyMessage={text.noDepartment}>
-            {(data) => <BarList items={data.byDepartment.map((row) => ({ key: row.name, label: row.name, value: row.dataUsedGb }))} formatValue={formatGb} />}
+            {(result) => <BarList items={groupItems(result.byDepartment, (name) => name ?? text.unassigned)} formatValue={formatGb} />}
           </DataState>
         </SectionCard>
-        <SectionCard title={text.byPlan}>
-          <DataState resource={resource} skeleton={<ListSkeleton rows={5} />} isEmpty={(data) => !data.byPlan.length} emptyMessage={text.noPlan}>
-            {(data) => <BarList items={data.byPlan.map((row) => ({ key: row.name, label: row.name, value: row.dataUsedGb }))} formatValue={formatGb} />}
+        <SectionCard title={text.byTier}>
+          <DataState resource={resource} skeleton={<ListSkeleton rows={5} />} isEmpty={(result) => !result.byTier.length} emptyMessage={text.noTier}>
+            {(result) => <BarList items={groupItems(result.byTier, tierLabel)} formatValue={formatGb} />}
           </DataState>
         </SectionCard>
       </div>

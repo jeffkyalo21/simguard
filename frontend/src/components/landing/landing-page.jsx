@@ -2,7 +2,7 @@ import { GlassBackdrop } from "@/components/shared/glass-backdrop";
 import { Audience } from "@/components/landing/audience";
 import { Contact } from "@/components/landing/contact";
 import { CtaBand } from "@/components/landing/cta-band";
-import { DemoDialogProvider } from "@/components/landing/demo-dialog";
+import { RegisterDialogProvider } from "@/components/landing/register-dialog";
 import { Faq } from "@/components/landing/faq";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
@@ -27,7 +27,7 @@ export function LandingPage() {
     <LandingShell>
       {/* The only animated backdrop in the product; it covers the static one. */}
       <GlassBackdrop animated />
-      <DemoDialogProvider>
+      <RegisterDialogProvider>
         <LandingNav />
         <main id="main" tabIndex={-1} className="flex-1">
           <Hero />
@@ -44,7 +44,7 @@ export function LandingPage() {
           <CtaBand />
         </main>
         <LandingFooter />
-      </DemoDialogProvider>
+      </RegisterDialogProvider>
     </LandingShell>
   );
 }

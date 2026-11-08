@@ -3,8 +3,8 @@ import { InView } from "@/components/landing/in-view";
 import { Parallax } from "@/components/landing/parallax";
 import { SimCard } from "@/components/landing/sim-card";
 import { Tilt } from "@/components/landing/tilt";
+import { SAMPLE_DASHBOARD } from "@/components/landing/landing-data";
 import { riskLevel } from "@/components/data/risk-bar";
-import { getSampleDashboard } from "@/lib/data";
 import { formatNumber, formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 import { cn } from "@/lib/utils";
@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils";
 const text = copy.landing;
 const board = copy.dashboard;
 
-// The real dashboard at "Last 30 days", built from the same mock data on
-// the server, so the preview cannot drift from it.
-const DASHBOARD = getSampleDashboard(30);
+// A fixed sample of the dashboard at "Last 30 days"; the landing page is
+// public and never calls the API.
+const DASHBOARD = SAMPLE_DASHBOARD;
 
 const KPIS = [
   { key: "activeSims", hero: false },

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { BookDemoButton } from "@/components/landing/demo-dialog";
+import { RegisterButton } from "@/components/landing/register-dialog";
 import { LandingMenu } from "@/components/landing/landing-menu";
 import { ScrollLink } from "@/components/landing/scroll-link";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ const sectionLinks = [
 /**
  * Floating glass pill, the same family as the app nav. LandingShell sets
  * data-scrolled for the stronger blur and border once the page moves.
- * From 1100px the section links, Sign in and Book a demo sit in the pill;
+ * From 1100px the section links, Sign in and Register sit in the pill;
  * below that they move into the Menu sheet.
  */
 export function LandingNav() {
@@ -50,7 +50,7 @@ export function LandingNav() {
             <Link href="/login">{copy.actions.signIn}</Link>
           </Button>
           <Button asChild className="hidden h-10 px-5 min-[1100px]:inline-flex">
-            <BookDemoButton>{copy.landing.bookDemo}</BookDemoButton>
+            <RegisterButton>{copy.landing.registerLabel}</RegisterButton>
           </Button>
           <LandingMenu links={sectionLinks} />
         </div>

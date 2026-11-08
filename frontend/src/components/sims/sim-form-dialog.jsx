@@ -14,16 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ApiError } from "@/lib/api";
-import { createSim, referenceData, updateSim } from "@/lib/data";
-import { useCarriers } from "@/lib/mock/store";
+import { ApiError, errorMessage } from "@/lib/api";
+import { createSim, setSimTier, updateSim } from "@/lib/data";
+import { useCarriers, useTiers } from "@/hooks/use-reference";
 import { formatPhone } from "@/lib/format";
 import { simFieldErrors } from "@/lib/validation";
 import { copy } from "@/lib/copy";
 
 const text = copy.sims.form;
 
-// Error codes from validation and the data layer, mapped per field.
+// Error codes from client validation, mapped per field. The backend sends
+// sentences, so a field it rejects shows that field's own line (first code
+// below), and a duplicate (409) shows the "taken" line.
 const messages = {
   phoneNumber: { required: text.errors.phoneRequired, invalid: text.errors.phoneInvalid, taken: text.errors.phoneTaken },
   iccid: { required: text.errors.iccidRequired, tooLong: text.errors.iccidTooLong, taken: text.errors.iccidTaken },
@@ -33,6 +35,20 @@ const messages = {
 };
 
 const FIELD_ORDER = ["phoneNumber", "iccid", "carrierId", "planType", "monthlyCost"];
+const SERVER_CODES = { phoneNumber: "invalid", iccid: "tooLong", carrierId: "invalid", operator: "invalid", planType: "required", monthlyCost: "invalid" };
+
+/** Field messages for a failed save, or null when no field is to blame. */
+function serverFieldMessages(error) {
+  if (!(error instanceof ApiError) || ![400, 409].includes(error.status)) return null;
+  const result = {};
+  for (const field of Object.keys(error.errors ?? {})) {
+    const target = field === "operator" ? "carrierId" : field;
+    const code = error.status === 409 ? "taken" : SERVER_CODES[field];
+    const message = messages[target]?.[code];
+    if (message) result[target] = message;
+  }
+  return Object.keys(result).length ? result : null;
+}
 
 // Shown in place of the carrier select when there are no carriers.
 const ADD_CARRIER_ID = "sim-carrierId-add";
@@ -48,7 +64,8 @@ function initialValues(sim) {
     phoneNumber: sim ? formatPhone(sim.phoneNumber) : "",
     iccid: sim?.iccid ?? "",
     carrierId: sim?.carrierId == null ? "" : String(sim.carrierId),
-    planType: sim?.planType ?? "",
+    // A new SIM takes its plan type from the tier, like imported SIMs.
+    planType: sim ? sim.planType : "",
     monthlyCost: sim ? String(sim.monthlyCost) : "",
   };
 }
@@ -83,14 +100,13 @@ export function SelectField({ id, label, value, options, error, onChange, placeh
   );
 }
 
-const planOptions = referenceData.planTypes.map((name) => ({ value: name, label: name }));
-
 /** The fields. Keyed by the caller, so each opening starts fresh. */
 function SimForm({ sim, open, onOpenChange, onSaved }) {
   const [values, setValues] = useState(() => initialValues(sim));
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const carriers = useCarriers();
+  const tierOptions = useTiers().map(({ tier }) => ({ value: tier, label: copy.tiers[tier] ?? tier }));
   const carrierOptions = carriers.map((carrier) => ({ value: String(carrier.id), label: carrier.name }));
   const noCarriers = carrierOptions.length === 0;
 
@@ -111,20 +127,29 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
     if (Object.keys(fieldErrors).length) return focusFirstError(fieldErrors);
 
     setBusy(true);
+    let saved = null;
     try {
-      const saved = sim ? await updateSim(sim.id, values) : await createSim(values);
+      saved = sim ? await updateSim(sim.id, values) : await createSim(values);
+      // A new SIM gets the chosen tier, so its allowance and cost apply.
+      if (!sim) await setSimTier(saved.id, values.planType);
       const number = formatPhone(saved.phoneNumber);
       toast.success(sim ? copy.sims.toasts.saved(number) : copy.sims.toasts.added(number));
       onSaved?.(saved);
       onOpenChange(false);
     } catch (error) {
-      const codes = error instanceof ApiError ? error.errors : {};
-      const serverErrors = toMessages(Object.fromEntries(Object.entries(codes).map(([field, list]) => [field, list[0]])));
-      if (Object.keys(serverErrors).length) {
+      if (saved) {
+        // The SIM exists; only the tier failed. Close and say so.
+        toast.error(text.tierFailed(formatPhone(saved.phoneNumber)));
+        onSaved?.(saved);
+        onOpenChange(false);
+        return;
+      }
+      const serverErrors = serverFieldMessages(error);
+      if (serverErrors) {
         setErrors(serverErrors);
         focusFirstError(serverErrors);
       } else {
-        toast.error(copy.errors.generic);
+        toast.error(errorMessage(error));
       }
     } finally {
       setBusy(false);
@@ -187,16 +212,23 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
             </Link>
           )}
         </SelectField>
-        <SelectField
-          id="sim-planType"
-          label={text.plan}
-          value={values.planType}
-          options={planOptions}
-          error={errors.planType}
-          onChange={set("planType")}
-        />
+        {sim ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">{text.plan}</span>
+            <span className="flex h-10 items-center text-sm text-muted-foreground">{copy.tiers[sim.planType] ?? sim.planType}</span>
+          </div>
+        ) : (
+          <SelectField
+            id="sim-planType"
+            label={text.tier}
+            value={values.planType}
+            options={tierOptions}
+            error={errors.planType}
+            onChange={set("planType")}
+          />
+        )}
       </div>
-      <FormField id="sim-monthlyCost" label={text.cost} error={errors.monthlyCost}>
+      <FormField id="sim-monthlyCost" label={text.cost} hint={text.costHint} error={errors.monthlyCost}>
         {(field) => (
           <Input
             {...field}

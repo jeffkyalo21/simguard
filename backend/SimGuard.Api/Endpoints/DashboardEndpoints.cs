@@ -3,6 +3,8 @@ using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
+using SimGuard.Api.TierRecommendations;
+using SimGuard.Api.Usage;
 
 namespace SimGuard.Api.Endpoints;
 
@@ -16,7 +18,7 @@ public static class DashboardEndpoints
         routes.MapGet("/dashboard/summary", GetSummary)
             .WithTags("Dashboard")
             .WithName("GetDashboardSummary")
-            .RequireAuthorization(AuthPolicies.CanRead)
+            .RequireAuthorization(AuthPolicies.OrgRead)
             .Produces<DashboardSummaryResponse>()
             .ProducesValidationProblem();
 
@@ -38,9 +40,27 @@ public static class DashboardEndpoints
             return errors.ToProblem();
         }
 
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        var to = new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc);
-        var from = to.AddDays(-window);
+        // The window ends on the as-of date, the latest daily_usage date, so
+        // the demo data (which ends on 2025-03-31) reads as current. Without
+        // usage it falls back to the clock.
+        var asOf = await UsageAnalytics.AsOfAsync(db, cancellationToken);
+        DateTime from;
+        DateTime to;
+
+        if (asOf is not null)
+        {
+            from = asOf.Value.AddDays(1 - window).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            to = asOf.Value.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc);
+        }
+        else
+        {
+            var now = timeProvider.GetUtcNow().UtcDateTime;
+            to = new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc);
+            from = to.AddDays(-window);
+        }
+
+        var fromDate = DateOnly.FromDateTime(from);
+        var toDate = DateOnly.FromDateTime(to);
 
         var activeSims = await db.Sims
             .CountAsync(s => s.Status != SimStatuses.Inactive, cancellationToken);
@@ -51,13 +71,18 @@ public static class DashboardEndpoints
         var toReview = await db.Alerts
             .CountAsync(a => a.Status == AlertStatuses.Escalated, cancellationToken);
 
-        var resolved = await db.Alerts
-            .CountAsync(
-                a => a.Status == AlertStatuses.Cleared && a.ResolvedAt >= from && a.ResolvedAt <= to,
-                cancellationToken);
+        // Alerts in the window by the day they were detected; alerts stored
+        // before scoring existed have no detectedOn and fall back to their
+        // stored time.
+        var inWindow = db.Alerts.Where(a =>
+            a.DetectedOn != null
+                ? a.DetectedOn >= fromDate && a.DetectedOn <= toDate
+                : a.CreatedAt >= from && a.CreatedAt <= to);
 
-        var counts = await db.Alerts
-            .Where(a => a.CreatedAt >= from && a.CreatedAt <= to)
+        var resolved = await inWindow
+            .CountAsync(a => a.Status == AlertStatuses.Cleared, cancellationToken);
+
+        var counts = await inWindow
             .GroupBy(a => a.Type)
             .Select(g => new { Type = g.Key, Count = g.Count() })
             .ToListAsync(cancellationToken);
@@ -75,7 +100,15 @@ public static class DashboardEndpoints
             .Select(AlertListItem.Projection)
             .ToListAsync(cancellationToken);
 
-        // tierChanges and dataWaste need usage ingestion (later issues).
+        var tierChanges = await db.TierRecommendations
+            .Where(r => r.Status == TierRecommendationStatuses.Open)
+            .GroupBy(r => r.Recommendation)
+            .OrderBy(g => g.Key)
+            .Select(g => new TierChangeCount(g.Key, g.Count()))
+            .ToListAsync(cancellationToken);
+
+        var (dataWaste, _) = await UsageAnalytics.DataWasteAsync(db, window, cancellationToken);
+
         return TypedResults.Ok(new DashboardSummaryResponse(
             window,
             from,
@@ -86,7 +119,8 @@ public static class DashboardEndpoints
             resolved,
             alertsByType,
             needsReview,
-            [],
-            null));
+            tierChanges,
+            dataWaste,
+            asOf));
     }
 }

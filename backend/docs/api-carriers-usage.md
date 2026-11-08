@@ -10,9 +10,13 @@ validation (with an `errors` object keyed by field), 401 no or invalid token,
 
 | Endpoint | Admin | SecurityOfficer | Auditor | Policy |
 | -------- | :---: | :-------------: | :-----: | ------ |
-| `GET /api/carriers` | yes | yes | yes | `CanRead` |
-| `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | yes | no | no | `CanManageCarriers` |
-| `GET /api/sims/{id}/usage` | yes | yes | yes | `CanRead` |
+| `GET /api/carriers` | no | yes | yes | `OrgRead` |
+| `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
+| `GET /api/sims/{id}/usage`, `/{id}/usage/cycle` | no | yes | yes | `OrgRead` |
+| `GET /api/usage/analytics`, `GET /api/tiers` | no | yes | yes | `OrgRead` |
+| `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
+
+The full matrix is in [auth.md](auth.md).
 
 ## Carriers
 
@@ -84,6 +88,9 @@ show it next to the name field:
 - Unknown carriers give 400: `errors.carrierId` ("Carrier 9 does not exist.")
   or `errors.operator` ("There is no carrier named 'X'. Add it with POST
   /api/carriers first."). Sending neither gives 400 on `carrierId`.
+- A duplicate phone number or ICCID gives 409 with `detail` and, additive
+  since issue #14, `errors.phoneNumber` or `errors.iccid` holding the same
+  sentence, like the carrier name conflict above.
 - SIM responses add `carrierId` and keep `operator`, now the carrier's name,
   so existing screens keep working. Renaming a carrier renames `operator` on
   all its SIMs.
@@ -91,6 +98,12 @@ show it next to the name field:
   filter matches the carrier name.
 - The SIM audit snapshots (`sim.created`, `sim.updated`, `sim.deleted`) carry
   `carrierId` and `operator`.
+- SIM responses add `allowance` (issue #14): the tier allowance of the SIM's
+  tier (see [Tier allowances](#tier-allowances)), or null without a tier.
+  `monthlyCost` is the stored value when it is not 0, otherwise the tier's
+  `monthlyCost`, so imported SIMs no longer show 0.
+- Allocation responses add `departmentName`, the department of the
+  allocated employee. `assignmentDate` is the stored timestamp, unchanged.
 
 The AddCarriers migration made one carrier per distinct old `sims.operator`
 value (trimmed, compared ignoring case, cut to 40 characters, empty values
@@ -128,6 +141,7 @@ has none). Without `from`, it covers the 30 days up to `to`.
   "from": "2025-03-02",
   "to": "2025-03-31",
   "totals": { "days": 30, "totalMb": 10412.551, "billedMb": 10412.5, "voiceMinutesUsed": 98.4, "smsCount": 61 },
+  "asOf": "2025-03-31",
   "days": [
     {
       "date": "2025-03-02",
@@ -146,11 +160,90 @@ has none). Without `from`, it covers the 30 days up to `to`.
 
 `days` is oldest first and has only the days that have a row: missing days
 are not filled with zeros. Totals are sums over `days`, rounded to 3 decimals.
+`asOf` (added for issue #14) is the latest `daily_usage` date of the whole
+fleet, or null without usage.
 
 | Status | When |
 | ------ | ---- |
 | 400 | `from` after `to` (`errors.from`), range longer than 366 days (`errors.to`), dates not `YYYY-MM-DD` |
 | 404 | unknown SIM |
+
+### GET /api/sims/{id}/usage/cycle
+
+The 30-day billing cycle (numbered from 0, cycle 0 starts on 2025-01-01, as
+in the tier recommendations) that holds the fleet's as-of date, up to that date.
+
+```json
+{
+  "simId": 125,
+  "asOf": "2025-03-31",
+  "cycle": 2,
+  "cycleStart": "2025-03-02",
+  "cycleEnd": "2025-03-31",
+  "cycleLength": 30,
+  "daysElapsed": 30,
+  "tier": "professional",
+  "allowance": { "tier": "professional", "dataMb": 40960, "voiceMinutes": 200, "sms": 135, "monthlyCost": 2500.00 },
+  "used": { "dataMb": 10412.6, "voiceMinutes": 98.4, "sms": 61 },
+  "days": [{ "date": "2025-03-02", "dataMb": 491.1, "cumulativeDataMb": 491.1, "voiceMinutes": 3.9, "sms": 4 }]
+}
+```
+
+`tier` is the SIM's tier, or the tier of its latest usage row in the cycle
+when the SIM has none; `allowance` is null when neither is known. Without any
+usage in the fleet, `asOf`, `cycle`, `cycleStart` and `cycleEnd` are null and
+`days` is empty. 404 for an unknown SIM.
+
+### GET /api/usage/analytics?days=&departmentId=&tier=
+
+Fleet usage for the `days` days (`7`, `30` or `90`, default 30) up to the
+as-of date. `departmentId` keeps SIMs whose current allocation is in that
+department; `tier` keeps SIMs of that tier (one of the four, ignoring case).
+
+```json
+{
+  "days": 30,
+  "asOf": "2025-03-31",
+  "from": "2025-03-02",
+  "to": "2025-03-31",
+  "totals": { "simCount": 1000, "dataUsedMb": 1004311.4, "dataPaidMb": 1310720.0, "unusedMb": 312004.2, "utilisationPercent": 77 },
+  "daily": [{ "date": "2025-03-02", "dataMb": 33410.2 }],
+  "byDepartment": [{ "name": null, "simCount": 1000, "dataUsedMb": 1004311.4, "dataPaidMb": 1310720.0 }],
+  "byTier": [{ "name": "field", "simCount": 250, "dataUsedMb": 401000.1, "dataPaidMb": 512000.0 }],
+  "topSims": [
+    { "simId": 125, "phoneNumber": "+254700000125", "employeeName": null, "departmentName": null,
+      "tier": "field", "carrier": "Safaricom", "dataUsedMb": 3100.2, "dataPaidMb": 3413.3, "utilisationPercent": 91 }
+  ],
+  "leastUsedSims": []
+}
+```
+
+Only SIMs with at least one usage row in the period count. Paid data is the
+tier bundle times `days`/30. `topSims` are the 10 SIMs with most data used;
+`leastUsedSims` the 10 with the lowest share of paid data used. Groups are
+sorted by data used; a null `name` means unallocated (department) or no tier.
+MB values are rounded to 1 decimal, percents to whole numbers. Without usage
+every list is empty and `asOf` is null. 400 for another `days` value or an
+unknown tier.
+
+## Tier allowances
+
+### GET /api/tiers
+
+The table `tier_allowances`, smallest bundle first:
+
+| tier | dataMb | voiceMinutes | sms | monthlyCost (KES) |
+| ---- | -----: | -----------: | --: | ----------------: |
+| support | 20480 | 100 | 70 | 1500 |
+| professional | 40960 | 200 | 135 | 2500 |
+| manager | 61440 | 300 | 205 | 3500 |
+| field | 102400 | 500 | 340 | 5000 |
+
+Data bundles match `TIER_BUNDLE_GB` in the ML service (1 GB = 1024 MB). Voice
+and SMS are the cycle totals in the demo usage (used plus remaining). The
+costs are demo values: the source data has no prices. The rows are seeded by
+the AddTierAllowances migration; there is no write endpoint. `sims.tier` is a
+foreign key to this table.
 
 ### Differences from the frontend mock
 
@@ -160,13 +253,54 @@ with `gb` cumulative. This endpoint returns raw days instead:
 
 - MB per day, not cumulative GB. Cumulative GB is a running sum of `totalMb`
   divided by 1024.
-- No billing cycle or plan limits: the backend has no bundle sizes. The
-  contract's `voiceMinutesRemaining` and `smsRemaining` are the closest
-  thing.
-- `getUsageAnalytics` is fleet-wide and has no backend endpoint yet.
+- The billing cycle view and plan limits are in `GET /api/sims/{id}/usage/cycle`.
+- `getUsageAnalytics` maps to `GET /api/usage/analytics`.
 
 The carrier items have no `status` ("connected" / "not connected") field;
-the backend has nothing to base it on.
+the backend has nothing to base it on, so the frontend shows no status badge.
+
+## SIM tier
+
+`sims.tier` is the SIM's ML plan tier: `field`, `manager`, `professional` or
+`support` (the tiers in the ML contract and the cohort keys in
+`ml-service/artifacts/cohort_stats.json`). The tier decides which ML cohort
+the SIM is compared with. The view `ml_daily_usage` returns `sims.tier` in
+place of the tier stored on each usage row when it is set, so a change
+affects every score computed after it (and any rescoring of past days); it
+does not change scores already stored. `GET /api/sims/{id}/usage` still shows
+the tier stored on each usage row.
+
+The AddSimTier migration set the tier of every SIM with usage from its most
+recent usage row. SIMs without usage have no tier (`null`) until one is set.
+Every SIM response (`GET /api/sims`, `GET /api/sims/{id}`, POST, PUT and
+the status PATCH) includes `tier` (one of the four tiers, or `null`), placed
+after `status`.
+
+`sims.iccid` already exists (required, unique, at most 30 characters), so no
+ICCID migration was needed. The SIM endpoints keep their current ICCID
+check; the CSV import (see [imports.md](imports.md)) is stricter and accepts
+18 to 22 digits only.
+
+### PATCH /api/sims/{id}/tier
+
+SecurityOfficer only (`OrgWrite`). Request: `{ "tier": "manager" }`, trimmed
+and compared ignoring case.
+
+```json
+{ "simId": 125, "tier": "manager", "previousTier": "professional" }
+```
+
+`previousTier` is `null` when the SIM had no tier. Sending the current tier
+returns 200 and writes no audit entry. A change writes `sim.tier_changed`
+with `oldValues {tier}` and `newValues {tier}`.
+
+| Status | When |
+| ------ | ---- |
+| 400 | tier missing (`errors.tier` "tier is required.") or not one of the four tiers |
+| 404 | unknown SIM |
+
+The frontend mock `setSimTier` also changes plan limits and cost; this
+endpoint only changes the tier.
 
 ## Smoke test
 

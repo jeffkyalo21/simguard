@@ -58,7 +58,7 @@ export function DataTable({
       return (
         <tr>
           <td colSpan={columns.length}>
-            <ErrorState onRetry={onRetry} />
+            <ErrorState error={error} onRetry={onRetry} />
           </td>
         </tr>
       );

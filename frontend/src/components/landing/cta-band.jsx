@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import { BookDemoButton } from "@/components/landing/demo-dialog";
+import { RegisterButton } from "@/components/landing/register-dialog";
 import { InView } from "@/components/landing/in-view";
 import { Button } from "@/components/ui/button";
 import { copy } from "@/lib/copy";
@@ -18,10 +18,10 @@ export function CtaBand() {
           </div>
           <span className="cta-glow relative rounded-full">
             <Button asChild size="lg" className="h-11 px-6 text-base">
-              <BookDemoButton>
-                {copy.landing.bookDemo}
+              <RegisterButton>
+                {copy.landing.registerLabel}
                 <ArrowRight aria-hidden="true" />
-              </BookDemoButton>
+              </RegisterButton>
             </Button>
           </span>
         </div>

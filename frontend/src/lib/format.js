@@ -31,8 +31,12 @@ const numberFormat = new Intl.NumberFormat(LOCALE);
 function parseUtc(iso) {
   if (!iso) return null;
 
+  // A date without a time ("2025-03-31", detectedOn and asOf) is that day:
+  // midday UTC is the same calendar day in Nairobi.
   // Treat timestamps without an offset as UTC rather than local time.
-  const value = /([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`;
+  const value = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? `${iso}T12:00:00Z`
+    : /([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : `${iso}Z`;
   const date = new Date(value);
 
   return Number.isNaN(date.getTime()) ? null : date;
@@ -129,9 +133,4 @@ export function dayToUtc(day, edge) {
   const time = edge === "end" ? "23:59:59.999" : "00:00:00.000";
   const date = new Date(`${day}T${time}${NAIROBI_OFFSET}`);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-}
-
-/** Today in Nairobi as "YYYY-MM-DD", for date inputs and their limits. */
-export function todayDay(now = new Date()) {
-  return now.toLocaleDateString("en-CA", { timeZone: TIME_ZONE });
 }

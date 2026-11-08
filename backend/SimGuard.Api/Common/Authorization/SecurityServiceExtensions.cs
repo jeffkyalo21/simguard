@@ -11,6 +11,7 @@ namespace SimGuard.Api.Common.Authorization;
 public static class SecurityServiceExtensions
 {
     public const string AuthRateLimitPolicy = "auth";
+    public const string AccessRequestRateLimitPolicy = "access-requests";
     public const string CorsPolicy = "Frontend";
     public const string DefaultAllowedOrigin = "http://localhost:3000";
 
@@ -182,6 +183,20 @@ public static class SecurityServiceExtensions
                     {
                         PermitLimit = permitLimit,
                         Window = window,
+                        QueueLimit = 0
+                    }));
+
+            // The public access request form: few requests per hour per IP.
+            var requestLimit = configuration.GetValue("RateLimiting:AccessRequests:PermitLimit", 5);
+            var requestWindow = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:AccessRequests:WindowSeconds", 3600));
+
+            options.AddPolicy(AccessRequestRateLimitPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = requestLimit,
+                        Window = requestWindow,
                         QueueLimit = 0
                     }));
         });

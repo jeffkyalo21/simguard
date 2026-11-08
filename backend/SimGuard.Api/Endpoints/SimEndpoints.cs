@@ -19,7 +19,7 @@ public static class SimEndpoints
     {
         var group = routes.MapGroup("/sims")
             .WithTags("SIMs")
-            .RequireAuthorization(AuthPolicies.CanRead);
+            .RequireAuthorization(AuthPolicies.OrgRead);
 
         group.MapGet("/", GetSims)
             .WithName("GetSims")
@@ -33,14 +33,14 @@ public static class SimEndpoints
 
         group.MapPost("/", CreateSim)
             .WithName("CreateSim")
-            .RequireAuthorization(AuthPolicies.CanManageSims)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<SimResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapPut("/{id:int}", UpdateSim)
             .WithName("UpdateSim")
-            .RequireAuthorization(AuthPolicies.CanManageSims)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<SimResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -48,15 +48,22 @@ public static class SimEndpoints
 
         group.MapPatch("/{id:int}/status", UpdateSimStatus)
             .WithName("UpdateSimStatus")
-            .RequireAuthorization(AuthPolicies.CanChangeSimStatus)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces<SimResponse>()
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapPatch("/{id:int}/tier", UpdateSimTier)
+            .WithName("UpdateSimTier")
+            .RequireAuthorization(AuthPolicies.OrgWrite)
+            .Produces<SimTierResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         group.MapDelete("/{id:int}", DeleteSim)
             .WithName("DeleteSim")
-            .RequireAuthorization(AuthPolicies.CanManageSims)
+            .RequireAuthorization(AuthPolicies.OrgWrite)
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
@@ -188,7 +195,7 @@ public static class SimEndpoints
 
         if (conflict is not null)
         {
-            return ApiProblems.Conflict(conflict);
+            return Duplicate(conflict.Value);
         }
 
         var sim = new Sim
@@ -243,7 +250,7 @@ public static class SimEndpoints
 
         if (conflict is not null)
         {
-            return ApiProblems.Conflict(conflict);
+            return Duplicate(conflict.Value);
         }
 
         var before = Snapshot(sim);
@@ -314,6 +321,53 @@ public static class SimEndpoints
         }
 
         return TypedResults.Ok(await FindSimResponseAsync(db, id, cancellationToken));
+    }
+
+    // The tier picks the ML cohort the SIM is compared with, so a change
+    // affects every score computed after it (see ml_daily_usage).
+    private static async Task<IResult> UpdateSimTier(
+        int id,
+        SimTierRequest request,
+        SimGuardDbContext db,
+        AuditWriter audit,
+        CancellationToken cancellationToken)
+    {
+        var tier = request.Tier?.Trim().ToLowerInvariant();
+
+        if (string.IsNullOrEmpty(tier))
+        {
+            return Invalid("tier", "tier is required.");
+        }
+
+        if (!SimTiers.All.Contains(tier))
+        {
+            return Invalid("tier", $"tier must be one of: {string.Join(", ", SimTiers.All)}.");
+        }
+
+        string? oldTier;
+
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            var sim = await LockSimAsync(db, id, cancellationToken);
+
+            if (sim is null)
+            {
+                return ApiProblems.NotFound($"SIM {id} was not found.");
+            }
+
+            oldTier = sim.Tier;
+
+            if (oldTier != tier)
+            {
+                sim.Tier = tier;
+                audit.Add(AuditActions.SimTierChanged, sim.Id, new { tier = oldTier }, new { tier });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return TypedResults.Ok(new SimTierResponse(id, tier, oldTier));
     }
 
     private static async Task<IResult> DeleteSim(
@@ -467,7 +521,16 @@ public static class SimEndpoints
         return byName;
     }
 
-    private static async Task<string?> FindUniquenessConflictAsync(
+    // A duplicate phone number or ICCID: the usual 409 ProblemDetails plus
+    // the error on the field (additive, issue #14), so a form can show it
+    // next to the input.
+    private static IResult Duplicate((string Field, string Message) conflict) =>
+        ApiProblems.Conflict(conflict.Message, new Dictionary<string, object?>
+        {
+            ["errors"] = new Dictionary<string, string[]> { [conflict.Field] = [conflict.Message] }
+        });
+
+    private static async Task<(string Field, string Message)?> FindUniquenessConflictAsync(
         SimGuardDbContext db,
         ValidatedSim values,
         int? excludeId,
@@ -477,14 +540,14 @@ public static class SimEndpoints
                 s => s.PhoneNumber == values.PhoneNumber && (excludeId == null || s.Id != excludeId),
                 cancellationToken))
         {
-            return $"A SIM with phone number '{values.PhoneNumber}' already exists.";
+            return ("phoneNumber", $"A SIM with phone number '{values.PhoneNumber}' already exists.");
         }
 
         if (await db.Sims.AnyAsync(
                 s => s.Iccid == values.Iccid && (excludeId == null || s.Id != excludeId),
                 cancellationToken))
         {
-            return $"A SIM with ICCID '{values.Iccid}' already exists.";
+            return ("iccid", $"A SIM with ICCID '{values.Iccid}' already exists.");
         }
 
         return null;
@@ -517,10 +580,19 @@ public static class SimEndpoints
             sim.CarrierId,
             sim.Carrier.Name,
             sim.PlanType,
-            sim.MonthlyCost,
+            sim.MonthlyCost != 0 || sim.TierAllowance is null ? sim.MonthlyCost : sim.TierAllowance.MonthlyCost,
             sim.Status,
+            sim.Tier,
             sim.CreatedAt,
-            currentAllocation);
+            currentAllocation,
+            sim.TierAllowance is null
+                ? null
+                : new TierAllowanceResponse(
+                    sim.TierAllowance.Tier,
+                    sim.TierAllowance.DataMb,
+                    sim.TierAllowance.VoiceMinutes,
+                    sim.TierAllowance.Sms,
+                    sim.TierAllowance.MonthlyCost));
 
     private sealed record ValidatedSim(
         string PhoneNumber,

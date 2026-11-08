@@ -1,6 +1,6 @@
 import { Bricolage_Grotesque } from "next/font/google";
 import { ArrowRight } from "lucide-react";
-import { BookDemoButton } from "@/components/landing/demo-dialog";
+import { RegisterButton } from "@/components/landing/register-dialog";
 import { ScrollLink } from "@/components/landing/scroll-link";
 import { Button } from "@/components/ui/button";
 import { copy } from "@/lib/copy";
@@ -53,10 +53,10 @@ export function Hero() {
         </p>
         <div className="hero-fade flex flex-wrap items-center justify-center gap-3" style={{ "--i": 1 }}>
           <Button asChild size="lg" className="h-12 px-7 text-base">
-            <BookDemoButton>
-              {text.bookDemo}
+            <RegisterButton>
+              {text.registerLabel}
               <ArrowRight aria-hidden="true" />
-            </BookDemoButton>
+            </RegisterButton>
           </Button>
           <Button asChild size="lg" variant="outline" className="h-12 px-7 text-base">
             <ScrollLink href="#how-it-works">{text.seeHow}</ScrollLink>

@@ -1,13 +1,10 @@
 # Frontend - Next.js
 
 The SimGuard web app: a dashboard for monitoring a company SIM fleet (SIMs,
-allocations, usage and misuse alerts). It will talk to the ASP.NET Core API in
-`backend/SimGuard.Api`.
-
-Built so far: the scaffold (#16) and the Landing, Login, Dashboard, SIM list
-and SIM profile screens (#17). **All screens run on mock data**: there are no
-API calls, no auth and no CORS needed yet. Auth arrives in #15, the remaining
-screens in #18 and #19.
+allocations, usage and misuse alerts). It talks to the ASP.NET Core API in
+`backend/SimGuard.Api` through `lib/data.js`; every screen reads and writes
+real backend data (#14). There is no mock data: a screen shows the backend's
+answer or an error.
 
 ## Prerequisites
 
@@ -21,11 +18,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000. Any email and password signs in (mock login).
-
-`NEXT_PUBLIC_API_URL` in `.env.local` sets the API base URL (default
-`http://localhost:5275`). Nothing reads it until the mock layer is swapped
-for real calls. `.env.local` is git-ignored; never commit it.
+Open http://localhost:3000 and sign in with a backend account. The backend
+must be running: `BACKEND_URL` in `.env.local` is its address (default
+`http://localhost:5275`). It is read on the server only; the browser never
+talks to the backend and never sees a token. `.env.local` is git-ignored;
+never commit it. See [docs/auth-frontend.md](docs/auth-frontend.md) for the
+design, the cookies, the route handlers and how to run it locally.
 
 ## Scripts
 
@@ -35,6 +33,7 @@ for real calls. `.env.local` is git-ignored; never commit it.
 | `npm run build` | Production build                 |
 | `npm run start` | Serve the production build       |
 | `npm run lint`  | ESLint                           |
+| `npm test`      | Unit tests (`node --test`)       |
 
 ## Folder layout
 
@@ -44,18 +43,25 @@ src/
     layout.jsx              root layout: font, glass theme, backdrop, toaster
     icon.svg                favicon (the SimGuard mark)
     (marketing)/page.jsx    landing page at "/"
-    (auth)/login/page.jsx   login
-    (app)/layout.jsx        app shell + mock store provider
+    (auth)/login/...        sign in, mfa, mfa-setup, change-password
+    (app)/layout.jsx        app shell: checks the session, checks the session, auth provider
+    (app)/admin             Admin area: scoring status and Run now
+    api/auth/...            route handlers: login, mfa, enrolment, password, logout, me
+    api/backend/[...path]   forwards signed in calls to the backend
     (app)/dashboard, sims, sims/[id]        built screens
-    (app)/alerts, alerts/[id], usage, allocations, audit-log, settings   placeholders
+    (app)/alerts, alerts/[id], usage, allocations, audit-log, settings,
+    tier-recommendations
     not-found.jsx, error.jsx
                 (no root loading.jsx: the nav would then stream first; the
                 dynamic routes set `instant = false` and block instead)
-  proxy.js                  404s unknown SIM ids before /sims/[id] renders
+  proxy.js                  sends pages without a session cookie to /login, and
+                            404s unknown SIM ids before /sims/[id] renders
                             (its prerendered shell would otherwise send a 200)
   components/
     landing/    landing sections, landing.css and its motion helpers (used by "/" only)
     dashboard/  dashboard-view
+    admin/      admin-view (scoring status)
+    tier-recommendations/  tier-recommendations-view
     sims/       sims-view, sim-profile, sim-form-dialog, sim-status-dialog, tier-dialog
     data/       data-table, pagination, filter-select, search-input, kpi-card,
                 section-card, bar-list, line-chart, progress-bar, risk-bar, skeletons
@@ -65,44 +71,49 @@ src/
     layout/     pill-nav, icon-button, nav-items, theme-toggle, page-header,
                 page-transition, logo
     glass/      glass-card
-    auth/       login-form
+    auth/       login, mfa, mfa-setup and change-password forms, auth-provider,
+                route-guard, sign-out-button, error-summary, qr-code
     ui/         shadcn/ui components (generated, keep edits minimal)
   hooks/
     use-resource.js       load data with loading, error and retry
+    use-permission.js     whether the role may do an action, and why not
     use-opening-key.js    reset a dialog's form each time it opens
     use-return-focus.js   return focus to whatever opened a dialog
   lib/
-    data.js        the only data access point for screens (mock for now)
-    mock/          fixtures, seeded random, in-memory db and its React store
+    data.js        the only data access point for screens (backend calls)
+    data-version.js  bumped after every write so loaded screens reload
     validation.js  phone normalising and SIM form rules (mirrors the backend)
     format.js      dates, KES, numbers, phone numbers, data sizes
     copy.js        every user-facing string
-    api.js         fetch wrapper for when real calls start
+    api.js         fetch wrapper for /api/backend, ApiError, errorMessage
+    auth/          core (pure helpers, unit tested), server (cookies, backend
+                   calls) and client (route handler calls)
+    permissions.js which role may open which page and do which action
 ```
 
-## Mock data layer
+## Data layer
 
-Screens never import from `lib/mock` directly. They call functions in
+Screens never call `fetch` themselves. They call functions in
 `src/lib/data.js` (`listSims`, `getSim`, `getDashboard`, `createSim`,
-`setSimStatus` and so on), which return the same shapes the backend returns
-(`{ items, page, pageSize, total }` for lists, `ApiError` with a field `errors`
-map for validation) after a ~300 ms delay. Swapping to the real API later
-means changing the function bodies in `data.js` only.
+`setSimStatus` and so on), which call the backend through `/api/backend` and
+return its response shapes (`{ items, page, pageSize, total }` for lists).
+A failed call throws `ApiError` with the status, the field `errors` map and
+any extra ProblemDetails fields in `extensions`. Show it with
+`errorMessage(error, { 409: "..." })` from `lib/api.js`, never the backend's
+own sentence.
 
-- **Fixtures** (`lib/mock/fixtures.js`) are deterministic: a seeded random
-  generator builds 120 SIMs with fictional, generic employees and the
-  departments Flight ops, Ground handling, Finance, IT, Cargo and Customer
-  care. Operators are "Carrier A/B/C". The clock is fixed at 29 Oct 2026.
-- **Writes persist for the session.** The `(app)` layout holds a reducer
-  store (`lib/mock/store.jsx`); adding, editing or changing a SIM updates the
-  list, the profile and the dashboard during client navigation. A full page
-  reload resets to the fixtures.
-- **State checks:** add `?mock=error` or `?mock=empty` to any app URL to see
-  the error or empty states.
+- **Writes refresh screens.** Every write bumps the data version
+  (`lib/data-version.js`) on success and on 409, so every mounted
+  `useResource` reloads.
+- **Role gating.** Buttons for actions the role cannot do are disabled with a
+  `DisabledReason` tooltip (`usePermission(action)`); the backend refuses the
+  same actions with 403.
+- **No browser clock.** No screen uses the current date as "now"; dates come
+  from the backend.
 
 Use `useResource(load, key)` from `src/hooks` to load data in a screen (`key`
 is an array of the inputs, like effect deps). It gives
-`{ data, error, loading, retry }` and reloads when the store changes.
+`{ data, error, loading, retry }` and reloads when the data version changes.
 
 ## Theme
 
@@ -199,8 +210,8 @@ centred at a 1280 px max width with 24 px side padding. Login has no nav.
 - **All copy lives in `src/lib/copy.js`.** Sentence case, short, no status
   codes shown to users.
 - **Branding.** The product is "SimGuard" with its generic shield mark. Never
-  include real company names or logos anywhere (code, comments, copy, mock
-  data, file names, alt text, docs), and no "trusted by" strips. Mock people
+  include real company names or logos anywhere (code, comments, copy, demo
+  data, file names, alt text, docs), and no "trusted by" strips. Demo people
   and departments stay fictional and generic. No photo or image backdrops.
 
 ## Adding a screen
@@ -208,8 +219,8 @@ centred at a 1280 px max width with 24 px side padding. Login has no nav.
 1. Add `src/app/(app)/<route>/page.jsx`. Keep it a thin server component that
    renders one client view (`components/<area>/<area>-view.jsx`). If the view
    reads `useSearchParams`, wrap it in `<Suspense>` with a skeleton fallback.
-2. Add the data functions to `src/lib/data.js` (with mock bodies under
-   `src/lib/mock`), returning the backend's response shape.
+2. Add the data functions to `src/lib/data.js`, returning the backend's
+   response shape.
 3. Load data with `useResource`, and build from `PageHeader`, `GlassCard`,
    `SectionCard`, `DataTable`, `FilterSelect`, `Pagination`, `FormDialog` and
    `ConfirmDialog` so states (loading, empty, error) come for free. Pick the

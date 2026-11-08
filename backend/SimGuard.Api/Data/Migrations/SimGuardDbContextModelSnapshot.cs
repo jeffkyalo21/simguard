@@ -177,6 +177,81 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("app_user_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.AccessRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<string>("Organisation")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("organisation");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<string>("ReviewedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("reviewed_by_email");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("idx_access_requests_created_at");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("idx_access_requests_pending_email")
+                        .HasFilter("status = 'pending'");
+
+                    b.ToTable("access_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_access_requests_role", "role IN ('SecurityOfficer', 'Auditor')");
+
+                            t.HasCheckConstraint("chk_access_requests_status", "status IN ('pending', 'approved', 'declined')");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Alert", b =>
                 {
                     b.Property<int>("Id")
@@ -191,6 +266,14 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateOnly?>("DetectedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("detected_on");
+
+                    b.Property<DateOnly?>("LastDetectedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("last_detected_on");
 
                     b.Property<string>("ModelVersion")
                         .HasMaxLength(50)
@@ -255,6 +338,9 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("idx_alerts_created_at");
+
+                    b.HasIndex("DetectedOn")
+                        .HasDatabaseName("idx_alerts_detected_on");
 
                     b.HasIndex("ModelVersion")
                         .HasDatabaseName("idx_alerts_model_version");
@@ -455,6 +541,11 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("actor_email");
 
+                    b.Property<string>("ActorRole")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("actor_role");
+
                     b.Property<int?>("ActorUserId")
                         .HasColumnType("integer")
                         .HasColumnName("actor_user_id");
@@ -462,6 +553,12 @@ namespace SimGuard.Api.Data.Migrations
                     b.Property<int?>("AffectedSimId")
                         .HasColumnType("integer")
                         .HasColumnName("affected_sim_id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("category");
 
                     b.Property<JsonDocument>("NewValues")
                         .HasColumnType("jsonb")
@@ -492,13 +589,19 @@ namespace SimGuard.Api.Data.Migrations
                     b.HasIndex("AffectedSimId")
                         .HasDatabaseName("idx_audit_logs_sim");
 
+                    b.HasIndex("Category")
+                        .HasDatabaseName("idx_audit_logs_category");
+
                     b.HasIndex("Timestamp")
                         .HasDatabaseName("idx_audit_logs_timestamp");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("idx_audit_logs_user");
 
-                    b.ToTable("audit_logs", (string)null);
+                    b.ToTable("audit_logs", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_audit_logs_category", "category IN ('system', 'organisation')");
+                        });
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.AuthEvent", b =>
@@ -762,6 +865,114 @@ namespace SimGuard.Api.Data.Migrations
                     b.ToTable("employees", (string)null);
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.ImportRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ErrorCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("error_count");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<DateTime>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("Inserted")
+                        .HasColumnType("integer")
+                        .HasColumnName("inserted");
+
+                    b.Property<int>("InvalidRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("invalid_rows");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.Property<bool>("SkipInvalid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("skip_invalid");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_rows");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<int>("Unchanged")
+                        .HasColumnType("integer")
+                        .HasColumnName("unchanged");
+
+                    b.Property<int>("Updated")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated");
+
+                    b.Property<string>("UploadedByEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("uploaded_by_email");
+
+                    b.Property<int?>("UploadedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("uploaded_by_user_id");
+
+                    b.Property<int>("ValidRows")
+                        .HasColumnType("integer")
+                        .HasColumnName("valid_rows");
+
+                    b.Property<int>("WarningCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("warning_count");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("idx_import_runs_started_at");
+
+                    b.HasIndex("Type")
+                        .HasDatabaseName("idx_import_runs_type");
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.ToTable("import_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_import_runs_status", "status IN ('committed', 'rejected', 'failed')");
+
+                            t.HasCheckConstraint("chk_import_runs_type", "type IN ('departments', 'employees', 'sims', 'allocations', 'usage')");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>
                 {
                     b.Property<long>("Id")
@@ -829,6 +1040,129 @@ namespace SimGuard.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.ScoringRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AlertsCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("alerts_created");
+
+                    b.Property<int>("AlertsUpdated")
+                        .HasColumnType("integer")
+                        .HasColumnName("alerts_updated");
+
+                    b.Property<int>("DatesScored")
+                        .HasColumnType("integer")
+                        .HasColumnName("dates_scored");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("error_summary");
+
+                    b.Property<int>("Failures")
+                        .HasColumnType("integer")
+                        .HasColumnName("failures");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<DateOnly?>("FirstDate")
+                        .HasColumnType("date")
+                        .HasColumnName("first_date");
+
+                    b.Property<bool>("Force")
+                        .HasColumnType("boolean")
+                        .HasColumnName("force");
+
+                    b.Property<DateOnly?>("LastDate")
+                        .HasColumnType("date")
+                        .HasColumnName("last_date");
+
+                    b.Property<int>("MergedRequests")
+                        .HasColumnType("integer")
+                        .HasColumnName("merged_requests");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("model_version");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("requested_by");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<DateOnly?>("ScopeFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("scope_from");
+
+                    b.PrimitiveCollection<int[]>("ScopeSimIds")
+                        .HasColumnType("integer[]")
+                        .HasColumnName("scope_sim_ids");
+
+                    b.Property<DateOnly?>("ScopeTo")
+                        .HasColumnType("date")
+                        .HasColumnName("scope_to");
+
+                    b.Property<int>("SimDaysScored")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_days_scored");
+
+                    b.Property<int>("SimDaysSkipped")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_days_skipped");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("trigger");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedAt")
+                        .HasDatabaseName("idx_scoring_runs_requested_at");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_scoring_runs_status");
+
+                    b.ToTable("scoring_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_scoring_runs_status", "status IN ('queued', 'running', 'succeeded', 'partial', 'failed')");
+
+                            t.HasCheckConstraint("chk_scoring_runs_trigger", "trigger IN ('schedule', 'manual', 'import')");
+                        });
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>
                 {
                     b.Property<int>("Id")
@@ -879,6 +1213,11 @@ namespace SimGuard.Api.Data.Migrations
                         .HasDefaultValue("available")
                         .HasColumnName("status");
 
+                    b.Property<string>("Tier")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tier");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CarrierId")
@@ -893,9 +1232,304 @@ namespace SimGuard.Api.Data.Migrations
                     b.HasIndex("Status")
                         .HasDatabaseName("idx_sims_status");
 
+                    b.HasIndex("Tier");
+
                     b.ToTable("sims", null, t =>
                         {
                             t.HasCheckConstraint("CK_sims_status", "status IN ('available', 'assigned', 'inactive')");
+
+                            t.HasCheckConstraint("CK_sims_tier", "tier IS NULL OR tier IN ('field', 'manager', 'professional', 'support')");
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierAllowance", b =>
+                {
+                    b.Property<string>("Tier")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tier");
+
+                    b.Property<int>("DataMb")
+                        .HasColumnType("integer")
+                        .HasColumnName("data_mb");
+
+                    b.Property<decimal>("MonthlyCost")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("monthly_cost");
+
+                    b.Property<int>("Sms")
+                        .HasColumnType("integer")
+                        .HasColumnName("sms");
+
+                    b.Property<int>("VoiceMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("voice_minutes");
+
+                    b.HasKey("Tier");
+
+                    b.ToTable("tier_allowances", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_tier_allowances_tier", "tier IN ('field', 'manager', 'professional', 'support')");
+
+                            t.HasCheckConstraint("CK_tier_allowances_values", "data_mb > 0 AND voice_minutes >= 0 AND sms >= 0 AND monthly_cost >= 0");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Tier = "support",
+                            DataMb = 20480,
+                            MonthlyCost = 1500m,
+                            Sms = 70,
+                            VoiceMinutes = 100
+                        },
+                        new
+                        {
+                            Tier = "professional",
+                            DataMb = 40960,
+                            MonthlyCost = 2500m,
+                            Sms = 135,
+                            VoiceMinutes = 200
+                        },
+                        new
+                        {
+                            Tier = "manager",
+                            DataMb = 61440,
+                            MonthlyCost = 3500m,
+                            Sms = 205,
+                            VoiceMinutes = 300
+                        },
+                        new
+                        {
+                            Tier = "field",
+                            DataMb = 102400,
+                            MonthlyCost = 5000m,
+                            Sms = 340,
+                            VoiceMinutes = 500
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at");
+
+                    b.Property<int?>("AppliedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("applied_by_user_id");
+
+                    b.Property<int>("BillingCycle")
+                        .HasColumnType("integer")
+                        .HasColumnName("billing_cycle");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CurrentTier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("current_tier");
+
+                    b.Property<int?>("DaysToDepletion")
+                        .HasColumnType("integer")
+                        .HasColumnName("days_to_depletion");
+
+                    b.Property<DateTime?>("DismissedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dismissed_at");
+
+                    b.Property<int?>("DismissedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("dismissed_by_user_id");
+
+                    b.Property<double?>("ProjectedOverageMb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("projected_overage_mb");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Recommendation")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("recommendation");
+
+                    b.Property<string>("RecommendedTier")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("recommended_tier");
+
+                    b.Property<int>("RunId")
+                        .HasColumnType("integer")
+                        .HasColumnName("run_id");
+
+                    b.Property<int>("SimId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sim_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppliedByUserId");
+
+                    b.HasIndex("DismissedByUserId");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("SimId")
+                        .IsUnique()
+                        .HasDatabaseName("idx_tier_recs_one_open_per_sim")
+                        .HasFilter("status = 'open'");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("idx_tier_recs_status");
+
+                    b.HasIndex("SimId", "Status")
+                        .HasDatabaseName("idx_tier_recs_sim_status");
+
+                    b.ToTable("tier_recommendations", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_tier_recs_current_tier", "current_tier IN ('field', 'manager', 'professional', 'support')");
+
+                            t.HasCheckConstraint("chk_tier_recs_recommendation", "recommendation IN ('upgrade', 'downgrade')");
+
+                            t.HasCheckConstraint("chk_tier_recs_recommended_tier", "recommended_tier IN ('field', 'manager', 'professional', 'support')");
+
+                            t.HasCheckConstraint("chk_tier_recs_status", "status IN ('open', 'dismissed', 'applied')");
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationRun", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("BillingCycle")
+                        .HasColumnType("integer")
+                        .HasColumnName("billing_cycle");
+
+                    b.Property<string>("ErrorSummary")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("error_summary");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("RecommendationsCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("recommendations_created");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("requested_by");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<int>("SimsEvaluated")
+                        .HasColumnType("integer")
+                        .HasColumnName("sims_evaluated");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("trigger");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("idx_tier_rec_runs_started_at");
+
+                    b.ToTable("tier_recommendation_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_tier_rec_runs_status", "status IN ('running', 'succeeded', 'partial', 'failed')");
+
+                            t.HasCheckConstraint("chk_tier_rec_runs_trigger", "trigger IN ('manual', 'automatic')");
+                        });
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<int>("IntervalDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("interval_days");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("tier_recommendation_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("chk_tier_rec_settings_interval", "interval_days BETWEEN 90 AND 365");
+
+                            t.HasCheckConstraint("chk_tier_rec_settings_single_row", "id = 1");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            IntervalDays = 90
                         });
                 });
 
@@ -1061,6 +1695,16 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("Department");
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.ImportRun", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "UploadedBy")
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UploadedBy");
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>
                 {
                     b.HasOne("SimGuard.Api.Models.Sim", "Sim")
@@ -1072,6 +1716,16 @@ namespace SimGuard.Api.Data.Migrations
                     b.Navigation("Sim");
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.ScoringRun", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RequestedByUser");
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.Sim", b =>
                 {
                     b.HasOne("SimGuard.Api.Models.Carrier", "Carrier")
@@ -1080,7 +1734,67 @@ namespace SimGuard.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("SimGuard.Api.Models.TierAllowance", "TierAllowance")
+                        .WithMany()
+                        .HasForeignKey("Tier")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Carrier");
+
+                    b.Navigation("TierAllowance");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendation", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "AppliedByUser")
+                        .WithMany()
+                        .HasForeignKey("AppliedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SimGuard.Api.Models.AppUser", "DismissedByUser")
+                        .WithMany()
+                        .HasForeignKey("DismissedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SimGuard.Api.Models.TierRecommendationRun", "Run")
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SimGuard.Api.Models.Sim", "Sim")
+                        .WithMany()
+                        .HasForeignKey("SimId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppliedByUser");
+
+                    b.Navigation("DismissedByUser");
+
+                    b.Navigation("Run");
+
+                    b.Navigation("Sim");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationRun", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RequestedByUser");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.TierRecommendationSettings", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "UpdatedByUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.Carrier", b =>

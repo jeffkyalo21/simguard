@@ -17,11 +17,13 @@ import { FormDialog } from "@/components/shared/form-dialog";
 import { NotFoundContent } from "@/components/shared/not-found-content";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
+import { activityText, activityTime } from "@/components/sims/activity-text";
 import { Button } from "@/components/ui/button";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
-import { ApiError } from "@/lib/api";
+import { ApiError, errorMessage } from "@/lib/api";
 import { getAlert, getSimRisk, listSimActivity, setAlertStatus } from "@/lib/data";
-import { GATE_BANDS, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
+import { GATE_BANDS, formatDate, formatDateTime, formatPhone, formatShortDate } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const text = copy.alertDetail;
@@ -30,23 +32,20 @@ function featureLabel(feature) {
   return copy.featureLabels[feature] ?? feature.replaceAll("_", " ");
 }
 
-function activityLabel(entry) {
-  if (entry.kind === "alertStatus") {
-    const detail = entry.detail;
-    return `${copy.alertTypes[detail.type] ?? detail.type} alert: ${copy.risk[detail.status] ?? detail.status}${detail.resolution ? ` (${copy.alertResolution[detail.resolution]})` : ""}`;
-  }
-  if (entry.kind === "alert") return copy.simProfile.activity.alert(copy.alertTypes[entry.detail] ?? entry.detail);
-  if (entry.kind === "allocated") return copy.simProfile.activity.allocated(entry.detail);
-  if (entry.kind === "returned") return copy.simProfile.activity.returned(entry.detail);
-  if (entry.kind === "created") return copy.simProfile.activity.created;
-  return copy.simProfile.activity[entry.kind] ?? entry.kind;
+// The ML service sends raw contributions (any size, negative when a feature
+// lowers the risk). Each reason shows its share of the total effect.
+function shareOf(reasons) {
+  const total = reasons.reduce((sum, reason) => sum + Math.abs(Number(reason.contribution) || 0), 0);
+  return (reason) => (total > 0 ? Math.abs(Number(reason.contribution) || 0) / total : 0);
 }
 
 function ReasonList({ reasons }) {
+  const share = shareOf(reasons);
   return (
     <ul className="flex flex-col divide-y divide-border">
       {reasons.map((reason, index) => {
-        const contribution = text.contribution(reason.contribution);
+        const value = share(reason);
+        const contribution = text.contribution(value);
         return (
           <li key={`${reason.feature}-${index}`} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
             <div className="min-w-0">
@@ -54,7 +53,7 @@ function ReasonList({ reasons }) {
               <p className="text-sm text-muted-foreground">{text.direction[reason.direction] ?? reason.direction}</p>
             </div>
             <div className="flex items-center gap-2">
-              <ProgressBar value={reason.contribution * 100} max={40} label={featureLabel(reason.feature)} valueText={contribution} className="w-20" />
+              <ProgressBar value={value * 100} max={100} label={featureLabel(reason.feature)} valueText={contribution} className="w-20" />
               <span className="text-sm tabular-nums">{contribution}</span>
             </div>
           </li>
@@ -64,14 +63,33 @@ function ReasonList({ reasons }) {
   );
 }
 
+/** One review button; `reason` says why it is disabled, null when it is not. */
+function AlertAction({ reason, busy, onClick, children }) {
+  const disabled = reason !== null || busy;
+  return (
+    <DisabledReason reason={reason ?? ""} disabled={reason !== null}>
+      <Button variant="outline" className="touch-target h-10 px-3" disabled={disabled} onClick={onClick}>{children}</Button>
+    </DisabledReason>
+  );
+}
+
+// 409: someone else moved the alert first; the page reloads it.
+const writeMessages = { 409: text.toasts.conflict };
+
 function Investigation({ alert }) {
-  const risk = useResource(() => getSimRisk(alert.simId, { days: 90 }), [alert.simId]);
+  // The history ends on the alert's last detection day, not today: the demo
+  // scores are in 2025.
+  const riskTo = alert.lastDetectedOn ?? alert.detectedOn ?? undefined;
+  const risk = useResource(() => getSimRisk(alert.simId, { days: 90, to: riskTo }), [alert.simId, riskTo]);
   const activity = useResource(() => listSimActivity(alert.simId), [alert.simId]);
   const [dialog, setDialog] = useState({ open: false, resolution: null });
   const [busy, setBusy] = useState(false);
   const canClose = alert.status === "flagged" || alert.status === "escalated";
   const canReopen = alert.status === "cleared";
   const canConfirm = alert.status === "escalated";
+  const review = usePermission("alerts.review");
+  // The role reason wins over the status reason.
+  const reasonFor = (allowedNow) => review.reason ?? (allowedNow ? null : text.actionUnavailable);
 
   async function closeWithResolution(event) {
     event.preventDefault();
@@ -83,8 +101,8 @@ function Investigation({ alert }) {
       await setAlertStatus(alert.id, { status: "cleared", resolution: dialog.resolution, ...(resolutionNote ? { resolutionNote } : {}) });
       toast.success(dialog.resolution === "confirmedMisuse" ? text.toasts.confirmed : text.toasts.falsePositive);
       setDialog({ open: false, resolution: null });
-    } catch {
-      toast.error(copy.errors.generic);
+    } catch (error) {
+      toast.error(errorMessage(error, writeMessages));
     } finally {
       setBusy(false);
     }
@@ -95,8 +113,8 @@ function Investigation({ alert }) {
     try {
       await setAlertStatus(alert.id, { status });
       toast.success(status === "escalated" ? text.toasts.reopened : text.toasts.flagged);
-    } catch {
-      toast.error(copy.errors.generic);
+    } catch (error) {
+      toast.error(errorMessage(error, writeMessages));
     } finally {
       setBusy(false);
     }
@@ -111,8 +129,8 @@ function Investigation({ alert }) {
     { key: "status", header: copy.columns.status, cell: (item) => <RiskBadge level={item.status} /> },
   ];
   const activityColumns = [
-    { key: "time", header: copy.columns.time, cell: (entry) => formatDateTime(entry.at) },
-    { key: "action", header: copy.columns.action, cell: activityLabel },
+    { key: "time", header: copy.columns.time, cell: activityTime },
+    { key: "action", header: copy.columns.action, cell: activityText },
   ];
 
   return (
@@ -123,18 +141,10 @@ function Investigation({ alert }) {
         badge={<div className="flex flex-wrap items-center gap-2"><RiskBadge level={alert.status} /><span className="text-sm text-muted-foreground">{text.riskLevel}: {copy.alerts.riskLevel[alert.riskLevel] ?? alert.riskLevel}</span><RiskBar score={alert.riskScore} /></div>}
         actions={
           <>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canClose || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canClose || busy} onClick={() => setDialog({ open: true, resolution: "confirmedMisuse" })}>{text.confirmedMisuse}</Button>
-            </DisabledReason>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canClose || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canClose || busy} onClick={() => setDialog({ open: true, resolution: "falsePositive" })}>{text.falsePositive}</Button>
-            </DisabledReason>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canReopen || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canReopen || busy} onClick={() => changeStatus("escalated")}>{text.reopen}</Button>
-            </DisabledReason>
-            <DisabledReason reason={text.actionUnavailable} disabled={!canConfirm || busy}>
-              <Button variant="outline" className="touch-target h-10 px-3" disabled={!canConfirm || busy} onClick={() => changeStatus("flagged")}>{text.confirmFlagged}</Button>
-            </DisabledReason>
+            <AlertAction reason={reasonFor(canClose)} busy={busy} onClick={() => setDialog({ open: true, resolution: "confirmedMisuse" })}>{text.confirmedMisuse}</AlertAction>
+            <AlertAction reason={reasonFor(canClose)} busy={busy} onClick={() => setDialog({ open: true, resolution: "falsePositive" })}>{text.falsePositive}</AlertAction>
+            <AlertAction reason={reasonFor(canReopen)} busy={busy} onClick={() => changeStatus("escalated")}>{text.reopen}</AlertAction>
+            <AlertAction reason={reasonFor(canConfirm)} busy={busy} onClick={() => changeStatus("flagged")}>{text.confirmFlagged}</AlertAction>
           </>
         }
       />
@@ -146,11 +156,11 @@ function Investigation({ alert }) {
         <SectionCard title={text.simAndEmployee}>
           <dl className="grid gap-x-5 sm:grid-cols-2">
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{copy.columns.number}</dt><dd className="mt-1 font-medium"><Link href={`/sims/${alert.sim.id}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring">{formatPhone(alert.sim.phoneNumber)}</Link></dd></div>
-            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.employee}</dt><dd className="mt-1 font-medium">{alert.currentAllocation ? <Link href={`/sims?q=${encodeURIComponent(alert.currentAllocation.employeeName)}`} className="rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring">{alert.currentAllocation.employeeName}</Link> : text.noEmployee}</dd></div>
+            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.employee}</dt><dd className="mt-1 font-medium">{alert.currentAllocation?.employeeName ?? text.noEmployee}</dd></div>
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.department}</dt><dd className="mt-1 font-medium">{alert.currentAllocation?.departmentName ?? copy.common.noValue}</dd></div>
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.iccid}</dt><dd className="mt-1 font-medium">{alert.sim.iccid}</dd></div>
             <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{text.operator}</dt><dd className="mt-1 font-medium">{alert.sim.operator ?? copy.common.noValue}</dd></div>
-            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{copy.columns.detected}</dt><dd className="mt-1 font-medium">{formatDateTime(alert.createdAt)}</dd></div>
+            <div className="border-b border-border py-3 text-sm"><dt className="text-muted-foreground">{copy.columns.detected}</dt><dd className="mt-1 font-medium">{alert.detectedOn ? formatDate(alert.detectedOn) : formatDateTime(alert.createdAt)}</dd></div>
           </dl>
         </SectionCard>
       </div>
@@ -196,7 +206,7 @@ export function AlertDetail({ id }) {
   if (resource.error instanceof ApiError && resource.error.status === 404) {
     return <NotFoundContent title={text.notFound} href="/alerts" action={copy.actions.viewAll} />;
   }
-  if (resource.error) return <><h1 className="sr-only">{copy.pages.alertDetail.title}</h1><ErrorState onRetry={resource.retry} /></>;
+  if (resource.error) return <><h1 className="sr-only">{copy.pages.alertDetail.title}</h1><ErrorState error={resource.error} onRetry={resource.retry} /></>;
   if (!alert) return <div role="status" aria-busy="true" className="flex flex-col gap-5"><h1 className="sr-only">{copy.pages.alertDetail.title}</h1><ListSkeleton rows={8} /></div>;
   return <Investigation key={`${alert.id}-${alert.status}-${alert.resolvedAt ?? "open"}`} alert={alert} />;
 }

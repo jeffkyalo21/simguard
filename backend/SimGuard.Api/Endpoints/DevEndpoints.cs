@@ -25,7 +25,7 @@ public static class DevEndpoints
         routes.MapPost("/dev/seed-demo", SeedDemo)
             .WithTags("Development")
             .WithName("SeedDemo")
-            .RequireAuthorization(AuthPolicies.CanUseDevTools)
+            .RequireAuthorization(AuthPolicies.DevTools)
             .Produces<SeedDemoResponse>()
             .ProducesProblem(StatusCodes.Status409Conflict);
 

@@ -12,8 +12,9 @@
       status change, risk history (including a SIM without scores), risk
       score filters, the SIM activity timeline and the dashboard summary.
 
-    The script signs in as the Development Admin and creates its own
-    Security Officer and Auditor. Admin credentials come from
+    The script signs in as the Development Admin, creates its own
+    Security Officer and Auditor and does every organisation action as the
+    Security Officer (Admin gets 403 on organisation data). Admin credentials come from
     -AdminSecretsFile (written by auth-smoke.ps1) or from the environment
     variables below; the environment wins. Passwords, tokens and MFA
     secrets are never printed.
@@ -211,6 +212,8 @@ $officer = Complete-FirstSignIn 'Officer' $officerEmail $officerTemp
 $auditor = Complete-FirstSignIn 'Auditor' $auditorEmail $auditorTemp
 
 $roles = [ordered]@{ Admin = $admin; Officer = $officer; Auditor = $auditor }
+# Admin is the SimGuard operator and gets 403 on organisation data.
+$orgRead = @{ Admin = 403; Officer = 200; Auditor = 200 }
 
 # --- Anonymous ---------------------------------------------------------------
 foreach ($path in @('/api/alerts', '/api/alerts/1', '/api/sims/1/risk', '/api/risk-scores', '/api/sims/1/activity', '/api/dashboard/summary', '/api/audit-logs')) {
@@ -220,13 +223,13 @@ Check 'PATCH /api/alerts/1/status without token' 401 (Invoke-Api PATCH '/api/ale
 Check 'POST /api/dev/seed-demo without token' 401 (Invoke-Api POST '/api/dev/seed-demo')
 
 # --- Test data: department, employee and SIMs --------------------------------
-$department = Invoke-Api POST '/api/departments' @{ name = "Alerts Smoke $runId" } $admin
-Check 'Admin creates department (audited)' 201 $department
-$employee = Invoke-Api POST '/api/employees' @{ name = "Alerts Smoke $runId"; email = "alerts-employee-$runId@simguard.local"; departmentId = $department.Data.id; jobRole = 'Field Agent' } $admin
-Check 'Admin creates employee (audited)' 201 $employee
+$department = Invoke-Api POST '/api/departments' @{ name = "Alerts Smoke $runId" } $officer
+Check 'Officer creates department (audited)' 201 $department
+$employee = Invoke-Api POST '/api/employees' @{ name = "Alerts Smoke $runId"; email = "alerts-employee-$runId@simguard.local"; departmentId = $department.Data.id; jobRole = 'Field Agent' } $officer
+Check 'Officer creates employee (audited)' 201 $employee
 
 # Enough SIMs for the seeder (30 scored SIMs) plus a few new ones every run.
-$existing = (Invoke-Api GET '/api/sims?pageSize=1' $null $admin).Data.total
+$existing = (Invoke-Api GET '/api/sims?pageSize=1' $null $officer).Data.total
 $toCreate = [math]::Max(3, 32 - $existing)
 $createdSims = @()
 for ($i = 0; $i -lt $toCreate; $i++) {
@@ -237,11 +240,11 @@ for ($i = 0; $i -lt $toCreate; $i++) {
         operator = 'Safaricom'
         planType = 'Postpaid'
         monthlyCost = 1500
-    } $admin
+    } $officer
     if ($sim.Status -ne 201) { throw "Could not create SIM $i (status $($sim.Status))." }
     $createdSims += $sim.Data
 }
-Check-True "Admin created $toCreate SIMs" ($createdSims.Count -eq $toCreate) "SIMs before: $existing"
+Check-True "Officer created $toCreate SIMs" ($createdSims.Count -eq $toCreate) "SIMs before: $existing"
 
 # --- Demo seed ---------------------------------------------------------------
 Check 'Officer POST /api/dev/seed-demo' 403 (Invoke-Api POST '/api/dev/seed-demo' $null $officer)
@@ -255,70 +258,70 @@ Check-True 'Seed creates 60 alerts and 90 days per scored SIM' (($seed2.Data.ale
 
 # A SIM created after seeding has no risk scores.
 $n = ($runId * 40 + 39) % 100000000
-$emptySim = Invoke-Api POST '/api/sims' @{ phoneNumber = '+2547' + $n.ToString('00000000'); iccid = '8925401' + ($runId * 40 + 39).ToString('000000000000'); operator = 'Airtel'; planType = 'Prepaid'; monthlyCost = 500 } $admin
-Check 'Admin creates a SIM without scores' 201 $emptySim
+$emptySim = Invoke-Api POST '/api/sims' @{ phoneNumber = '+2547' + $n.ToString('00000000'); iccid = '8925401' + ($runId * 40 + 39).ToString('000000000000'); operator = 'Airtel'; planType = 'Prepaid'; monthlyCost = 500 } $officer
+Check 'Officer creates a SIM without scores' 201 $emptySim
 
 # --- Alerts: read per role, filters, sorting, paging -------------------------
 foreach ($role in $roles.Keys) {
     $list = Invoke-Api GET '/api/alerts' $null $roles[$role]
-    Check "$role GET /api/alerts" 200 $list "total=$($list.Data.total)"
+    Check "$role GET /api/alerts" $orgRead[$role] $list "total=$($list.Data.total)"
 }
 
-$all = Invoke-Api GET '/api/alerts?pageSize=100' $null $admin
+$all = Invoke-Api GET '/api/alerts?pageSize=100' $null $officer
 $items = @($all.Data.items)
 Check-True 'Default order is newest first' ((@($items | ForEach-Object { [DateTime]$_.createdAt }) -join '|') -eq (@($items | ForEach-Object { [DateTime]$_.createdAt } | Sort-Object -Descending) -join '|'))
 Check-True 'List items carry phone number, reasons and riskLevel' (($items[0].simPhoneNumber -like '+254*') -and (@($items[0].reasons).Count -gt 0) -and ($items[0].riskLevel -in @('high', 'medium', 'low')))
 Check-True 'Types in the list are within the vocabulary' (@($items | Where-Object { $_.type -notin @('inactiveBilling', 'sharing', 'reselling', 'ghostUsage', 'other') }).Count -eq 0)
 
-$flagged = Invoke-Api GET '/api/alerts?status=flagged&pageSize=100' $null $admin
+$flagged = Invoke-Api GET '/api/alerts?status=flagged&pageSize=100' $null $officer
 Check 'Filter status=flagged' 200 $flagged "total=$($flagged.Data.total)"
 Check-True 'status=flagged returns only flagged' (@($flagged.Data.items | Where-Object { $_.status -ne 'flagged' }).Count -eq 0)
 
-$sharing = Invoke-Api GET '/api/alerts?type=sharing&pageSize=100' $null $admin
+$sharing = Invoke-Api GET '/api/alerts?type=sharing&pageSize=100' $null $officer
 Check 'Filter type=sharing' 200 $sharing "total=$($sharing.Data.total)"
 Check-True 'type=sharing returns only sharing' (@($sharing.Data.items | Where-Object { $_.type -ne 'sharing' }).Count -eq 0)
 
 $someSim = $items[0].simId
-$bySim = Invoke-Api GET "/api/alerts?simId=$someSim&pageSize=100" $null $admin
+$bySim = Invoke-Api GET "/api/alerts?simId=$someSim&pageSize=100" $null $officer
 Check 'Filter simId' 200 $bySim "simId=$someSim total=$($bySim.Data.total)"
 Check-True 'simId filter returns only that SIM' (@($bySim.Data.items | Where-Object { $_.simId -ne $someSim }).Count -eq 0)
 
-$high = Invoke-Api GET '/api/alerts?minScore=0.9&pageSize=100' $null $admin
+$high = Invoke-Api GET '/api/alerts?minScore=0.9&pageSize=100' $null $officer
 Check 'Filter minScore=0.9' 200 $high "total=$($high.Data.total)"
 Check-True 'minScore filter returns scores >= 0.9' (@($high.Data.items | Where-Object { [double]$_.riskScore -lt 0.9 }).Count -eq 0)
 
 $fromUtc = [DateTime]::UtcNow.AddDays(-30).ToString('yyyy-MM-ddTHH:mm:ssZ')
 $toUtc = [DateTime]::UtcNow.AddDays(-7).ToString('yyyy-MM-ddTHH:mm:ssZ')
-$range = Invoke-Api GET "/api/alerts?from=$fromUtc&to=$toUtc&pageSize=100" $null $admin
+$range = Invoke-Api GET "/api/alerts?from=$fromUtc&to=$toUtc&pageSize=100" $null $officer
 Check 'Filter from/to' 200 $range "total=$($range.Data.total)"
 Check-True 'from/to filter stays inside the window' (@($range.Data.items | Where-Object { ([DateTime]$_.createdAt).ToUniversalTime() -lt [DateTime]::UtcNow.AddDays(-30).AddMinutes(-1) -or ([DateTime]$_.createdAt).ToUniversalTime() -gt [DateTime]::UtcNow.AddDays(-7).AddMinutes(1) }).Count -eq 0)
 
-$byScore = Invoke-Api GET '/api/alerts?sort=riskScore&order=desc&pageSize=100' $null $admin
+$byScore = Invoke-Api GET '/api/alerts?sort=riskScore&order=desc&pageSize=100' $null $officer
 $scores = @($byScore.Data.items | ForEach-Object { [double]$_.riskScore })
 Check 'Sort riskScore desc' 200 $byScore
 Check-True 'riskScore desc is sorted' (($scores -join '|') -eq (@($scores | Sort-Object -Descending) -join '|'))
-$asc = Invoke-Api GET '/api/alerts?sort=createdAt&order=asc&pageSize=1' $null $admin
+$asc = Invoke-Api GET '/api/alerts?sort=createdAt&order=asc&pageSize=1' $null $officer
 Check-True 'createdAt asc starts with the oldest' ([DateTime]$asc.Data.items[0].createdAt -le [DateTime]$items[$items.Count - 1].createdAt)
 
-$page1 = Invoke-Api GET '/api/alerts?page=1&pageSize=5' $null $admin
-$page2 = Invoke-Api GET '/api/alerts?page=2&pageSize=5' $null $admin
+$page1 = Invoke-Api GET '/api/alerts?page=1&pageSize=5' $null $officer
+$page2 = Invoke-Api GET '/api/alerts?page=2&pageSize=5' $null $officer
 Check 'Paging page=2&pageSize=5' 200 $page2 "items=$(@($page2.Data.items).Count) total=$($page2.Data.total)"
 Check-True 'Pages do not overlap' (@($page1.Data.items | Where-Object { $_.id -in @($page2.Data.items | ForEach-Object { $_.id }) }).Count -eq 0)
-Check 'Bad status filter' 400 (Invoke-Api GET '/api/alerts?status=open' $null $admin)
-Check 'Bad type filter' 400 (Invoke-Api GET '/api/alerts?type=fraud' $null $admin)
-Check 'minScore above 1' 400 (Invoke-Api GET '/api/alerts?minScore=5' $null $admin)
-Check 'Bad sort' 400 (Invoke-Api GET '/api/alerts?sort=simId' $null $admin)
-Check 'from after to' 400 (Invoke-Api GET "/api/alerts?from=$toUtc&to=$fromUtc" $null $admin)
-Check 'pageSize=0' 400 (Invoke-Api GET '/api/alerts?pageSize=0' $null $admin)
+Check 'Bad status filter' 400 (Invoke-Api GET '/api/alerts?status=open' $null $officer)
+Check 'Bad type filter' 400 (Invoke-Api GET '/api/alerts?type=fraud' $null $officer)
+Check 'minScore above 1' 400 (Invoke-Api GET '/api/alerts?minScore=5' $null $officer)
+Check 'Bad sort' 400 (Invoke-Api GET '/api/alerts?sort=simId' $null $officer)
+Check 'from after to' 400 (Invoke-Api GET "/api/alerts?from=$toUtc&to=$fromUtc" $null $officer)
+Check 'pageSize=0' 400 (Invoke-Api GET '/api/alerts?pageSize=0' $null $officer)
 
 # --- Alert detail ------------------------------------------------------------
 $target = @($flagged.Data.items)[0]
 foreach ($role in $roles.Keys) {
-    Check "$role GET /api/alerts/{id}" 200 (Invoke-Api GET "/api/alerts/$($target.id)" $null $roles[$role])
+    Check "$role GET /api/alerts/{id}" $orgRead[$role] (Invoke-Api GET "/api/alerts/$($target.id)" $null $roles[$role])
 }
-$detail = (Invoke-Api GET "/api/alerts/$($target.id)" $null $admin).Data
+$detail = (Invoke-Api GET "/api/alerts/$($target.id)" $null $officer).Data
 Check-True 'Detail has reasons, SIM and at most 5 other recent alerts' ((@($detail.reasons).Count -gt 0) -and ($detail.sim.id -eq $target.simId) -and (@($detail.recentAlerts).Count -le 5) -and (@($detail.recentAlerts | Where-Object { $_.id -eq $target.id }).Count -eq 0))
-Check 'GET /api/alerts/{unknown}' 404 (Invoke-Api GET '/api/alerts/999999999' $null $admin)
+Check 'GET /api/alerts/{unknown}' 404 (Invoke-Api GET '/api/alerts/999999999' $null $officer)
 
 # Allocate the alert's SIM when it is free, so the detail and the timeline
 # show an allocation.
@@ -327,9 +330,9 @@ if ($detail.sim.status -eq 'available') {
     $alloc = Invoke-Api POST '/api/allocations' @{ simId = $target.simId; employeeId = $employee.Data.id; assignedBy = $employee.Data.id } $officer
     Check 'Officer allocates the alert SIM (audited)' 201 $alloc
     $allocated = $alloc.Status -eq 201
-    $withAlloc = (Invoke-Api GET "/api/alerts/$($target.id)" $null $admin).Data
+    $withAlloc = (Invoke-Api GET "/api/alerts/$($target.id)" $null $officer).Data
     Check-True 'Detail shows the current allocation' ($withAlloc.currentAllocation.employeeName -eq "Alerts Smoke $runId")
-    $listed = (Invoke-Api GET "/api/alerts?simId=$($target.simId)" $null $admin).Data.items[0]
+    $listed = (Invoke-Api GET "/api/alerts?simId=$($target.simId)" $null $officer).Data.items[0]
     Check-True 'List item shows employee and department' (($listed.employeeName -eq "Alerts Smoke $runId") -and ($listed.departmentName -eq "Alerts Smoke $runId"))
 }
 
@@ -355,72 +358,77 @@ Check 'PATCH escalated with resolution (not a close)' 400 (Invoke-Api PATCH $sta
 $reopen = Invoke-Api PATCH $statusPath @{ status = 'escalated' } $officer
 Check 'Officer reopens cleared alert (to escalated)' 200 $reopen "status=$($reopen.Data.status)"
 Check-True 'Reopen clears resolvedAt, resolution, note and resolvedBy' (($reopen.Data.status -eq 'escalated') -and ($null -eq $reopen.Data.resolvedAt) -and ($null -eq $reopen.Data.resolution) -and ($null -eq $reopen.Data.resolutionNote) -and ($null -eq $reopen.Data.resolvedBy))
-Check 'Admin moves escalated to flagged' 200 (Invoke-Api PATCH $statusPath @{ status = 'flagged' } $admin)
-$final = Invoke-Api PATCH $statusPath @{ status = 'cleared'; resolution = 'confirmedMisuse' } $admin
-Check 'Admin clears it as confirmed misuse' 200 $final "resolvedBy=$($final.Data.resolvedBy.name)"
+Check 'Officer moves escalated to flagged' 200 (Invoke-Api PATCH $statusPath @{ status = 'flagged' } $officer)
+$final = Invoke-Api PATCH $statusPath @{ status = 'cleared'; resolution = 'confirmedMisuse' } $officer
+Check 'Officer clears it as confirmed misuse' 200 $final "resolvedBy=$($final.Data.resolvedBy.name)"
 
 # --- Audit log ---------------------------------------------------------------
 $auditPath = "/api/audit-logs?action=alert.status_changed&simId=$($target.simId)&pageSize=100"
 Check 'Officer GET /api/audit-logs' 403 (Invoke-Api GET '/api/audit-logs' $null $officer)
 Check 'Auditor GET /api/audit-logs' 200 (Invoke-Api GET '/api/audit-logs' $null $auditor)
-$auditRows = Invoke-Api GET $auditPath $null $admin
-Check 'Admin GET /api/audit-logs?action=alert.status_changed&simId=' 200 $auditRows "rows=$($auditRows.Data.total)"
-$clearRow = @($auditRows.Data.items | Where-Object { $_.newValues.alertId -eq $target.id -and $_.oldValues.status -eq 'flagged' -and $_.newValues.status -eq 'cleared' -and $_.actorEmail -eq $officerEmail })
+$auditRows = Invoke-Api GET $auditPath $null $auditor
+Check 'Auditor GET /api/audit-logs?action=alert.status_changed&simId=' 200 $auditRows "rows=$($auditRows.Data.total)"
+$clearRow = @($auditRows.Data.items | Where-Object { $_.newValues.alertId -eq $target.id -and $_.oldValues.status -eq 'flagged' -and $_.newValues.status -eq 'cleared' -and $_.newValues.resolution -eq 'falsePositive' -and $_.actorEmail -eq $officerEmail })
 Check-True 'Status change wrote an audit row with actor, old and new values' ($clearRow.Count -eq 1) "actor=$($clearRow[0].actorEmail) old=$($clearRow[0].oldValues.status) new=$($clearRow[0].newValues.status) resolution=$($clearRow[0].newValues.resolution)"
 Check-True 'Audit row has actorUserId, SIM phone and no employee link' (($clearRow[0].actorUserId -gt 0) -and ($clearRow[0].affectedSimPhoneNumber -like '+254*') -and ($null -eq $clearRow[0].employeeId))
+Check-True 'Audit row has actorRole SecurityOfficer and category organisation' (($clearRow[0].actorRole -eq 'SecurityOfficer') -and ($clearRow[0].category -eq 'organisation'))
+$adminAudit = Invoke-Api GET $auditPath $null $admin
+Check-True 'Admin sees no organisation audit rows' (($adminAudit.Status -eq 200) -and ($adminAudit.Data.total -eq 0))
+$adminAll = Invoke-Api GET '/api/audit-logs?pageSize=100' $null $admin
+Check-True 'Admin audit rows are all system rows' (($adminAll.Data.total -gt 0) -and (@($adminAll.Data.items | Where-Object { $_.category -ne 'system' }).Count -eq 0))
 Check-True 'Four status changes recorded, newest first' ((@($auditRows.Data.items | Where-Object { $_.newValues.alertId -eq $target.id }).Count -eq 4) -and (@($auditRows.Data.items)[0].newValues.status -eq 'cleared') -and (@($auditRows.Data.items)[0].newValues.resolution -eq 'confirmedMisuse'))
 
 $byActor = Invoke-Api GET "/api/audit-logs?actorEmail=$($officerEmail.ToUpperInvariant())&pageSize=100" $null $auditor
 Check 'Filter actorEmail (case-insensitive)' 200 $byActor "rows=$($byActor.Data.total)"
 Check-True 'actorEmail filter returns only that actor' ((@($byActor.Data.items).Count -gt 0) -and (@($byActor.Data.items | Where-Object { $_.actorEmail -ne $officerEmail }).Count -eq 0))
-$simCreated = Invoke-Api GET "/api/audit-logs?action=sim.created&simId=$($emptySim.Data.id)" $null $admin
-Check-True 'SIM creation is audited with the Admin as actor' (($simCreated.Data.total -eq 1) -and ($simCreated.Data.items[0].actorEmail -eq $adminEmail) -and ($simCreated.Data.items[0].newValues.phoneNumber -eq $emptySim.Data.phoneNumber))
-$deptCreated = Invoke-Api GET "/api/audit-logs?action=department.created&from=$([DateTime]::UtcNow.AddMinutes(-30).ToString('yyyy-MM-ddTHH:mm:ssZ'))" $null $admin
+$simCreated = Invoke-Api GET "/api/audit-logs?action=sim.created&simId=$($emptySim.Data.id)" $null $auditor
+Check-True 'SIM creation is audited with the Officer as actor' (($simCreated.Data.total -eq 1) -and ($simCreated.Data.items[0].actorEmail -eq $officerEmail) -and ($simCreated.Data.items[0].newValues.phoneNumber -eq $emptySim.Data.phoneNumber))
+$deptCreated = Invoke-Api GET "/api/audit-logs?action=department.created&from=$([DateTime]::UtcNow.AddMinutes(-30).ToString('yyyy-MM-ddTHH:mm:ssZ'))" $null $auditor
 Check-True 'Department creation is audited' (@($deptCreated.Data.items | Where-Object { $_.newValues.id -eq $department.Data.id }).Count -eq 1)
-$seedRows = Invoke-Api GET '/api/audit-logs?action=dev.demo_seeded&pageSize=2' $null $admin
+$seedRows = Invoke-Api GET '/api/audit-logs?action=dev.demo_seeded&pageSize=2' $null $auditor
 Check-True 'Demo seeding is audited' ($seedRows.Data.total -ge 2)
-$auditPage = Invoke-Api GET '/api/audit-logs?page=2&pageSize=3' $null $admin
+$auditPage = Invoke-Api GET '/api/audit-logs?page=2&pageSize=3' $null $auditor
 Check 'Audit paging page=2&pageSize=3' 200 $auditPage "items=$(@($auditPage.Data.items).Count) total=$($auditPage.Data.total)"
-Check 'Audit from after to' 400 (Invoke-Api GET "/api/audit-logs?from=$toUtc&to=$fromUtc" $null $admin)
+Check 'Audit from after to' 400 (Invoke-Api GET "/api/audit-logs?from=$toUtc&to=$fromUtc" $null $auditor)
 
 # --- Risk --------------------------------------------------------------------
-$scoredSim = (Invoke-Api GET '/api/risk-scores?pageSize=1' $null $admin).Data.items[0].simId
+$scoredSim = (Invoke-Api GET '/api/risk-scores?pageSize=1' $null $officer).Data.items[0].simId
 foreach ($role in $roles.Keys) {
-    Check "$role GET /api/sims/{id}/risk" 200 (Invoke-Api GET "/api/sims/$scoredSim/risk" $null $roles[$role])
+    Check "$role GET /api/sims/{id}/risk" $orgRead[$role] (Invoke-Api GET "/api/sims/$scoredSim/risk" $null $roles[$role])
 }
-$risk = (Invoke-Api GET "/api/sims/$scoredSim/risk" $null $admin).Data
+$risk = (Invoke-Api GET "/api/sims/$scoredSim/risk" $null $officer).Data
 Check-True 'Risk has latest, riskLevel and 90 days of history, oldest first' (($null -ne $risk.latest) -and ($risk.latest.riskLevel -in @('high', 'medium', 'low')) -and (@($risk.history).Count -eq 90) -and ($risk.history[0].date -lt $risk.history[89].date))
 Check-True 'Latest riskLevel follows the bucket' ((@{ flag = 'high'; escalated = 'medium'; clear = 'low' })[$risk.latest.bucket] -eq $risk.latest.riskLevel)
-$risk30 = Invoke-Api GET "/api/sims/$scoredSim/risk?days=30" $null $admin
+$risk30 = Invoke-Api GET "/api/sims/$scoredSim/risk?days=30" $null $officer
 Check 'Risk days=30' 200 $risk30 "history=$(@($risk30.Data.history).Count)"
-Check 'Risk days=0' 400 (Invoke-Api GET "/api/sims/$scoredSim/risk?days=0" $null $admin)
-Check 'Risk days=366' 400 (Invoke-Api GET "/api/sims/$scoredSim/risk?days=366" $null $admin)
-$empty = Invoke-Api GET "/api/sims/$($emptySim.Data.id)/risk" $null $admin
+Check 'Risk days=0' 400 (Invoke-Api GET "/api/sims/$scoredSim/risk?days=0" $null $officer)
+Check 'Risk days=366' 400 (Invoke-Api GET "/api/sims/$scoredSim/risk?days=366" $null $officer)
+$empty = Invoke-Api GET "/api/sims/$($emptySim.Data.id)/risk" $null $officer
 Check 'Risk for a SIM without scores' 200 $empty "latest=$(if ($null -eq $empty.Data.latest) { 'null' } else { 'set' }) history=$(@($empty.Data.history).Count)"
 Check-True 'SIM without scores: latest null, empty history' (($null -eq $empty.Data.latest) -and (@($empty.Data.history).Count -eq 0))
-Check 'Risk for unknown SIM' 404 (Invoke-Api GET '/api/sims/999999999/risk' $null $admin)
+Check 'Risk for unknown SIM' 404 (Invoke-Api GET '/api/sims/999999999/risk' $null $officer)
 
 foreach ($role in $roles.Keys) {
-    Check "$role GET /api/risk-scores" 200 (Invoke-Api GET '/api/risk-scores' $null $roles[$role])
+    Check "$role GET /api/risk-scores" $orgRead[$role] (Invoke-Api GET '/api/risk-scores' $null $roles[$role])
 }
-$flagScores = Invoke-Api GET '/api/risk-scores?bucket=flag&pageSize=100' $null $admin
+$flagScores = Invoke-Api GET '/api/risk-scores?bucket=flag&pageSize=100' $null $officer
 Check 'Filter bucket=flag' 200 $flagScores "total=$($flagScores.Data.total)"
 Check-True 'bucket=flag returns flag rows with riskLevel high' (@($flagScores.Data.items | Where-Object { $_.bucket -ne 'flag' -or $_.riskLevel -ne 'high' }).Count -eq 0)
 $fromDate = [DateTime]::UtcNow.AddDays(-10).ToString('yyyy-MM-dd')
 $toDate = [DateTime]::UtcNow.AddDays(-5).ToString('yyyy-MM-dd')
-$simScores = Invoke-Api GET "/api/risk-scores?simId=$scoredSim&from=$fromDate&to=$toDate" $null $admin
+$simScores = Invoke-Api GET "/api/risk-scores?simId=$scoredSim&from=$fromDate&to=$toDate" $null $officer
 Check 'Filter simId, from, to' 200 $simScores "total=$($simScores.Data.total)"
 Check-True 'simId and date filters: 6 days, newest first' (($simScores.Data.total -eq 6) -and ($simScores.Data.items[0].date -eq $toDate))
-Check 'Bad bucket' 400 (Invoke-Api GET '/api/risk-scores?bucket=high' $null $admin)
-Check 'Risk scores from after to' 400 (Invoke-Api GET "/api/risk-scores?from=$toDate&to=$fromDate" $null $admin)
-$scorePage = Invoke-Api GET '/api/risk-scores?page=3&pageSize=7' $null $admin
+Check 'Bad bucket' 400 (Invoke-Api GET '/api/risk-scores?bucket=high' $null $officer)
+Check 'Risk scores from after to' 400 (Invoke-Api GET "/api/risk-scores?from=$toDate&to=$fromDate" $null $officer)
+$scorePage = Invoke-Api GET '/api/risk-scores?page=3&pageSize=7' $null $officer
 Check-True 'Risk score paging' (($scorePage.Status -eq 200) -and (@($scorePage.Data.items).Count -eq 7) -and ($scorePage.Data.page -eq 3))
 
 # --- Activity ----------------------------------------------------------------
 foreach ($role in $roles.Keys) {
-    Check "$role GET /api/sims/{id}/activity" 200 (Invoke-Api GET "/api/sims/$($target.simId)/activity" $null $roles[$role])
+    Check "$role GET /api/sims/{id}/activity" $orgRead[$role] (Invoke-Api GET "/api/sims/$($target.simId)/activity" $null $roles[$role])
 }
-$activity = (Invoke-Api GET "/api/sims/$($target.simId)/activity?pageSize=100" $null $admin).Data
+$activity = (Invoke-Api GET "/api/sims/$($target.simId)/activity?pageSize=100" $null $officer).Data
 $kinds = @($activity.items | ForEach-Object { $_.kind } | Sort-Object -Unique)
 Check-True 'Activity merges alerts (opened and cleared)' (($kinds -contains 'alertOpened') -and ($kinds -contains 'alertCleared')) "kinds: $($kinds -join ',')"
 if ($allocated) {
@@ -428,24 +436,24 @@ if ($allocated) {
 }
 $times = @($activity.items | ForEach-Object { [DateTime]$_.occurredAt })
 Check-True 'Activity is newest first' (($times -join '|') -eq (@($times | Sort-Object -Descending) -join '|'))
-$activityPage = Invoke-Api GET "/api/sims/$($target.simId)/activity?page=1&pageSize=2" $null $admin
+$activityPage = Invoke-Api GET "/api/sims/$($target.simId)/activity?page=1&pageSize=2" $null $officer
 Check-True 'Activity paging' (($activityPage.Status -eq 200) -and (@($activityPage.Data.items).Count -le 2) -and ($activityPage.Data.total -eq $activity.total))
-Check 'Activity for unknown SIM' 404 (Invoke-Api GET '/api/sims/999999999/activity' $null $admin)
-$simAudit = (Invoke-Api GET "/api/sims/$($emptySim.Data.id)/activity" $null $admin).Data
-Check-True 'Activity shows the sim.created audit row' (@($simAudit.items | Where-Object { $_.kind -eq 'audit' -and $_.action -eq 'sim.created' -and $_.actorEmail -eq $adminEmail }).Count -eq 1)
+Check 'Activity for unknown SIM' 404 (Invoke-Api GET '/api/sims/999999999/activity' $null $officer)
+$simAudit = (Invoke-Api GET "/api/sims/$($emptySim.Data.id)/activity" $null $officer).Data
+Check-True 'Activity shows the sim.created audit row' (@($simAudit.items | Where-Object { $_.kind -eq 'audit' -and $_.action -eq 'sim.created' -and $_.actorEmail -eq $officerEmail }).Count -eq 1)
 
 # --- Dashboard ---------------------------------------------------------------
 foreach ($role in $roles.Keys) {
-    Check "$role GET /api/dashboard/summary" 200 (Invoke-Api GET '/api/dashboard/summary' $null $roles[$role])
+    Check "$role GET /api/dashboard/summary" $orgRead[$role] (Invoke-Api GET '/api/dashboard/summary' $null $roles[$role])
 }
 foreach ($d in @(7, 30, 90)) {
-    $summary = Invoke-Api GET "/api/dashboard/summary?days=$d" $null $admin
+    $summary = Invoke-Api GET "/api/dashboard/summary?days=$d" $null $officer
     Check "Dashboard days=$d" 200 $summary "activeSims=$($summary.Data.activeSims) flagged=$($summary.Data.flagged) toReview=$($summary.Data.toReview) resolved=$($summary.Data.resolved)"
 }
-Check 'Dashboard days=14' 400 (Invoke-Api GET '/api/dashboard/summary?days=14' $null $admin)
-Check 'Dashboard days=abc' 400 (Invoke-Api GET '/api/dashboard/summary?days=abc' $null $admin)
-$summary = (Invoke-Api GET '/api/dashboard/summary?days=90' $null $admin).Data
-Check-True 'Dashboard flagged and toReview match the alert list' (($summary.flagged -eq (Invoke-Api GET '/api/alerts?status=flagged&pageSize=1' $null $admin).Data.total) -and ($summary.toReview -eq (Invoke-Api GET '/api/alerts?status=escalated&pageSize=1' $null $admin).Data.total))
+Check 'Dashboard days=14' 400 (Invoke-Api GET '/api/dashboard/summary?days=14' $null $officer)
+Check 'Dashboard days=abc' 400 (Invoke-Api GET '/api/dashboard/summary?days=abc' $null $officer)
+$summary = (Invoke-Api GET '/api/dashboard/summary?days=90' $null $officer).Data
+Check-True 'Dashboard flagged and toReview match the alert list' (($summary.flagged -eq (Invoke-Api GET '/api/alerts?status=flagged&pageSize=1' $null $officer).Data.total) -and ($summary.toReview -eq (Invoke-Api GET '/api/alerts?status=escalated&pageSize=1' $null $officer).Data.total))
 Check-True 'alertsByType has the four types plus other' ((@($summary.alertsByType.PSObject.Properties.Name) -join ',') -eq 'inactiveBilling,sharing,reselling,ghostUsage,other')
 Check-True 'needsReview has 5 flagged or escalated alerts with SIM and reasons' ((@($summary.needsReview).Count -eq 5) -and (@($summary.needsReview | Where-Object { $_.status -notin @('flagged', 'escalated') -or -not $_.simPhoneNumber -or @($_.reasons).Count -eq 0 }).Count -eq 0))
 Check-True 'tierChanges is empty and dataWaste is null' ((@($summary.tierChanges).Count -eq 0) -and ($null -eq $summary.dataWaste))
@@ -453,7 +461,7 @@ Check-True 'tierChanges is empty and dataWaste is null' ((@($summary.tierChanges
 # --- Seed endpoint outside Development ---------------------------------------
 if ($ProductionBaseUrl) {
     $prodAdmin = Get-AdminToken $ProductionBaseUrl
-    Check 'Production: Admin token works' 200 (Invoke-Api GET '/api/alerts?pageSize=1' $null $prodAdmin -Base $ProductionBaseUrl)
+    Check 'Production: Admin token works' 200 (Invoke-Api GET '/api/auth/me' $null $prodAdmin -Base $ProductionBaseUrl)
     Check 'Production: POST /api/dev/seed-demo as Admin' 404 (Invoke-Api POST '/api/dev/seed-demo' $null $prodAdmin -Base $ProductionBaseUrl)
 }
 

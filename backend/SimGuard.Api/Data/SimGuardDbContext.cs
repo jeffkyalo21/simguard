@@ -6,7 +6,7 @@ using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Data;
 
-public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, int>
+public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, int>
 {
     public SimGuardDbContext(
         DbContextOptions<SimGuardDbContext> options)
@@ -24,6 +24,8 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
     public DbSet<RiskScore> RiskScores => Set<RiskScore>();
     public DbSet<DailyUsage> DailyUsage => Set<DailyUsage>();
     public DbSet<AuthEvent> AuthEvents => Set<AuthEvent>();
+    public DbSet<ImportRun> ImportRuns => Set<ImportRun>();
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +131,10 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 table.HasCheckConstraint(
                     "CK_sims_status",
                     "status IN ('available', 'assigned', 'inactive')");
+
+                table.HasCheckConstraint(
+                    "CK_sims_tier",
+                    "tier IS NULL OR tier IN ('field', 'manager', 'professional', 'support')");
             });
 
             entity.HasKey(e => e.Id);
@@ -165,6 +171,11 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasMaxLength(20)
                 .HasDefaultValue("available")
                 .IsRequired();
+
+            // ML plan tier (cohort). Null until set or loaded.
+            entity.Property(e => e.Tier)
+                .HasColumnName("tier")
+                .HasMaxLength(20);
 
             entity.Property(e => e.CreatedAt)
                 .HasColumnName("created_at")
@@ -316,6 +327,14 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasColumnName("resolved_at")
                 .HasColumnType("timestamp with time zone");
 
+            entity.Property(e => e.DetectedOn)
+                .HasColumnName("detected_on")
+                .HasColumnType("date");
+
+            entity.Property(e => e.LastDetectedOn)
+                .HasColumnName("last_detected_on")
+                .HasColumnType("date");
+
             entity.Property(e => e.Resolution)
                 .HasColumnName("resolution")
                 .HasMaxLength(20);
@@ -338,6 +357,9 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
             entity.HasIndex(e => e.ModelVersion)
                 .HasDatabaseName("idx_alerts_model_version");
+
+            entity.HasIndex(e => e.DetectedOn)
+                .HasDatabaseName("idx_alerts_detected_on");
 
             entity.HasOne(e => e.Sim)
                 .WithMany(s => s.Alerts)
@@ -482,7 +504,12 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
         // Audit logs
         modelBuilder.Entity<AuditLog>(entity =>
         {
-            entity.ToTable("audit_logs");
+            entity.ToTable("audit_logs", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_audit_logs_category",
+                    "category IN ('system', 'organisation')");
+            });
 
             entity.HasKey(e => e.Id);
 
@@ -504,6 +531,15 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasColumnName("action")
                 .HasMaxLength(100)
                 .IsRequired();
+
+            entity.Property(e => e.Category)
+                .HasColumnName("category")
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.ActorRole)
+                .HasColumnName("actor_role")
+                .HasMaxLength(20);
 
             entity.Property(e => e.AffectedSimId)
                 .HasColumnName("affected_sim_id");
@@ -535,6 +571,9 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
 
             entity.HasIndex(e => e.Action)
                 .HasDatabaseName("idx_audit_logs_action");
+
+            entity.HasIndex(e => e.Category)
+                .HasDatabaseName("idx_audit_logs_category");
 
             entity.HasOne(e => e.User)
                 .WithMany(e => e.AuditLogs)
@@ -608,6 +647,120 @@ public class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole<int>, i
                 .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
+
+        // CSV import runs (commits only). See backend/docs/imports.md.
+        modelBuilder.Entity<ImportRun>(entity =>
+        {
+            entity.ToTable("import_runs", table =>
+            {
+                table.HasCheckConstraint(
+                    "chk_import_runs_type",
+                    "type IN ('departments', 'employees', 'sims', 'allocations', 'usage')");
+
+                table.HasCheckConstraint(
+                    "chk_import_runs_status",
+                    "status IN ('committed', 'rejected', 'failed')");
+            });
+
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id")
+                .UseSerialColumn();
+
+            entity.Property(e => e.Type)
+                .HasColumnName("type")
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.FileName)
+                .HasColumnName("file_name")
+                .HasMaxLength(255)
+                .IsRequired();
+
+            entity.Property(e => e.Sha256)
+                .HasColumnName("sha256")
+                .HasMaxLength(64);
+
+            entity.Property(e => e.UploadedByUserId)
+                .HasColumnName("uploaded_by_user_id");
+
+            entity.Property(e => e.UploadedByEmail)
+                .HasColumnName("uploaded_by_email")
+                .HasMaxLength(256);
+
+            entity.Property(e => e.StartedAt)
+                .HasColumnName("started_at")
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.FinishedAt)
+                .HasColumnName("finished_at")
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.Status)
+                .HasColumnName("status")
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(e => e.SkipInvalid).HasColumnName("skip_invalid");
+            entity.Property(e => e.TotalRows).HasColumnName("total_rows");
+            entity.Property(e => e.ValidRows).HasColumnName("valid_rows");
+            entity.Property(e => e.InvalidRows).HasColumnName("invalid_rows");
+            entity.Property(e => e.Inserted).HasColumnName("inserted");
+            entity.Property(e => e.Updated).HasColumnName("updated");
+            entity.Property(e => e.Unchanged).HasColumnName("unchanged");
+            entity.Property(e => e.ErrorCount).HasColumnName("error_count");
+            entity.Property(e => e.WarningCount).HasColumnName("warning_count");
+
+            entity.Property(e => e.Message)
+                .HasColumnName("message")
+                .HasMaxLength(500);
+
+            entity.HasIndex(e => e.StartedAt)
+                .HasDatabaseName("idx_import_runs_started_at");
+
+            entity.HasIndex(e => e.Type)
+                .HasDatabaseName("idx_import_runs_type");
+
+            entity.HasOne(e => e.UploadedBy)
+                .WithMany()
+                .HasForeignKey(e => e.UploadedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Requests for an account from the landing page.
+        modelBuilder.Entity<AccessRequest>(entity =>
+        {
+            entity.ToTable("access_requests", table =>
+            {
+                table.HasCheckConstraint("chk_access_requests_role", "role IN ('SecurityOfficer', 'Auditor')");
+                table.HasCheckConstraint("chk_access_requests_status", "status IN ('pending', 'approved', 'declined')");
+            });
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").UseSerialColumn();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Organisation).HasColumnName("organisation").HasMaxLength(150).IsRequired();
+            entity.Property(e => e.Role).HasColumnName("role").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Note).HasColumnName("note").HasMaxLength(500);
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReviewedByEmail).HasColumnName("reviewed_by_email").HasMaxLength(256);
+
+            entity.HasIndex(e => e.CreatedAt).HasDatabaseName("idx_access_requests_created_at");
+
+            // One pending request per email (stored in lower case).
+            entity.HasIndex("Email")
+                .HasDatabaseName("idx_access_requests_pending_email")
+                .IsUnique()
+                .HasFilter("status = 'pending'");
+        });
+
+        ConfigureScoring(modelBuilder);
+        ConfigureTierRecommendations(modelBuilder);
+        ConfigureTierAllowances(modelBuilder);
     }
 
     // ASP.NET Core Identity tables. Renamed to app_* with snake_case columns

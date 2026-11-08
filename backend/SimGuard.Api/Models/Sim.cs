@@ -9,9 +9,17 @@ public class Sim
     public string PlanType { get; set; } = string.Empty;
     public decimal MonthlyCost { get; set; }
     public string Status { get; set; } = "available";
+
+    // ML plan tier: field, manager, professional or support. It picks the
+    // cohort the ML service compares the SIM with. Null until set.
+    public string? Tier { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public Carrier Carrier { get; set; } = null!;
+
+    // The allowance of Tier, null while the SIM has no tier.
+    public TierAllowance? TierAllowance { get; set; }
 
     public ICollection<Allocation> Allocations { get; set; }
         = new List<Allocation>();

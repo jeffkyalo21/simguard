@@ -11,6 +11,12 @@ ML_PROPHET_CHECKPOINTS   precomputed checkpoint forecasts for the parquet reader
 ML_USE_PRECOMPUTED_PROPHET  "1" (default) to use the precomputed forecasts
                          where they cover the request, "0" to always fit
 ML_PROPHET_N_JOBS        joblib workers for Prophet fits (default: -1, all cores)
+ML_SHARED_SECRET         secret the backend sends in the X-SimGuard-ML-Secret
+                         header; required on every route except /health
+                         (never committed)
+ML_ENVIRONMENT           "Development" or anything else (default "Production").
+                         Without ML_SHARED_SECRET the service starts only in
+                         Development, with the check off and a warning.
 """
 
 from __future__ import annotations
@@ -44,6 +50,11 @@ REQUIRED_ARTIFACTS = (
 
 READERS = ("parquet", "postgres")
 
+# Header that carries ML_SHARED_SECRET. /health is the only open route.
+SECRET_HEADER = "X-SimGuard-ML-Secret"
+OPEN_PATHS = frozenset({"/health"})
+DEVELOPMENT = "development"
+
 
 def _env_path(name: str, default: Path) -> Path:
     value = os.environ.get(name)
@@ -71,6 +82,16 @@ class Settings:
         default_factory=lambda: os.environ.get("ML_USE_PRECOMPUTED_PROPHET", "1") != "0"
     )
     prophet_n_jobs: int = field(default_factory=lambda: int(os.environ.get("ML_PROPHET_N_JOBS", "-1")))
+    shared_secret: str = field(
+        default_factory=lambda: os.environ.get("ML_SHARED_SECRET", "").strip(), repr=False
+    )
+    environment: str = field(
+        default_factory=lambda: os.environ.get("ML_ENVIRONMENT", "Production").strip() or "Production"
+    )
+
+    @property
+    def is_development(self) -> bool:
+        return self.environment.lower() == DEVELOPMENT
 
     def missing_artifacts(self) -> list[str]:
         return [name for name in REQUIRED_ARTIFACTS if not (self.artifact_dir / name).is_file()]
