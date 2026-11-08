@@ -78,6 +78,11 @@ export function authErrorText(error, { recovery = false } = {}) {
   }
 }
 
+/** The public landing page, where a deleted account ends up. */
+export function landingHref() {
+  return "/";
+}
+
 /** Query string carrying a safe "next" path between the sign-in steps. */
 export function nextQuery(next) {
   const safe = safeNextPath(next);

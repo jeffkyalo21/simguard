@@ -382,6 +382,25 @@ export function saveCarrierFeed(id, { baseUrl, enabled, startDate, apiKey }) {
   return write(api.put(`/carriers/${id}/feed`, body));
 }
 
+/** PUT /auth/me. Changes the signed-in user's own name; returns the profile. */
+export function updateProfileName(name) {
+  return api.put("/auth/me", { name: String(name ?? "").trim() });
+}
+
+/**
+ * POST /auth/mfa/recovery-codes. Makes 10 new recovery codes (the old ones
+ * stop working) after the password and a current authenticator code.
+ * @returns {Promise<{ recoveryCodes: string[] }>}
+ */
+export function regenerateRecoveryCodes({ password, code }) {
+  return api.post("/auth/mfa/recovery-codes", { password, code: String(code ?? "").trim() });
+}
+
+/** POST /auth/me/delete. Deletes the signed-in account (204). */
+export function deleteMyAccount({ password, code }) {
+  return api.post("/auth/me/delete", { password, code: String(code ?? "").trim() });
+}
+
 /**
  * POST /carriers/{id}/feed/test. Always 200 when the call was made:
  * `{ ok, message, date }` says how the carrier answered. Typed values are

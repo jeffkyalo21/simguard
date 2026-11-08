@@ -14,9 +14,9 @@ export const PAGES = Object.freeze({
   sims: [OFFICER, AUDITOR],
   allocations: [OFFICER, AUDITOR],
   alerts: [OFFICER, AUDITOR],
-  // Carriers and departments are tabs of Settings; the Auditor opens
-  // Settings to read them but cannot change anything there.
-  settings: [OFFICER, AUDITOR],
+  // Settings holds the carriers (the Auditor reads them) and every
+  // signed-in user's own profile, so every role may open it.
+  settings: [ADMIN, OFFICER, AUDITOR],
   carriers: [OFFICER, AUDITOR],
   departments: [OFFICER, AUDITOR],
   imports: [OFFICER],
