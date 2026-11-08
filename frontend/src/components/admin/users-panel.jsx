@@ -57,6 +57,17 @@ const confirmations = {
   },
 };
 
+// Your own row cannot change your role, disable you or replace your password
+// (the API answers 409). The tooltip says why; inside a menu the wrapper is
+// not focusable, so the item also carries the reason as screen reader text.
+function SelfBlocked({ self, children }) {
+  return (
+    <DisabledReason reason={text.ownAccount} disabled={self} focusable={false}>
+      {children}
+    </DisabledReason>
+  );
+}
+
 export function UsersPanel() {
   const [page, setPage] = useState(1);
   const resource = useResource(() => listUsers({ page, pageSize: PAGE_SIZE }), [page]);
@@ -137,12 +148,22 @@ export function UsersPanel() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={self} onSelect={() => setChangingRole({ open: true, user })}>
-                  {text.actions.changeRole}
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={user.isDisabled} onSelect={() => setConfirming({ open: true, kind: "resend", user })}>
-                  {text.actions.resend}
-                </DropdownMenuItem>
+                <SelfBlocked self={self}>
+                  <DropdownMenuItem disabled={self} className="w-full" onSelect={() => setChangingRole({ open: true, user })}>
+                    {text.actions.changeRole}
+                    {self && <span className="sr-only">{text.ownAccount}</span>}
+                  </DropdownMenuItem>
+                </SelfBlocked>
+                <SelfBlocked self={self}>
+                  <DropdownMenuItem
+                    disabled={self || user.isDisabled}
+                    className="w-full"
+                    onSelect={() => setConfirming({ open: true, kind: "resend", user })}
+                  >
+                    {text.actions.resend}
+                    {self && <span className="sr-only">{text.ownAccount}</span>}
+                  </DropdownMenuItem>
+                </SelfBlocked>
                 {user.lockedOutUntil && (
                   <DropdownMenuItem onSelect={() => runQuick(unlockUser, text.toasts.unlocked, user)}>{text.actions.unlock}</DropdownMenuItem>
                 )}
@@ -152,9 +173,12 @@ export function UsersPanel() {
                 {user.isDisabled ? (
                   <DropdownMenuItem onSelect={() => runQuick(enableUser, text.toasts.enabled, user)}>{text.actions.enable}</DropdownMenuItem>
                 ) : (
-                  <DropdownMenuItem disabled={self} onSelect={() => setConfirming({ open: true, kind: "disable", user })}>
-                    {text.actions.disable}
-                  </DropdownMenuItem>
+                  <SelfBlocked self={self}>
+                    <DropdownMenuItem disabled={self} className="w-full" onSelect={() => setConfirming({ open: true, kind: "disable", user })}>
+                      {text.actions.disable}
+                      {self && <span className="sr-only">{text.ownAccount}</span>}
+                    </DropdownMenuItem>
+                  </SelfBlocked>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>

@@ -250,7 +250,9 @@ Passwords, tokens and codes are never stored.
 - `signin-email` sets a new random password, emails it, sets
   `mustChangePassword = true` and clears any lockout. It works for an account
   that never signed in and for one whose owner forgot the password. The old
-  password stops working at once. A disabled account gives 409.
+  password stops working at once. A disabled account gives 409, and so does
+  your own account ("Ask another Admin"): replacing your own password would
+  leave you depending on an email that may fail.
 - `unlock` clears a lockout and the failed-attempt count; it does not touch
   the password. Calling it on an unlocked account is a no-op (200).
 - `temporaryPassword` on `POST /api/users`, on access request approval and on
@@ -267,6 +269,10 @@ Passwords, tokens and codes are never stored.
 - An Admin cannot change their own role or disable themselves (409).
 - The last active Admin cannot be demoted or disabled (409). These checks
   run under a database lock, so two Admins cannot remove each other at once.
+  In a one-at-a-time sequence the caller is always an active Admin who is not
+  the target, so the target is never the last one: the own-account rule above
+  is what stops the final Admin from removing themselves, and the lock covers
+  concurrent calls.
 - Password reset also clears a lockout.
 - MFA reset removes the authenticator key and recovery codes; the user
   enrols again at the next sign-in.

@@ -325,6 +325,39 @@ Check 'Officer GET /api/auth/events' 403 (Invoke-Api GET '/api/auth/events' $nul
 $adminId = (Invoke-Api GET '/api/auth/me' $null $admin).Data.id
 Check 'Admin disables self' 409 (Invoke-Api POST "/api/users/$adminId/disable" $null $admin)
 Check 'Admin demotes self' 409 (Invoke-Api PUT "/api/users/$adminId/role" @{ role = 'Auditor' } $admin)
+$resendSelf = Invoke-Api POST "/api/users/$adminId/signin-email" $null $admin
+Check 'Admin resends own sign-in email' 409 $resendSelf
+Check-True 'Own-account resend says why' ([string]$resendSelf.Data.detail -like '*your own account*') ([string]$resendSelf.Data.detail)
+
+# The system is never left with no active Admin. Reduce it to one active Admin
+# (a second Admin disables the seed Admin) and check nobody can remove the
+# last one. A caller who is not the target is itself an active Admin, so
+# sequentially the last-Admin guard is reached through the own-account rule;
+# the database lock covers concurrent calls. The seed Admin is enabled again
+# afterwards and the second Admin is disabled.
+$secondEmail = "second-admin-$runId@simguard.local"
+$secondTemp = New-TestPassword
+$secondAdmin = Invoke-Api POST '/api/users' @{ email = $secondEmail; name = 'Smoke Second Admin'; role = 'Admin'; temporaryPassword = $secondTemp } $admin
+Check 'Create a second Admin' 201 $secondAdmin
+$secondId = $secondAdmin.Data.id
+$secondSession = Complete-FirstSignIn 'Second Admin' $secondEmail $secondTemp (New-TestPassword)
+$second = $secondSession.Token
+Check 'Second Admin disables the seed Admin (two were active, allowed)' 200 (Invoke-Api POST "/api/users/$adminId/disable" $null $second)
+$activeAdmins = @((Invoke-Api GET '/api/users?role=Admin&pageSize=100' $null $second).Data.items | Where-Object { -not $_.isDisabled })
+Check-True 'Exactly one active Admin is left' ($activeAdmins.Count -eq 1) "count=$($activeAdmins.Count)"
+Check 'Last active Admin cannot disable self' 409 (Invoke-Api POST "/api/users/$secondId/disable" $null $second)
+Check 'Last active Admin cannot demote self' 409 (Invoke-Api PUT "/api/users/$secondId/role" @{ role = 'Auditor' } $second)
+Check 'Last active Admin cannot resend own sign-in email' 409 (Invoke-Api POST "/api/users/$secondId/signin-email" $null $second)
+$stillActive = @((Invoke-Api GET '/api/users?role=Admin&pageSize=100' $null $second).Data.items | Where-Object { -not $_.isDisabled })
+Check-True 'Still one active Admin after the refused calls' (($stillActive.Count -eq 1) -and ($stillActive[0].id -eq $secondId)) "count=$($stillActive.Count)"
+Check 'Disabled seed Admin token is rejected' 401 (Invoke-Api GET '/api/users' $null $admin)
+Check 'Second Admin enables the seed Admin again' 200 (Invoke-Api POST "/api/users/$adminId/enable" $null $second)
+$relogin = Invoke-Api POST '/api/auth/login' @{ email = $adminEmail; password = $adminNewPassword }
+Check 'Seed Admin login after enable' 200 $relogin "status=$($relogin.Data.status)"
+$reverify = Invoke-Api POST '/api/auth/mfa/verify' @{ mfaToken = $relogin.Data.mfaToken; code = (Get-Totp $adminSecret -OffsetSteps 1) }
+Check 'Seed Admin MFA verify after enable' 200 $reverify
+$admin = $reverify.Data.accessToken
+Check 'Seed Admin disables the second Admin (two active, allowed)' 200 (Invoke-Api POST "/api/users/$secondId/disable" $null $admin)
 
 # --- Role change, disable, enable, MFA reset ---------------------------------
 $auditorId = $auditor.Data.id

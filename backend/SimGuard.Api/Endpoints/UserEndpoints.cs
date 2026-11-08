@@ -498,6 +498,7 @@ public static class UserEndpoints
     // sign-in, and any lockout is cleared.
     private static async Task<IResult> ResendSignInEmail(
         int id,
+        ClaimsPrincipal principal,
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
@@ -511,6 +512,13 @@ public static class UserEndpoints
         if (user is null)
         {
             return ApiProblems.NotFound($"User {id} was not found.");
+        }
+
+        // Replacing your own password would leave you depending on an email
+        // that may fail. Another Admin does it for you.
+        if (id == TokenService.GetUserId(principal))
+        {
+            return ApiProblems.Conflict("You cannot send sign-in details to your own account. Ask another Admin.");
         }
 
         if (user.IsDisabled)

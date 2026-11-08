@@ -175,6 +175,7 @@ export const copy = {
       },
       mfa: { on: "Two-step sign-in on", off: "Two-step sign-in not set up" },
       you: "you",
+      ownAccount: "Not available for your own account. Ask another Admin.",
       actionsFor: (name) => `Actions for ${name}`,
       actions: {
         changeRole: "Change role",
