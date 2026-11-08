@@ -177,6 +177,7 @@ public static class RiskEndpoints
                 a.RiskScore,
                 a.Status,
                 a.CreatedAt,
+                a.DetectedOn,
                 a.ResolvedAt,
                 a.Resolution,
                 ResolvedByEmail = a.ResolvedByUser == null ? null : a.ResolvedByUser.Email
@@ -216,7 +217,8 @@ public static class RiskEndpoints
                 null,
                 null,
                 "alert",
-                a.Id));
+                a.Id,
+                a.DetectedOn));
 
             if (a.Status == AlertStatuses.Cleared && a.ResolvedAt is { } resolvedAt)
             {

@@ -88,6 +88,9 @@ show it next to the name field:
 - Unknown carriers give 400: `errors.carrierId` ("Carrier 9 does not exist.")
   or `errors.operator` ("There is no carrier named 'X'. Add it with POST
   /api/carriers first."). Sending neither gives 400 on `carrierId`.
+- A duplicate phone number or ICCID gives 409 with `detail` and, additive
+  since issue #14, `errors.phoneNumber` or `errors.iccid` holding the same
+  sentence, like the carrier name conflict above.
 - SIM responses add `carrierId` and keep `operator`, now the carrier's name,
   so existing screens keep working. Renaming a carrier renames `operator` on
   all its SIMs.

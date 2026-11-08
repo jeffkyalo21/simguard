@@ -68,7 +68,7 @@ public partial class SimGuardDbContext
         {
             entity.ToTable("tier_recommendations", table =>
             {
-                table.HasCheckConstraint("chk_tier_recs_status", "status IN ('open', 'dismissed')");
+                table.HasCheckConstraint("chk_tier_recs_status", "status IN ('open', 'dismissed', 'applied')");
                 table.HasCheckConstraint("chk_tier_recs_recommendation", "recommendation IN ('upgrade', 'downgrade')");
                 table.HasCheckConstraint("chk_tier_recs_current_tier", "current_tier IN ('field', 'manager', 'professional', 'support')");
                 table.HasCheckConstraint("chk_tier_recs_recommended_tier", "recommended_tier IN ('field', 'manager', 'professional', 'support')");
@@ -89,6 +89,8 @@ public partial class SimGuardDbContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
             entity.Property(e => e.DismissedAt).HasColumnName("dismissed_at").HasColumnType("timestamp with time zone");
             entity.Property(e => e.DismissedByUserId).HasColumnName("dismissed_by_user_id");
+            entity.Property(e => e.AppliedAt).HasColumnName("applied_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.AppliedByUserId).HasColumnName("applied_by_user_id");
 
             entity.HasIndex(e => new { e.SimId, e.Status }).HasDatabaseName("idx_tier_recs_sim_status");
             entity.HasIndex(e => e.Status).HasDatabaseName("idx_tier_recs_status");
@@ -112,6 +114,11 @@ public partial class SimGuardDbContext
             entity.HasOne(e => e.DismissedByUser)
                 .WithMany()
                 .HasForeignKey(e => e.DismissedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.AppliedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.AppliedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }

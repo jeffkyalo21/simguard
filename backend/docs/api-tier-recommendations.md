@@ -3,8 +3,9 @@
 Issue #14. A run asks the ML service (`POST /v1/recommend-tier`) whether each
 SIM's plan tier fits its forecast usage and stores upgrades and downgrades as
 open recommendations. Nothing is applied automatically: the SecurityOfficer
-applies a tier with `PATCH /api/sims/{id}/tier`, or dismisses the
-recommendation. Run rules, timing and failure behaviour are in
+applies the recommended tier with `POST /api/tier-recommendations/{id}/apply`
+(or changes the tier by hand with `PATCH /api/sims/{id}/tier`), or dismisses
+the recommendation. Run rules, timing and failure behaviour are in
 [scoring-pipeline.md](scoring-pipeline.md).
 
 All times are UTC. Errors are RFC 7807 problem details, like the rest of the
@@ -19,13 +20,14 @@ API.
 | `GET /api/tier-recommendations/status` | no | yes | yes | `OrgRead` |
 | `PUT /api/tier-recommendations/settings` | no | yes | no | `OrgWrite` |
 | `POST /api/tier-recommendations/run` | no | yes | no | `OrgWrite` |
+| `POST /api/tier-recommendations/{id}/apply` | no | yes | no | `OrgWrite` |
 | `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
 
 ## Vocabulary
 
 | Field | Values |
 | ----- | ------ |
-| recommendation `status` | `open`, `dismissed` |
+| recommendation `status` | `open`, `dismissed`, `applied` |
 | `recommendation` | `upgrade`, `downgrade` |
 | tier | `field`, `manager`, `professional`, `support` |
 | run `trigger` | `manual`, `automatic` |
@@ -134,7 +136,8 @@ cycle, counted from 2025-01-01, that holds the latest usage date.
   "status": "open",
   "createdAt": "2026-11-04T09:12:00Z",
   "runId": 3,
-  "dismissedAt": null
+  "dismissedAt": null,
+  "appliedAt": null
 }
 ```
 
@@ -142,13 +145,23 @@ cycle, counted from 2025-01-01, that holds the latest usage date.
 
 ### GET /api/tier-recommendations
 
-Query: `status` (`open` or `dismissed`), `page`, `pageSize`. 200:
+Query: `status` (`open`, `dismissed` or `applied`), `page`, `pageSize`. 200:
 `PagedResult<TierRecommendationItem>`, newest first. 400: unknown `status`
 or bad paging.
 
+### POST /api/tier-recommendations/{id}/apply
+
+Sets the SIM to `recommendedTier` and marks the recommendation `applied`
+(with `appliedAt`), in one transaction under the SIM row lock. 200: the
+applied item. 404: unknown id. 409: the recommendation is not open
+(already applied or dismissed). Audited as `sim.tier_changed` (when the
+tier changes) and `tier_recommendation.applied`. The SIM no longer has an
+open recommendation, so a later run may evaluate it again.
+
 ### POST /api/tier-recommendations/{id}/dismiss
 
-200: the dismissed item. 404: unknown id. 409: already dismissed. Audited as
+200: the dismissed item. 404: unknown id. 409: not open (already dismissed
+or applied). Audited as
 `tier_recommendation.dismissed`. A later run does not recommend the same
 tier for that SIM again for 90 days.
 
@@ -167,3 +180,7 @@ Migration `AddTierRecommendations`:
   `projected_overage_mb`, `days_to_depletion`, `status`, `created_at`,
   `dismissed_at`, `dismissed_by_user_id`; a unique partial index allows one
   open recommendation per SIM.
+
+Migration `AddTierRecommendationApplied` (issue #14): `applied_at`,
+`applied_by_user_id` (foreign key to `app_users`, set null on delete) and
+`applied` in the `status` check.

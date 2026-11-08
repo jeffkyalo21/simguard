@@ -195,7 +195,7 @@ public static class SimEndpoints
 
         if (conflict is not null)
         {
-            return ApiProblems.Conflict(conflict);
+            return Duplicate(conflict.Value);
         }
 
         var sim = new Sim
@@ -250,7 +250,7 @@ public static class SimEndpoints
 
         if (conflict is not null)
         {
-            return ApiProblems.Conflict(conflict);
+            return Duplicate(conflict.Value);
         }
 
         var before = Snapshot(sim);
@@ -521,7 +521,16 @@ public static class SimEndpoints
         return byName;
     }
 
-    private static async Task<string?> FindUniquenessConflictAsync(
+    // A duplicate phone number or ICCID: the usual 409 ProblemDetails plus
+    // the error on the field (additive, issue #14), so a form can show it
+    // next to the input.
+    private static IResult Duplicate((string Field, string Message) conflict) =>
+        ApiProblems.Conflict(conflict.Message, new Dictionary<string, object?>
+        {
+            ["errors"] = new Dictionary<string, string[]> { [conflict.Field] = [conflict.Message] }
+        });
+
+    private static async Task<(string Field, string Message)?> FindUniquenessConflictAsync(
         SimGuardDbContext db,
         ValidatedSim values,
         int? excludeId,
@@ -531,14 +540,14 @@ public static class SimEndpoints
                 s => s.PhoneNumber == values.PhoneNumber && (excludeId == null || s.Id != excludeId),
                 cancellationToken))
         {
-            return $"A SIM with phone number '{values.PhoneNumber}' already exists.";
+            return ("phoneNumber", $"A SIM with phone number '{values.PhoneNumber}' already exists.");
         }
 
         if (await db.Sims.AnyAsync(
                 s => s.Iccid == values.Iccid && (excludeId == null || s.Id != excludeId),
                 cancellationToken))
         {
-            return $"A SIM with ICCID '{values.Iccid}' already exists.";
+            return ("iccid", $"A SIM with ICCID '{values.Iccid}' already exists.");
         }
 
         return null;

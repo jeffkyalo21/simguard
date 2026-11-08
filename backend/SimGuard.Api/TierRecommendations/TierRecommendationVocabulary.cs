@@ -21,7 +21,10 @@ public static class TierRecommendationStatuses
     public const string Open = "open";
     public const string Dismissed = "dismissed";
 
-    public static readonly IReadOnlySet<string> All = new HashSet<string> { Open, Dismissed };
+    // The SecurityOfficer set the SIM to the recommended tier (issue #14).
+    public const string Applied = "applied";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string> { Open, Dismissed, Applied };
 }
 
 public static class TierRecommendationKinds

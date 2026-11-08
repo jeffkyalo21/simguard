@@ -285,7 +285,8 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
       "actorEmail": "officer@simguard.local",
       "action": null,
       "referenceType": "alert",
-      "referenceId": 17
+      "referenceId": 17,
+      "occurredOn": null
     },
     {
       "kind": "audit",
@@ -294,7 +295,8 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
       "actorEmail": "admin@simguard.local",
       "action": "sim.status_changed",
       "referenceType": "auditLog",
-      "referenceId": 88
+      "referenceId": 88,
+      "occurredOn": null
     }
   ],
   "page": 1,
@@ -305,7 +307,7 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
 
 | `kind` | Source | `referenceType` |
 | ------ | ------ | --------------- |
-| `alertOpened` | alert `createdAt` | `alert` |
+| `alertOpened` | alert `createdAt`; `occurredOn` is the alert's `detectedOn` | `alert` |
 | `alertCleared` | alert `resolvedAt` (cleared alerts) | `alert` |
 | `allocationStarted` | allocation `assignmentDate` | `allocation` |
 | `allocationEnded` | allocation `returnDate` | `allocation` |
@@ -315,6 +317,9 @@ Audit rows whose action starts with `alert.` or `allocation.` are left out
 because the alert and allocation entries already show them. `actorEmail` is
 the user who cleared the alert, or the acting user of the audit row; for
 allocations it is null (the assigner is an employee, named in `summary`).
+`occurredOn` (additive, issue #14) is set on `alertOpened` rows only: the
+scored day the alert was detected, which for backfilled alerts is long
+before the row was stored. Screens show it in place of `occurredAt`.
 404: unknown SIM.
 
 ## Dashboard

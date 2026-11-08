@@ -147,7 +147,10 @@ public record ActivityItem(
     string? ActorEmail,
     string? Action,
     string ReferenceType,
-    int ReferenceId);
+    int ReferenceId,
+    // Additive (issue #14): the day an opened alert was detected, which for
+    // scored alerts is not the day the row was stored (occurredAt).
+    DateOnly? OccurredOn = null);
 
 public record DashboardSummaryResponse(
     int Days,

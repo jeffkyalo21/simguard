@@ -1244,6 +1244,14 @@ namespace SimGuard.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
 
+                    b.Property<DateTime?>("AppliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at");
+
+                    b.Property<int?>("AppliedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("applied_by_user_id");
+
                     b.Property<int>("BillingCycle")
                         .HasColumnType("integer")
                         .HasColumnName("billing_cycle");
@@ -1308,6 +1316,8 @@ namespace SimGuard.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AppliedByUserId");
+
                     b.HasIndex("DismissedByUserId");
 
                     b.HasIndex("RunId");
@@ -1331,7 +1341,7 @@ namespace SimGuard.Api.Data.Migrations
 
                             t.HasCheckConstraint("chk_tier_recs_recommended_tier", "recommended_tier IN ('field', 'manager', 'professional', 'support')");
 
-                            t.HasCheckConstraint("chk_tier_recs_status", "status IN ('open', 'dismissed')");
+                            t.HasCheckConstraint("chk_tier_recs_status", "status IN ('open', 'dismissed', 'applied')");
                         });
                 });
 
@@ -1661,6 +1671,11 @@ namespace SimGuard.Api.Data.Migrations
 
             modelBuilder.Entity("SimGuard.Api.Models.TierRecommendation", b =>
                 {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "AppliedByUser")
+                        .WithMany()
+                        .HasForeignKey("AppliedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("SimGuard.Api.Models.AppUser", "DismissedByUser")
                         .WithMany()
                         .HasForeignKey("DismissedByUserId")
@@ -1677,6 +1692,8 @@ namespace SimGuard.Api.Data.Migrations
                         .HasForeignKey("SimId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("AppliedByUser");
 
                     b.Navigation("DismissedByUser");
 

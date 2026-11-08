@@ -52,7 +52,9 @@ public record TierRecommendationItem(
     string Status,
     DateTime CreatedAt,
     int RunId,
-    DateTime? DismissedAt);
+    DateTime? DismissedAt,
+    // Additive (issue #14): when the recommended tier was applied.
+    DateTime? AppliedAt);
 
 // Tier recommendations (issue #14). Contract in
 // backend/docs/api-tier-recommendations.md. Reading is OrgRead
@@ -90,6 +92,13 @@ public static class TierRecommendationEndpoints
             .Produces<TierRecommendationRunStarted>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapPost("/{id:int}/apply", Apply)
+            .WithName("ApplyTierRecommendation")
+            .RequireAuthorization(AuthPolicies.OrgWrite)
+            .Produces<TierRecommendationItem>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
         group.MapPost("/{id:int}/dismiss", Dismiss)
             .WithName("DismissTierRecommendation")
             .RequireAuthorization(AuthPolicies.OrgWrite)
@@ -112,7 +121,7 @@ public static class TierRecommendationEndpoints
 
         if (status is not null && !TierRecommendationStatuses.All.Contains(status))
         {
-            errors.Add("status", "status must be open or dismissed.");
+            errors.Add("status", "status must be open, dismissed or applied.");
         }
 
         if (errors.HasErrors)
@@ -254,6 +263,65 @@ public static class TierRecommendationEndpoints
         return TypedResults.Ok(item);
     }
 
+    // Sets the SIM to the recommended tier and closes the recommendation as
+    // applied, in one transaction. The SIM row lock is the same one
+    // PATCH /api/sims/{id}/tier takes. Audited as sim.tier_changed (when the
+    // tier changes) and tier_recommendation.applied.
+    private static async Task<IResult> Apply(
+        int id,
+        HttpContext http,
+        SimGuardDbContext db,
+        AuditWriter audit,
+        CancellationToken cancellationToken)
+    {
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            var rec = await db.TierRecommendations.SingleOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+            if (rec is null)
+            {
+                return ApiProblems.NotFound($"Tier recommendation {id} was not found.");
+            }
+
+            var sim = await SimEndpoints.LockSimAsync(db, rec.SimId, cancellationToken);
+
+            // Read again under the SIM lock: a concurrent apply or dismiss
+            // of the same recommendation has finished by now.
+            await db.Entry(rec).ReloadAsync(cancellationToken);
+
+            if (rec.Status != TierRecommendationStatuses.Open)
+            {
+                return ApiProblems.Conflict($"Tier recommendation {id} is already {rec.Status}.");
+            }
+
+            if (sim is null)
+            {
+                return ApiProblems.NotFound($"SIM {rec.SimId} was not found.");
+            }
+
+            var oldTier = sim.Tier;
+
+            if (oldTier != rec.RecommendedTier)
+            {
+                sim.Tier = rec.RecommendedTier;
+                audit.Add(AuditActions.SimTierChanged, sim.Id, new { tier = oldTier }, new { tier = sim.Tier });
+            }
+
+            rec.Status = TierRecommendationStatuses.Applied;
+            rec.AppliedAt = Timestamps.UtcNow();
+            rec.AppliedByUserId = TokenService.GetUserId(http.User);
+
+            audit.Add(AuditActions.TierRecommendationApplied, rec.SimId,
+                new { recommendationId = rec.Id, status = TierRecommendationStatuses.Open, tier = oldTier },
+                new { recommendationId = rec.Id, status = rec.Status, tier = rec.RecommendedTier });
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        var item = await db.TierRecommendations.AsNoTracking().Where(r => r.Id == id).Select(Item).SingleAsync(cancellationToken);
+        return TypedResults.Ok(item);
+    }
+
     private static async Task<TierRecommendationSettings> LoadSettingsAsync(SimGuardDbContext db, CancellationToken cancellationToken)
     {
         var settings = await db.TierRecommendationSettings.SingleOrDefaultAsync(s => s.Id == 1, cancellationToken);
@@ -278,5 +346,6 @@ public static class TierRecommendationEndpoints
     private static readonly System.Linq.Expressions.Expression<Func<TierRecommendation, TierRecommendationItem>> Item =
         r => new TierRecommendationItem(
             r.Id, r.SimId, r.Sim.PhoneNumber, r.CurrentTier, r.RecommendedTier, r.Recommendation, r.Reason,
-            r.BillingCycle, r.ProjectedOverageMb, r.DaysToDepletion, r.Status, r.CreatedAt, r.RunId, r.DismissedAt);
+            r.BillingCycle, r.ProjectedOverageMb, r.DaysToDepletion, r.Status, r.CreatedAt, r.RunId, r.DismissedAt,
+            r.AppliedAt);
 }

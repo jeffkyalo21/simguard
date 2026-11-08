@@ -69,14 +69,17 @@ public class TierRecommendation
     public double? ProjectedOverageMb { get; set; }
     public int? DaysToDepletion { get; set; }
 
-    // open or dismissed.
+    // open, dismissed or applied.
     public string Status { get; set; } = "open";
 
     public DateTime CreatedAt { get; set; }
     public DateTime? DismissedAt { get; set; }
     public int? DismissedByUserId { get; set; }
+    public DateTime? AppliedAt { get; set; }
+    public int? AppliedByUserId { get; set; }
 
     public Sim Sim { get; set; } = null!;
     public TierRecommendationRun Run { get; set; } = null!;
     public AppUser? DismissedByUser { get; set; }
+    public AppUser? AppliedByUser { get; set; }
 }
