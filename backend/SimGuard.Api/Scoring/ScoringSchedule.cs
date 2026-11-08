@@ -116,9 +116,17 @@ public sealed class ScoringImportTrigger(
     IOptionsMonitor<ScoringOptions> options,
     ILogger<ScoringImportTrigger> logger)
 {
-    public async Task<int?> AfterUsageImportAsync(ImportCoverage coverage, CancellationToken cancellationToken)
+    public Task<int?> AfterUsageImportAsync(ImportCoverage coverage, CancellationToken cancellationToken) =>
+        coverage.Details.Count == 0 || coverage.FirstDate is null || coverage.LastDate is null
+            ? Task.FromResult<int?>(null)
+            : AfterUsageLoadedAsync(
+                coverage.Details.Select(d => d.SimId).ToArray(), coverage.FirstDate.Value, coverage.LastDate.Value, cancellationToken);
+
+    // Same for any source of usage rows (the carrier feed uses this).
+    public async Task<int?> AfterUsageLoadedAsync(
+        IReadOnlyCollection<int> simIds, DateOnly firstDate, DateOnly lastDate, CancellationToken cancellationToken)
     {
-        if (!options.CurrentValue.Enabled || coverage.Details.Count == 0 || coverage.FirstDate is null || coverage.LastDate is null)
+        if (!options.CurrentValue.Enabled || simIds.Count == 0)
         {
             return null;
         }
@@ -129,9 +137,9 @@ public sealed class ScoringImportTrigger(
                 new ScoringRequest(
                     ScoringTriggers.Import,
                     false,
-                    coverage.Details.Select(d => d.SimId).ToArray(),
-                    coverage.FirstDate,
-                    coverage.LastDate.Value.AddDays(MlLimits.ScoreLookbackDays - 1),
+                    simIds,
+                    firstDate,
+                    lastDate.AddDays(MlLimits.ScoreLookbackDays - 1),
                     null,
                     AuditWriter.SystemActor),
                 cancellationToken);

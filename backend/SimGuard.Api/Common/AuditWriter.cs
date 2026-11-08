@@ -17,6 +17,9 @@ public static class AuditActions
     public const string CarrierCreated = "carrier.created";
     public const string CarrierRenamed = "carrier.renamed";
     public const string CarrierDeleted = "carrier.deleted";
+    public const string CarrierFeedSaved = "carrier.feed_saved";
+    public const string CarrierFeedTested = "carrier.feed_tested";
+    public const string CarrierFeedSyncRequested = "carrier.feed_sync_requested";
     public const string AllocationCreated = "allocation.created";
     public const string AllocationReturned = "allocation.returned";
     public const string DepartmentCreated = "department.created";

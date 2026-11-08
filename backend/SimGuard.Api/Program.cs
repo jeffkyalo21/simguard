@@ -7,6 +7,7 @@ using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Email;
 using SimGuard.Api.Endpoints;
+using SimGuard.Api.Feed;
 using SimGuard.Api.Ml;
 using SimGuard.Api.Scoring;
 using SimGuard.Api.TierRecommendations;
@@ -28,6 +29,10 @@ builder.Services.AddMlServiceClient(builder.Configuration);
 // Scoring runs: queue, runner and the background worker.
 builder.Services.AddScoringPipeline(builder.Configuration);
 builder.Services.AddTierRecommendations(builder.Configuration);
+
+// Carrier usage feeds: encrypted keys, importer and the daily service.
+// See backend/docs/carrier-feed.md.
+builder.Services.AddCarrierFeed(builder.Configuration);
 
 // Transactional email through Brevo. See backend/docs/access-requests.md.
 builder.Services.AddEmail(builder.Configuration);
@@ -119,6 +124,7 @@ var api = app.MapGroup("/api");
 api.MapDepartmentEndpoints();
 api.MapEmployeeEndpoints();
 api.MapCarrierEndpoints();
+api.MapCarrierFeedEndpoints();
 api.MapSimEndpoints();
 api.MapAllocationEndpoints();
 api.MapAuthEndpoints();
