@@ -12,25 +12,24 @@ import { copy } from "@/lib/copy";
 const text = copy.landing.leadForm;
 
 // Same look as Input, for the native select and the textarea.
-const controlClass =
+export const controlClass =
   "w-full min-w-0 rounded-lg border border-input bg-transparent px-3 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40";
 
 // Field order, used to focus the first error.
-const ORDER = ["name", "email", "company", "sims", "time"];
+const ORDER = ["name", "email", "company", "sims"];
 
 function read(form) {
   const data = new FormData(form);
   return Object.fromEntries(ORDER.map((key) => [key, String(data.get(key) ?? "")]));
 }
 
-function validate(values, kind) {
+function validate(values) {
   const errors = {};
   if (!values.name.trim()) errors.name = text.errors.name;
   if (!values.email.trim()) errors.email = text.errors.emailRequired;
   else if (!isEmail(values.email.trim())) errors.email = text.errors.emailInvalid;
   if (!values.company.trim()) errors.company = text.errors.company;
   if (!values.sims) errors.sims = text.errors.sims;
-  if (kind === "demo" && !values.time) errors.time = text.errors.time;
   return errors;
 }
 
@@ -40,7 +39,7 @@ function validate(values, kind) {
  * theme, and the options get the popover colours so their text never
  * inherits light ink onto a white list.
  */
-function SelectField({ field, name, placeholder, options }) {
+export function SelectField({ field, name, placeholder, options }) {
   return (
     <div className="relative">
       <select
@@ -68,16 +67,13 @@ function SelectField({ field, name, placeholder, options }) {
 }
 
 /**
- * The one form behind "Book a demo" and the contact section, so both
- * validate the same way. It checks fields in the browser, shows inline
+ * The contact section form. It checks fields in the browser, shows inline
  * errors and focuses the first one. Nothing is sent or stored: a valid
- * submit only shows the thank-you state.
- * @param {{ kind: "demo" | "contact", submitLabel: string, wide?: boolean,
- *   doneAction?: React.ReactNode }} props
- *   doneAction: shown with the thank-you text (the dialog passes Close);
- *   without it the form offers to send another message.
+ * submit only shows the thank-you state. (Requests for an account go through
+ * RegisterForm.)
+ * @param {{ kind?: string, submitLabel: string, wide?: boolean }} props
  */
-export function LeadForm({ kind, submitLabel, wide = false, doneAction }) {
+export function LeadForm({ kind = "contact", submitLabel, wide = false }) {
   const [errors, setErrors] = useState({});
   const [tried, setTried] = useState(false);
   const [done, setDone] = useState(false);
@@ -97,7 +93,7 @@ export function LeadForm({ kind, submitLabel, wide = false, doneAction }) {
   function handleSubmit(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const nextErrors = validate(read(form), kind);
+    const nextErrors = validate(read(form));
 
     setTried(true);
     setErrors(nextErrors);
@@ -121,11 +117,9 @@ export function LeadForm({ kind, submitLabel, wide = false, doneAction }) {
       <div ref={successRef} tabIndex={-1} className="lead-success flex flex-col items-start gap-4 outline-none">
         <CircleCheck className="size-8 text-risk-cleared-foreground" aria-hidden="true" />
         <p className="text-lg font-medium">{text.success}</p>
-        {doneAction ?? (
-          <Button type="button" variant="outline" onClick={reset} className="h-11 px-5">
-            {copy.landing.contact.again}
-          </Button>
-        )}
+        <Button type="button" variant="outline" onClick={reset} className="h-11 px-5">
+          {copy.landing.contact.again}
+        </Button>
         <p className="text-xs text-muted-foreground">{text.note}</p>
       </div>
     );
@@ -135,7 +129,7 @@ export function LeadForm({ kind, submitLabel, wide = false, doneAction }) {
     <form
       ref={formRef}
       onSubmit={handleSubmit}
-      onChange={tried ? (event) => setErrors(validate(read(event.currentTarget), kind)) : undefined}
+      onChange={tried ? (event) => setErrors(validate(read(event.currentTarget))) : undefined}
       noValidate
       className="flex flex-col gap-5"
     >
@@ -163,19 +157,11 @@ export function LeadForm({ kind, submitLabel, wide = false, doneAction }) {
             <SelectField field={field} name="sims" placeholder={text.simsPlaceholder} options={text.simsOptions} />
           )}
         </FormField>
-        {kind === "demo" ? (
-          <FormField id={id("time")} label={text.time} error={errors.time}>
-            {(field) => (
-              <SelectField field={field} name="time" placeholder={text.timePlaceholder} options={text.timeOptions} />
-            )}
+        <div className={cn(wide && "sm:col-span-2")}>
+          <FormField id={id("message")} label={text.message}>
+            {(field) => <textarea {...field} name="message" rows={4} className={cn(controlClass, "resize-y py-2.5")} />}
           </FormField>
-        ) : (
-          <div className={cn(wide && "sm:col-span-2")}>
-            <FormField id={id("message")} label={text.message}>
-              {(field) => <textarea {...field} name="message" rows={4} className={cn(controlClass, "resize-y py-2.5")} />}
-            </FormField>
-          </div>
-        )}
+        </div>
       </div>
       <div className="flex flex-col items-start gap-2">
         <Button type="submit" size="lg" className="h-11 px-6">

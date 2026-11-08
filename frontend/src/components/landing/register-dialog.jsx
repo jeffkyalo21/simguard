@@ -1,29 +1,29 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
-import { LeadForm } from "@/components/landing/lead-form";
+import { RegisterForm } from "@/components/landing/register-form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { copy } from "@/lib/copy";
 
-const text = copy.landing.demo;
-const DemoContext = createContext(() => {});
+const text = copy.landing.register;
+const RegisterContext = createContext(() => {});
 
-/** Opens the demo dialog. Pass the element that should get focus back. */
-export function useOpenDemo() {
-  return useContext(DemoContext);
+/** Opens the Register dialog. Pass the element that should get focus back. */
+export function useOpenRegister() {
+  return useContext(RegisterContext);
 }
 
 /**
- * Holds the single "Book a demo" dialog for the Landing page. Every Book a
- * demo control opens it, and focus returns to the control that did.
+ * Holds the single Register dialog for the Landing page. Every Register
+ * control opens it, and focus returns to the control that did.
  * @param {{ children: React.ReactNode }} props
  */
-export function DemoDialogProvider({ children }) {
+export function RegisterDialogProvider({ children }) {
   const [open, setOpen] = useState(false);
   const opener = useRef(null);
 
-  const openDemo = useCallback((returnTo) => {
+  const openRegister = useCallback((returnTo) => {
     opener.current = returnTo ?? document.activeElement;
     setOpen(true);
   }, []);
@@ -37,7 +37,7 @@ export function DemoDialogProvider({ children }) {
   }
 
   return (
-    <DemoContext.Provider value={openDemo}>
+    <RegisterContext.Provider value={openRegister}>
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
@@ -49,9 +49,8 @@ export function DemoDialogProvider({ children }) {
             <DialogTitle className="text-lg font-semibold">{text.title}</DialogTitle>
           </DialogHeader>
           {/* The content unmounts on close, so the form starts empty each time. */}
-          <LeadForm
-            kind="demo"
-            submitLabel={text.submit}
+          <RegisterForm
+            idPrefix="dialog"
             doneAction={
               <DialogClose asChild>
                 <Button type="button" className="h-11 px-5">
@@ -62,29 +61,29 @@ export function DemoDialogProvider({ children }) {
           />
         </DialogContent>
       </Dialog>
-    </DemoContext.Provider>
+    </RegisterContext.Provider>
   );
 }
 
 /**
- * A "Book a demo" control. It is a link to the contact form, so it still
- * works without JavaScript; with JavaScript it opens the demo dialog.
+ * A Register control. It is a link to the /register page, so it still
+ * works without JavaScript; with JavaScript it opens the Register dialog.
  * Spreads its props so it can sit inside <Button asChild>.
  * @param {{ children: React.ReactNode } & React.AnchorHTMLAttributes<HTMLAnchorElement>} props
  */
-export function BookDemoButton({ children, onClick, ...props }) {
-  const openDemo = useOpenDemo();
+export function RegisterButton({ children, onClick, ...props }) {
+  const openRegister = useOpenRegister();
 
   return (
     <a
-      href="#contact"
+      href="/register"
       aria-haspopup="dialog"
       {...props}
       onClick={(event) => {
         onClick?.(event);
         if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault();
-        openDemo(event.currentTarget);
+        openRegister(event.currentTarget);
       }}
     >
       {children}

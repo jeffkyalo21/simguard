@@ -8,9 +8,11 @@ import { DataState } from "@/components/data/data-state";
 import { DataTable } from "@/components/data/data-table";
 import { SectionCard } from "@/components/data/section-card";
 import { ListSkeleton } from "@/components/data/skeletons";
+import { RequestsPanel } from "@/components/admin/requests-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { DisabledReason } from "@/components/shared/disabled-reason";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
 import { errorMessage } from "@/lib/api";
@@ -53,6 +55,7 @@ export function AdminView() {
   const running = usePermission("scoring.run");
   const resource = useResource(() => getScoringStatus(), []);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState("scoring");
   const data = resource.data;
   const active = Boolean(data?.runs.some((run) => ACTIVE.has(run.status)));
 
@@ -85,7 +88,16 @@ export function AdminView() {
         title={text.title}
         actions={<SignOutButton variant="outline" className="h-10 px-4" />}
       />
-      <p className="-mt-3 max-w-2xl text-sm text-muted-foreground">{text.intro}</p>
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
+        <TabsList variant="pill" aria-label={text.tabsLabel}>
+          {Object.entries(text.tabs).map(([value, label]) => (
+            <TabsTrigger key={value} value={value}>
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="scoring" className="flex flex-col gap-6">
+      <p className="max-w-2xl text-sm text-muted-foreground">{text.intro}</p>
 
       <SectionCard
         title={text.scoring}
@@ -144,6 +156,11 @@ export function AdminView() {
           emptyMessage={text.noRuns}
         />
       </SectionCard>
+        </TabsContent>
+        <TabsContent value="requests" className="flex flex-col gap-6">
+          <RequestsPanel />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }

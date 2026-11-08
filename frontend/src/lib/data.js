@@ -419,6 +419,31 @@ export function runScoring() {
   return write(api.post("/admin/scoring/run"));
 }
 
+/* ------------------------------------------------- Access requests (Admin) */
+
+/**
+ * GET /access-requests, newest first. `status` is pending, approved or
+ * declined. Admin only.
+ * @param {{ status?: string, page?: number, pageSize?: number }} [query]
+ */
+export function listAccessRequests({ status, page, pageSize } = {}) {
+  return api.get("/access-requests", { query: { status, page, pageSize } });
+}
+
+/** PATCH /access-requests/{id}/status to approved or declined. 409 when already reviewed. */
+export function reviewAccessRequest(id, status) {
+  return write(api.patch(`/access-requests/${id}/status`, { status }));
+}
+
+/**
+ * POST /users. The account starts with the temporary password and must
+ * change it at first sign-in. 409 when the email is taken.
+ * @param {{ email: string, name: string, role: string, temporaryPassword: string }} body
+ */
+export function createUser(body) {
+  return write(api.post("/users", body));
+}
+
 /* --------------------------------------------------------------- Imports */
 
 /** CSV import types in the order they should be imported. */

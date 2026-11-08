@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
-import { useOpenDemo } from "@/components/landing/demo-dialog";
+import { useOpenRegister } from "@/components/landing/register-dialog";
 import { scrollToSection } from "@/components/landing/scroll-link";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -15,7 +15,7 @@ const text = copy.landing;
 /**
  * Below 1100px the section links and both calls to action move into a
  * sheet. A choice closes the sheet first; once it has closed, the page
- * scrolls to the section or the demo dialog opens (focus then returns to
+ * scrolls to the section or the Register dialog opens (focus then returns to
  * the Menu button).
  * @param {{ links: { href: string, label: string }[] }} props
  */
@@ -23,7 +23,7 @@ export function LandingMenu({ links }) {
   const [open, setOpen] = useState(false);
   const pending = useRef(null);
   const triggerRef = useRef(null);
-  const openDemo = useOpenDemo();
+  const openRegister = useOpenRegister();
 
   function choose(event, next) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -37,7 +37,7 @@ export function LandingMenu({ links }) {
     pending.current = null;
     if (!next) return;
     event.preventDefault();
-    if (next === "demo") openDemo(triggerRef.current);
+    if (next === "register") openRegister(triggerRef.current);
     else scrollToSection(next);
   }
 
@@ -78,8 +78,8 @@ export function LandingMenu({ links }) {
         </nav>
         <div className="mt-auto flex flex-col gap-2 p-5">
           <Button asChild size="lg" className="h-11">
-            <a href="#contact" aria-haspopup="dialog" onClick={(event) => choose(event, "demo")}>
-              {text.bookDemo}
+            <a href="/register" aria-haspopup="dialog" onClick={(event) => choose(event, "register")}>
+              {text.registerLabel}
             </a>
           </Button>
           <Button asChild size="lg" variant="outline" className="h-11">

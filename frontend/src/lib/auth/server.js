@@ -37,9 +37,10 @@ async function readJson(response) {
  * `{ ok, status, data, retryAfter }` with status 0 when the backend could
  * not be reached. Tokens are sent as a Bearer header and never logged.
  * @param {string} path  relative to /api, for example "/auth/login"
- * @param {{ method?: string, token?: string, body?: unknown }} [options]
+ * @param {{ method?: string, token?: string, body?: unknown,
+ *   headers?: Record<string, string> }} [options]
  */
-export async function callBackend(path, { method = "GET", token, body } = {}) {
+export async function callBackend(path, { method = "GET", token, body, headers } = {}) {
   let response;
 
   try {
@@ -51,6 +52,7 @@ export async function callBackend(path, { method = "GET", token, body } = {}) {
         Accept: "application/json",
         ...(body !== undefined && { "Content-Type": "application/json" }),
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...headers,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
