@@ -33,7 +33,7 @@ export const copy = {
     allocations: { title: "Allocations", empty: "No allocations yet." },
     imports: { title: "Imports", empty: "No imports yet." },
     auditLog: { title: "Audit log", empty: "No activity yet." },
-    settings: { title: "Settings", empty: "No settings yet." },
+    settings: { title: "Settings" },
     tierRecommendations: { title: "Tier recommendations", empty: "No recommendations." },
     admin: { title: "Admin", empty: "No data yet." },
   },
@@ -1117,15 +1117,6 @@ export const copy = {
     tabsLabel: "Settings sections",
     tabs: {
       carriers: "Carriers",
-      departments: "Departments",
-      plans: "Plans and tiers",
-      profile: "Profile",
-    },
-    comingSoon: "Coming soon",
-    soon: {
-      departments: "Add, rename and remove the departments employees belong to.",
-      plans: "Set plan types and the data, voice and SMS limits of each tier.",
-      profile: "Change your name, email and password.",
     },
     carriers: {
       add: "Add carrier",
