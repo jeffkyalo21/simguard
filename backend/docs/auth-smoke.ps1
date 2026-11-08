@@ -308,9 +308,8 @@ Check 'Admin POST /api/sims' 403 (Invoke-Api POST '/api/sims' $simBody $admin)
 $sim = Invoke-Api POST '/api/sims' $simBody $officerToken
 Check 'Officer POST /api/sims' 201 $sim
 $simId = $sim.Data.id
-Check 'Auditor PATCH /api/sims/{id}/status' 403 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $auditorToken)
-Check 'Admin PATCH /api/sims/{id}/status' 403 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $admin)
-Check 'Officer PATCH /api/sims/{id}/status' 200 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $officerToken)
+$gone = Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $officerToken
+Check-True 'PATCH /api/sims/{id}/status no longer exists (404 or 405)' (@(404, 405) -contains [int]$gone.Status) "status=$($gone.Status)"
 Check 'Auditor POST /api/allocations' 403 (Invoke-Api POST '/api/allocations' @{ simId = $simId; employeeId = 1; assignedBy = 1 } $auditorToken)
 Check 'Admin DELETE /api/sims/{id}' 403 (Invoke-Api DELETE "/api/sims/$simId" $null $admin)
 Check 'Officer DELETE /api/sims/{id} (cleanup)' 204 (Invoke-Api DELETE "/api/sims/$simId" $null $officerToken)

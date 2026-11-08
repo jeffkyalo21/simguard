@@ -10,7 +10,6 @@
       group          endpoint                          Admin  Officer  Auditor
       org read       GET /api/sims                     403    200      200
       org write      POST /api/departments             403    201      403
-      status change  PATCH /api/sims/{id}/status       403    200      403
       tier change    PATCH /api/sims/{id}/tier         403    200      403
       users          GET /api/users                    200    403      403
       audit logs     GET /api/audit-logs               200    403      200
@@ -269,7 +268,6 @@ $simId = $sim.Data.id
 $matrix = @(
     @{ Group = 'org read';      Expect = @{ Admin = 403; Officer = 200; Auditor = 200 } },
     @{ Group = 'org write';     Expect = @{ Admin = 403; Officer = 201; Auditor = 403 } },
-    @{ Group = 'status change'; Expect = @{ Admin = 403; Officer = 200; Auditor = 403 } },
     @{ Group = 'tier change';   Expect = @{ Admin = 403; Officer = 200; Auditor = 403 } },
     @{ Group = 'users';         Expect = @{ Admin = 200; Officer = 403; Auditor = 403 } },
     @{ Group = 'audit logs';    Expect = @{ Admin = 200; Officer = 403; Auditor = 200 } },
@@ -291,7 +289,6 @@ foreach ($row in $matrix) {
                 $r = Invoke-Api POST '/api/departments' @{ name = "Roles $role $runId" } $token
                 if ($r.Status -eq 201) { $createdDepartments += $r.Data.id }
             }
-            'status change' { $label = 'PATCH /api/sims/{id}/status'; $r = Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $token }
             'tier change'   { $label = 'PATCH /api/sims/{id}/tier'; $r = Invoke-Api PATCH "/api/sims/$simId/tier" @{ tier = 'field' } $token }
             'users'         { $label = 'GET /api/users'; $r = Invoke-Api GET '/api/users' $null $token }
             'audit logs'    { $label = 'GET /api/audit-logs'; $r = Invoke-Api GET '/api/audit-logs?pageSize=1' $null $token }
@@ -304,6 +301,10 @@ foreach ($row in $matrix) {
         Check "[$($row.Group)] $role $label" $row.Expect[$role] $r
     }
 }
+
+# --- SIM status is read only: SimGuard has no endpoint to change it -----------
+$gone = Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $officer
+Check-True 'PATCH /api/sims/{id}/status no longer exists (Officer gets 404 or 405)' (@(404, 405) -contains [int]$gone.Status) "status=$($gone.Status)"
 
 # --- Tier endpoint -----------------------------------------------------------
 $tierPath = "/api/sims/$simId/tier"

@@ -375,7 +375,7 @@ The roles split operator from organisation:
   the system audit trail. It does not see or change the organisation's
   data (403 on every organisation endpoint).
 - **SecurityOfficer** manages the organisation: departments, employees,
-  SIMs, carriers, allocations, SIM status and tier, and alert reviews. It
+  SIMs, carriers, allocations, SIM tier, and alert reviews. It
   cannot manage users or read the audit logs.
 - **Auditor** is read-only: every organisation read, the full audit log and
   the auth event log. It never writes.
@@ -406,7 +406,6 @@ The roles split operator from organisation:
 | `POST /api/employees`, `PUT/DELETE /api/employees/{id}` | no | yes | no | `OrgWrite` |
 | `GET /api/sims`, `/{id}`, `/{id}/allocations`, `/{id}/risk`, `/{id}/activity`, `/{id}/usage`, `/{id}/usage/cycle` | no | yes | yes | `OrgRead` |
 | `POST /api/sims`, `PUT/DELETE /api/sims/{id}` | no | yes | no | `OrgWrite` |
-| `PATCH /api/sims/{id}/status` | no | yes | no | `OrgWrite` |
 | `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
 | `GET /api/carriers` | no | yes | yes | `OrgRead` |
 | `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
@@ -546,7 +545,7 @@ prints each step's expected and real status code. See the header of the
 script for how to run it.
 
 `backend/docs/roles-smoke.ps1` checks the role matrix: for each role one
-endpoint per group (organisation read and write, SIM status and tier
+endpoint per group (organisation read and write, SIM tier
 change, users, audit logs, auth events, health) with the expected 2xx or
 403, the tier endpoint and the audit log filtering by role. It uses the
 Development test accounts above when `SIMGUARD_SMOKE_OFFICER_EMAIL`,

@@ -1071,39 +1071,6 @@
           }
         },
         {
-          "name": "Change status",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/sims/{{simId}}/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "sims",
-                "{{simId}}",
-                "status"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"inactive\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          }
-        },
-        {
           "name": "Change tier",
           "request": {
             "method": "PATCH",

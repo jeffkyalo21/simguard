@@ -46,14 +46,6 @@ public static class SimEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
-        group.MapPatch("/{id:int}/status", UpdateSimStatus)
-            .WithName("UpdateSimStatus")
-            .RequireAuthorization(AuthPolicies.OrgWrite)
-            .Produces<SimResponse>()
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status409Conflict);
-
         group.MapPatch("/{id:int}/tier", UpdateSimTier)
             .WithName("UpdateSimTier")
             .RequireAuthorization(AuthPolicies.OrgWrite)
@@ -270,61 +262,6 @@ public static class SimEndpoints
 
         audit.Add(AuditActions.SimUpdated, sim.Id, before, Snapshot(sim));
         await db.SaveChangesAsync(cancellationToken);
-
-        return TypedResults.Ok(await FindSimResponseAsync(db, id, cancellationToken));
-    }
-
-    private static async Task<IResult> UpdateSimStatus(
-        int id,
-        SimStatusRequest request,
-        SimGuardDbContext db,
-        AuditWriter audit,
-        CancellationToken cancellationToken)
-    {
-        var status = request.Status?.Trim().ToLowerInvariant();
-
-        if (string.IsNullOrEmpty(status))
-        {
-            return Invalid("status", "status is required.");
-        }
-
-        if (status == SimStatuses.Assigned)
-        {
-            return Invalid(
-                "status",
-                "status cannot be set to 'assigned' directly. Create an allocation instead.");
-        }
-
-        if (status is not (SimStatuses.Available or SimStatuses.Inactive))
-        {
-            return Invalid("status", "status must be 'available' or 'inactive'.");
-        }
-
-        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
-        {
-            // Lock the row so a concurrent allocation cannot slip in between
-            // the active-allocation check and the status change.
-            var sim = await LockSimAsync(db, id, cancellationToken);
-
-            if (sim is null)
-            {
-                return ApiProblems.NotFound($"SIM {id} was not found.");
-            }
-
-            if (await db.Allocations.AnyAsync(
-                    a => a.SimId == id && a.ReturnDate == null,
-                    cancellationToken))
-            {
-                return ApiProblems.Conflict(
-                    $"SIM {id} has an active allocation. Return it before changing the status.");
-            }
-
-            var oldStatus = sim.Status;
-            sim.Status = status;
-            audit.Add(AuditActions.SimStatusChanged, sim.Id, new { status = oldStatus }, new { status });
-            await db.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-        }
 
         return TypedResults.Ok(await FindSimResponseAsync(db, id, cancellationToken));
     }

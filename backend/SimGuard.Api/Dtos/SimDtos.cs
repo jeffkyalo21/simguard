@@ -4,8 +4,8 @@ using SimGuard.Api.Models;
 namespace SimGuard.Api.Dtos;
 
 // Used by POST and PUT. Status is deliberately absent: new SIMs start as
-// "available" and status only changes through PATCH /sims/{id}/status or
-// the allocation workflow.
+// "available". Status comes from the carrier data (imports and the carrier
+// feed) or the allocation workflow; SimGuard has no endpoint to change it.
 //
 // The carrier is given by CarrierId (what the frontend SIM form sends) or,
 // for older clients, by Operator, the carrier name (case-insensitive).
@@ -17,8 +17,6 @@ public record SimRequest(
     string? Operator,
     string? PlanType,
     decimal? MonthlyCost);
-
-public record SimStatusRequest(string? Status);
 
 public record SimTierRequest(string? Tier);
 
