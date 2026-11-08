@@ -467,3 +467,32 @@ export async function commitImport(type, file, { skipInvalid = false } = {}) {
 export function listImportRuns({ page, pageSize } = {}) {
   return api.get("/imports", { query: { page, pageSize } });
 }
+
+/* ------------------------------------------------------- First-day setup */
+
+/**
+ * What the first-day checklist needs: how much of each kind of data exists.
+ * Totals come from list endpoints with pageSize 1; usage is done once the
+ * dashboard has an as-of date (the latest usage day).
+ */
+export async function getSetupProgress() {
+  const [carriers, departments, employees, sims, allocations, summary, scores] = await Promise.all([
+    listCarriers(),
+    api.get("/departments", { query: { pageSize: 1 } }),
+    api.get("/employees", { query: { pageSize: 1 } }),
+    api.get("/sims", { query: { pageSize: 1 } }),
+    api.get("/allocations", { query: { pageSize: 1 } }),
+    api.get("/dashboard/summary", { query: { days: 7 } }),
+    api.get("/risk-scores", { query: { pageSize: 1 } }),
+  ]);
+
+  return {
+    carriers: carriers.length,
+    departments: departments.total,
+    employees: employees.total,
+    sims: sims.total,
+    allocations: allocations.total,
+    usageAsOf: summary.asOf ?? null,
+    scores: scores.total,
+  };
+}

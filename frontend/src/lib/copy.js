@@ -1153,6 +1153,31 @@ export const copy = {
     },
   },
 
+  setup: {
+    title: "Set up your organisation",
+    intro: "Work through these steps to get your first scores.",
+    listLabel: "Setup steps",
+    done: "Done",
+    todo: "Not started",
+    counted: (count) => `${count.toLocaleString("en-KE")} added`,
+    steps: {
+      carriers: "Carriers",
+      departments: "Departments",
+      employees: "Employees",
+      sims: "SIMs",
+      allocations: "Allocations",
+      usage: "Daily usage",
+      scores: "Risk scores",
+    },
+    usageThrough: (date) => `Data up to ${date}`,
+    scoresWaiting: "Appear after a usage import.",
+    scoresReady: "Scoring is running.",
+    actions: { import: "Import", add: "Add", view: "View" },
+    complete: "Setup complete",
+    completeNote: "Your carriers, people, SIMs and usage are loaded.",
+    dismiss: "Dismiss",
+  },
+
   errors: {
     generic: "Something went wrong. Try again.",
     load: "Could not load data. Try again.",

@@ -12,6 +12,7 @@ import { SectionCard } from "@/components/data/section-card";
 import { ListSkeleton } from "@/components/data/skeletons";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
+import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { ErrorState } from "@/components/shared/error-state";
 import { Button } from "@/components/ui/button";
 import { useResource } from "@/hooks/use-resource";
@@ -138,6 +139,8 @@ export function DashboardView() {
       />
 
       {data?.asOf && <p className="-mt-2 text-sm text-muted-foreground">{text.asOf(formatDate(data.asOf))}</p>}
+
+      <SetupChecklist />
 
       {resource.error ? (
         <GlassCard>
