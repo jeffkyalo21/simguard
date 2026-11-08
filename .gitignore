@@ -30,3 +30,7 @@ mlruns.db
 **/appsettings.*.local.json
 docs/SimGuard wireframes
 .claude/
+
+# Deployment
+deploy/.env
+deploy/data-pack/

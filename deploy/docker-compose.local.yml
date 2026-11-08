@@ -1,0 +1,6 @@
+# Local proof only: publishes postgres on host port 5439. Do not use on a server.
+#   docker compose -p sgdeploy -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml up -d
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5439:5432"
