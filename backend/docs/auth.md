@@ -173,6 +173,56 @@ token stops working; use the new one.
 Errors: 400 (`currentPassword` incorrect, which counts as a failed attempt,
 or `newPassword` fails the policy or equals the current one), 401, 429.
 
+### PUT /api/auth/me
+
+Policy `AnyRole` (every role). Changes the signed-in user's own name. Email
+and role cannot be changed here.
+
+```json
+{ "name": "Wanjiru Kamau" }
+```
+
+200: the same body as `GET /api/auth/me`. Errors: 400 (empty or over 100
+characters), 401. Audit action `user.profile_updated`.
+
+### POST /api/auth/mfa/recovery-codes
+
+Policy `AnyRole`. Rate limited. Makes 10 new recovery codes; every earlier
+code stops working. The user proves who they are with the current password
+and a current 6-digit authenticator code (a recovery code is not accepted
+here).
+
+```json
+{ "password": "current password", "code": "123456" }
+```
+
+200: `{ "recoveryCodes": ["...", "..."] }`. The codes are shown once.
+Errors: 400 with a field error on `password` or `code` (a wrong value counts
+as a failed attempt and can lock the account), 401, 429. Events:
+`recovery_codes_regenerated` (auth event) and `user.recovery_codes_regenerated`
+(audit, no codes in it).
+
+### POST /api/auth/me/delete
+
+Policy `AnyRole`. Rate limited. Deletes the signed-in user's own account.
+Body as for the recovery codes: `password` and a current `code`.
+
+204 on success. The account is disabled and its personal data is removed:
+name becomes `Deleted user {id}`, the email and user name become
+`deleted-user-{id}@deleted.invalid`, the password, authenticator key and
+recovery codes are removed, and the security stamp changes so every token
+stops working (401). The row stays, so the user id and role in audit rows
+remain valid. In `audit_logs` and `auth_events` the old email is replaced by
+the placeholder (and IP address and user agent are cleared on the user's auth
+events). The same email can be invited again as a new account.
+
+Errors: 400 with a field error on `password` or `code`; 409 when the user is
+the last active Admin ("You are the last active Admin, so your account
+cannot be deleted. Make another user an Admin first."), checked under the same
+database lock as the Admin changes; 401; 429. Audit action `user.self_deleted`
+(old `{ id, role }`, new `{ id, role, isDisabled }`; never a password, code or
+email) and auth event `account_deleted`.
+
 ### GET /api/auth/events
 
 Admin or Auditor. Query: `type`, `from`, `to` (ISO 8601 with offset, e.g.
@@ -462,6 +512,11 @@ Development test accounts above when `SIMGUARD_SMOKE_OFFICER_EMAIL`,
 `SIMGUARD_SMOKE_OFFICER_PASSWORD` and the `AUDITOR` equivalents are set,
 otherwise it creates throwaway accounts. The alerts and carriers smoke
 scripts do every organisation action as a Security Officer.
+
+`auth-smoke.ps1` also covers the profile: renaming, new recovery codes (wrong
+password and wrong code refused), deleting an account (wrong password, wrong
+code, last Admin refused, a Security Officer deletes themselves, the old token
+gives 401, the audit row stays, the same email can be invited again).
 
 Run all four on a throwaway database, not on your dev database: auth-smoke
 signs in the seeded Admin for the first time and the others leave test
