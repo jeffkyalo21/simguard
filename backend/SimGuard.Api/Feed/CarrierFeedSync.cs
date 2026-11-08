@@ -32,7 +32,7 @@ public sealed record FeedRunResult(bool Started, string Status, string Message, 
 // leaves days before N imported and the cursor on the last good day. Rows are
 // matched to the carrier's SIMs by ICCID; unknown ICCIDs are counted as
 // rejected, not as errors. Upserts by (SIM, date), so running a day twice
-// adds no rows. See backend/docs/carrier-feed.md.
+// adds no rows. See docs/carrier-feed.md.
 public sealed class CarrierFeedSync(
     SimGuardDbContext db,
     CarrierFeedClient client,

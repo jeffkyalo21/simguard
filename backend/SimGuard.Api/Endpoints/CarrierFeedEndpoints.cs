@@ -10,7 +10,7 @@ using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Endpoints;
 
-// Carrier usage feed settings. Contract in backend/docs/carrier-feed.md.
+// Carrier usage feed settings. Contract in docs/carrier-feed.md.
 // The API key is write-only: no response, audit row or log contains it.
 public static class CarrierFeedEndpoints
 {

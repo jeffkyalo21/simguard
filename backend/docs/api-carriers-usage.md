@@ -12,6 +12,7 @@ validation (with an `errors` object keyed by field), 401 no or invalid token,
 | -------- | :---: | :-------------: | :-----: | ------ |
 | `GET /api/carriers` | no | yes | yes | `OrgRead` |
 | `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
+| `PUT /api/carriers/{id}/feed`, `POST .../feed/test`, `POST .../feed/sync` | no | yes | no | `OrgWrite` |
 | `GET /api/sims/{id}/usage`, `/{id}/usage/cycle` | no | yes | yes | `OrgRead` |
 | `GET /api/usage/analytics`, `GET /api/tiers` | no | yes | yes | `OrgRead` |
 | `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
@@ -29,6 +30,12 @@ A carrier is a mobile network operator. Every SIM belongs to exactly one.
 `name` is trimmed, 2 to 40 characters, and unique ignoring case (`airtel` and
 `Airtel` are the same carrier). `simCount` is the number of SIMs that use the
 carrier.
+
+Each carrier also has usage feed fields (additive): `feedBaseUrl`,
+`feedEnabled`, `feedKeySet` (whether an API key is saved; the key itself is
+never returned), `feedStartDate`, `lastSyncDate`, `lastSyncStatus`
+(`running`, `succeeded`, `failed`), `lastSyncAt` and `lastSyncMessage`. The
+three feed endpoints are described in [carrier-feed.md](../../docs/carrier-feed.md).
 
 ### GET /api/carriers
 
@@ -77,6 +84,11 @@ show it next to the name field:
 | `carrier.created` | null | `{ id, name }` |
 | `carrier.renamed` | `{ id, name }` before | `{ id, name }` after |
 | `carrier.deleted` | `{ id, name }` | null |
+| `carrier.feed_saved` | `{ carrierId, carrier, baseUrl, enabled, startDate, lastSyncDate, keySet, keyChanged }` before | the same after |
+| `carrier.feed_tested` | null | `{ carrierId, carrier, ok, date }` |
+| `carrier.feed_sync_requested` | null | `{ carrierId, carrier }` |
+
+Feed rows never contain the API key. They are `organisation` rows.
 
 `affectedSimId` is null on carrier rows.
 

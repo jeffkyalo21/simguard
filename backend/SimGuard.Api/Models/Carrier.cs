@@ -8,7 +8,7 @@ public class Carrier
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
 
-    // Usage feed (backend/docs/carrier-feed.md). The API key is never on
+    // Usage feed (docs/carrier-feed.md). The API key is never on
     // this row: it lives in ICarrierSecretStore; FeedKeySet only says it exists.
     public string? FeedBaseUrl { get; set; }
     public bool FeedEnabled { get; set; }

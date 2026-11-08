@@ -21,7 +21,7 @@ public interface ICarrierSecretStore
 
 // Keys are encrypted with ASP.NET Data Protection and stored in
 // carrier_secrets. In production persist and share the key ring (see
-// backend/docs/carrier-feed.md), or saved keys cannot be read after a
+// docs/carrier-feed.md), or saved keys cannot be read after a
 // restart or on another instance.
 public sealed class DataProtectionCarrierSecretStore(
     SimGuardDbContext db,

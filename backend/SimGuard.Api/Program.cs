@@ -31,7 +31,7 @@ builder.Services.AddScoringPipeline(builder.Configuration);
 builder.Services.AddTierRecommendations(builder.Configuration);
 
 // Carrier usage feeds: encrypted keys, importer and the daily service.
-// See backend/docs/carrier-feed.md.
+// See docs/carrier-feed.md.
 builder.Services.AddCarrierFeed(builder.Configuration);
 
 // Transactional email through Brevo. See backend/docs/access-requests.md.
