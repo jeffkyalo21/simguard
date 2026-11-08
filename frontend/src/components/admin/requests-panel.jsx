@@ -38,8 +38,9 @@ export function RequestsPanel() {
       return;
     }
     try {
-      await reviewAccessRequest(request.id, "approved");
-      toast.success(text.toasts.created(body.name));
+      const reviewed = await reviewAccessRequest(request.id, "approved", body.temporaryPassword);
+      if (reviewed?.emailSent) toast.success(text.toasts.created(body.name));
+      else toast.warning(text.toasts.createdNoEmail(body.name));
     } catch {
       toast.warning(text.toasts.createdNotMarked(body.name));
     }
@@ -51,8 +52,9 @@ export function RequestsPanel() {
     const { request } = declining;
     setBusy(true);
     try {
-      await reviewAccessRequest(request.id, "declined");
-      toast.success(text.toasts.declined(request.name));
+      const reviewed = await reviewAccessRequest(request.id, "declined");
+      if (reviewed?.emailSent === false) toast.warning(text.toasts.declinedNoEmail(request.name));
+      else toast.success(text.toasts.declined(request.name));
     } catch (error) {
       toast.error(error instanceof ApiError && error.status === 409 ? text.toasts.alreadyReviewed : errorMessage(error));
     } finally {

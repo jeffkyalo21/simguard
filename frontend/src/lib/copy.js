@@ -150,8 +150,10 @@ export const copy = {
       declineText: (name, email) => `${name} (${email}) will not get an account. You can not undo this.`,
       toasts: {
         declined: (name) => `Declined the request from ${name}.`,
-        created: (name) => `Account created for ${name}.`,
-        createdNotMarked: (name) => `Account created for ${name}, but the request could not be marked approved.`,
+        created: (name) => `Account created for ${name}. The sign-in details were emailed.`,
+        createdNoEmail: (name) => `Account created for ${name}, but the email could not be sent. Pass the temporary password on yourself.`,
+        createdNotMarked: (name) => `Account created for ${name}, but the request could not be marked approved. Mark it again or decline it.`,
+        declinedNoEmail: (name) => `Declined the request from ${name}. The email could not be sent.`,
         alreadyReviewed: "This request was already reviewed.",
       },
       dialog: {

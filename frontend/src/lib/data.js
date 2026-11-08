@@ -430,9 +430,14 @@ export function listAccessRequests({ status, page, pageSize } = {}) {
   return api.get("/access-requests", { query: { status, page, pageSize } });
 }
 
-/** PATCH /access-requests/{id}/status to approved or declined. 409 when already reviewed. */
-export function reviewAccessRequest(id, status) {
-  return write(api.patch(`/access-requests/${id}/status`, { status }));
+/**
+ * PATCH /access-requests/{id}/status to approved or declined. 409 when
+ * already reviewed. With approved, `temporaryPassword` makes the API email
+ * the sign-in details. The reply has `emailSent`: true or false when an email
+ * was due, null when not.
+ */
+export function reviewAccessRequest(id, status, temporaryPassword) {
+  return write(api.patch(`/access-requests/${id}/status`, { status, ...(temporaryPassword && { temporaryPassword }) }));
 }
 
 /**
