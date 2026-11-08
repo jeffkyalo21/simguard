@@ -45,7 +45,7 @@ src/
     (marketing)/page.jsx    landing page at "/"
     (auth)/login/...        sign in, mfa, mfa-setup, change-password
     (app)/layout.jsx        app shell: checks the session, checks the session, auth provider
-    (app)/admin             Admin area: scoring status and Run now
+    (app)/admin             Admin area: System health, access requests, users
     api/auth/...            route handlers: login, mfa, enrolment, password, logout, me
     api/backend/[...path]   forwards signed in calls to the backend
     (app)/dashboard, sims, sims/[id]        built screens
@@ -60,7 +60,7 @@ src/
   components/
     landing/    landing sections, landing.css and its motion helpers (used by "/" only)
     dashboard/  dashboard-view
-    admin/      admin-view (scoring status)
+    admin/      admin-view, system-health (status tiles and charts)
     tier-recommendations/  tier-recommendations-view
     sims/       sims-view, sim-profile, sim-form-dialog, sim-status-dialog, tier-dialog
     data/       data-table, pagination, filter-select, search-input, kpi-card,
