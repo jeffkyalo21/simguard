@@ -308,9 +308,8 @@ Check 'Admin POST /api/sims' 403 (Invoke-Api POST '/api/sims' $simBody $admin)
 $sim = Invoke-Api POST '/api/sims' $simBody $officerToken
 Check 'Officer POST /api/sims' 201 $sim
 $simId = $sim.Data.id
-Check 'Auditor PATCH /api/sims/{id}/status' 403 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $auditorToken)
-Check 'Admin PATCH /api/sims/{id}/status' 403 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $admin)
-Check 'Officer PATCH /api/sims/{id}/status' 200 (Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $officerToken)
+$gone = Invoke-Api PATCH "/api/sims/$simId/status" @{ status = 'inactive' } $officerToken
+Check-True 'PATCH /api/sims/{id}/status no longer exists (404 or 405)' (@(404, 405) -contains [int]$gone.Status) "status=$($gone.Status)"
 Check 'Auditor POST /api/allocations' 403 (Invoke-Api POST '/api/allocations' @{ simId = $simId; employeeId = 1; assignedBy = 1 } $auditorToken)
 Check 'Admin DELETE /api/sims/{id}' 403 (Invoke-Api DELETE "/api/sims/$simId" $null $admin)
 Check 'Officer DELETE /api/sims/{id} (cleanup)' 204 (Invoke-Api DELETE "/api/sims/$simId" $null $officerToken)
@@ -325,6 +324,39 @@ Check 'Officer GET /api/auth/events' 403 (Invoke-Api GET '/api/auth/events' $nul
 $adminId = (Invoke-Api GET '/api/auth/me' $null $admin).Data.id
 Check 'Admin disables self' 409 (Invoke-Api POST "/api/users/$adminId/disable" $null $admin)
 Check 'Admin demotes self' 409 (Invoke-Api PUT "/api/users/$adminId/role" @{ role = 'Auditor' } $admin)
+$resendSelf = Invoke-Api POST "/api/users/$adminId/signin-email" $null $admin
+Check 'Admin resends own sign-in email' 409 $resendSelf
+Check-True 'Own-account resend says why' ([string]$resendSelf.Data.detail -like '*your own account*') ([string]$resendSelf.Data.detail)
+
+# The system is never left with no active Admin. Reduce it to one active Admin
+# (a second Admin disables the seed Admin) and check nobody can remove the
+# last one. A caller who is not the target is itself an active Admin, so
+# sequentially the last-Admin guard is reached through the own-account rule;
+# the database lock covers concurrent calls. The seed Admin is enabled again
+# afterwards and the second Admin is disabled.
+$secondEmail = "second-admin-$runId@simguard.local"
+$secondTemp = New-TestPassword
+$secondAdmin = Invoke-Api POST '/api/users' @{ email = $secondEmail; name = 'Smoke Second Admin'; role = 'Admin'; temporaryPassword = $secondTemp } $admin
+Check 'Create a second Admin' 201 $secondAdmin
+$secondId = $secondAdmin.Data.id
+$secondSession = Complete-FirstSignIn 'Second Admin' $secondEmail $secondTemp (New-TestPassword)
+$second = $secondSession.Token
+Check 'Second Admin disables the seed Admin (two were active, allowed)' 200 (Invoke-Api POST "/api/users/$adminId/disable" $null $second)
+$activeAdmins = @((Invoke-Api GET '/api/users?role=Admin&pageSize=100' $null $second).Data.items | Where-Object { -not $_.isDisabled })
+Check-True 'Exactly one active Admin is left' ($activeAdmins.Count -eq 1) "count=$($activeAdmins.Count)"
+Check 'Last active Admin cannot disable self' 409 (Invoke-Api POST "/api/users/$secondId/disable" $null $second)
+Check 'Last active Admin cannot demote self' 409 (Invoke-Api PUT "/api/users/$secondId/role" @{ role = 'Auditor' } $second)
+Check 'Last active Admin cannot resend own sign-in email' 409 (Invoke-Api POST "/api/users/$secondId/signin-email" $null $second)
+$stillActive = @((Invoke-Api GET '/api/users?role=Admin&pageSize=100' $null $second).Data.items | Where-Object { -not $_.isDisabled })
+Check-True 'Still one active Admin after the refused calls' (($stillActive.Count -eq 1) -and ($stillActive[0].id -eq $secondId)) "count=$($stillActive.Count)"
+Check 'Disabled seed Admin token is rejected' 401 (Invoke-Api GET '/api/users' $null $admin)
+Check 'Second Admin enables the seed Admin again' 200 (Invoke-Api POST "/api/users/$adminId/enable" $null $second)
+$relogin = Invoke-Api POST '/api/auth/login' @{ email = $adminEmail; password = $adminNewPassword }
+Check 'Seed Admin login after enable' 200 $relogin "status=$($relogin.Data.status)"
+$reverify = Invoke-Api POST '/api/auth/mfa/verify' @{ mfaToken = $relogin.Data.mfaToken; code = (Get-Totp $adminSecret -OffsetSteps 1) }
+Check 'Seed Admin MFA verify after enable' 200 $reverify
+$admin = $reverify.Data.accessToken
+Check 'Seed Admin disables the second Admin (two active, allowed)' 200 (Invoke-Api POST "/api/users/$secondId/disable" $null $admin)
 
 # --- Role change, disable, enable, MFA reset ---------------------------------
 $auditorId = $auditor.Data.id
@@ -364,10 +396,99 @@ Check 'Admin resets password (clears lockout)' 200 (Invoke-Api POST "/api/users/
 $unlocked = Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = $resetPassword }
 Check 'Login after password reset' 200 $unlocked "status=$($unlocked.Data.status)"
 
+# Unlock: lock the account again, then clear the lockout without touching the password.
+for ($i = 1; $i -le 5; $i++) {
+    Check "Relock wrong password $i" 401 (Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = "wrong-again-$i-xyz" })
+}
+Check 'Locked account refuses the right password' 401 (Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = $resetPassword })
+$unlock = Invoke-Api POST "/api/users/$($lockUser.Data.id)/unlock" $null $admin
+Check 'Admin unlocks the account' 200 $unlock
+Check-True 'Unlock clears lockedOutUntil' ($null -eq $unlock.Data.lockedOutUntil)
+Check 'Login after unlock (same password)' 200 (Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = $resetPassword })
+Check 'Unlock of an unlocked account is fine' 200 (Invoke-Api POST "/api/users/$($lockUser.Data.id)/unlock" $null $admin)
+Check 'Unlock of an unknown user' 404 (Invoke-Api POST '/api/users/2147483000/unlock' $null $admin)
+
+# Invite without a password: the API generates one and emails it. No Brevo key
+# here, so emailSent is false; the account exists and must change its password.
+$inviteEmail = "invite-$runId@simguard.local"
+$invite = Invoke-Api POST '/api/users' @{ email = $inviteEmail; name = 'Smoke Invite'; role = 'Auditor' } $admin
+Check 'Invite without a password' 201 $invite
+Check-True 'Invite reports emailSent false, mustChangePassword true' (($invite.Data.emailSent -eq $false) -and ($invite.Data.mustChangePassword -eq $true)) "emailSent=$($invite.Data.emailSent)"
+Check-True 'Invite response carries no password' ($invite.Text -notmatch '(?i)password"\s*:\s*"') $invite.Text
+$resend = Invoke-Api POST "/api/users/$($invite.Data.id)/signin-email" $null $admin
+Check 'Resend sign-in email' 200 $resend
+Check-True 'Resend reports emailSent false and no password' (($resend.Data.emailSent -eq $false) -and ($resend.Text -notmatch '(?i)password"\s*:\s*"')) "emailSent=$($resend.Data.emailSent)"
+Check 'Resend for an unknown user' 404 (Invoke-Api POST '/api/users/2147483000/signin-email' $null $admin)
+Check 'Disable the invited user' 200 (Invoke-Api POST "/api/users/$($invite.Data.id)/disable" $null $admin)
+Check 'Resend for a disabled user' 409 (Invoke-Api POST "/api/users/$($invite.Data.id)/signin-email" $null $admin)
+
 $events = Invoke-Api GET '/api/auth/events?pageSize=100' $null $admin
 $types = @($events.Data.items | ForEach-Object { $_.eventType } | Sort-Object -Unique)
 Check 'GET /api/auth/events as Admin' 200 $events "types: $($types -join ',')"
 Check 'GET /api/auth/events bad type' 400 (Invoke-Api GET '/api/auth/events?type=nope' $null $admin)
+
+# --- Profile: name, recovery codes, delete my account -------------------------
+$delEmail = "delete-me-$runId@simguard.local"
+$delTemp = New-TestPassword
+$delPassword = New-TestPassword
+$delUser = Invoke-Api POST '/api/users' @{ email = $delEmail; name = 'Smoke Leaver'; role = 'SecurityOfficer'; temporaryPassword = $delTemp } $admin
+Check 'Create the account to delete' 201 $delUser
+$delId = $delUser.Data.id
+$delSession = Complete-FirstSignIn 'Leaver' $delEmail $delTemp $delPassword
+$del = $delSession.Token
+
+$renamed = Invoke-Api PUT '/api/auth/me' @{ name = 'Smoke Leaver Renamed' } $del
+Check 'Update own name' 200 $renamed
+Check-True 'Name changed, email and role unchanged' (($renamed.Data.name -eq 'Smoke Leaver Renamed') -and ($renamed.Data.email -eq $delEmail) -and ($renamed.Data.role -eq 'SecurityOfficer'))
+Check 'Update own name with an empty name' 400 (Invoke-Api PUT '/api/auth/me' @{ name = ' ' } $del)
+
+Check 'New recovery codes with a wrong password' 400 (Invoke-Api POST '/api/auth/mfa/recovery-codes' @{ password = 'wrong-password'; code = (Get-Totp $delSession.Secret) } $del)
+Check 'New recovery codes with a wrong code' 400 (Invoke-Api POST '/api/auth/mfa/recovery-codes' @{ password = $delPassword; code = '000000' } $del)
+$newCodes = Invoke-Api POST '/api/auth/mfa/recovery-codes' @{ password = $delPassword; code = (Get-Totp $delSession.Secret) } $del
+Check 'New recovery codes with password and code' 200 $newCodes
+Check-True 'Ten new codes, different from the old ones' (($newCodes.Data.recoveryCodes.Count -eq 10) -and (-not ($newCodes.Data.recoveryCodes | Where-Object { $delSession.RecoveryCodes -contains $_ })))
+
+Check 'Delete account with a wrong password' 400 (Invoke-Api POST '/api/auth/me/delete' @{ password = 'wrong-password'; code = (Get-Totp $delSession.Secret) } $del)
+Check 'Delete account with a wrong MFA code' 400 (Invoke-Api POST '/api/auth/me/delete' @{ password = $delPassword; code = '000000' } $del)
+Check 'Delete account without a password' 400 (Invoke-Api POST '/api/auth/me/delete' @{ code = (Get-Totp $delSession.Secret) } $del)
+Check 'Token still works after refused deletes' 200 (Invoke-Api GET '/api/auth/me' $null $del)
+
+# The last active Admin cannot delete themselves. A third Admin disables the
+# seed Admin, is then the only active one, and is refused.
+$thirdEmail = "third-admin-$runId@simguard.local"
+$thirdTemp = New-TestPassword
+$thirdPassword = New-TestPassword
+$thirdAdmin = Invoke-Api POST '/api/users' @{ email = $thirdEmail; name = 'Smoke Third Admin'; role = 'Admin'; temporaryPassword = $thirdTemp } $admin
+Check 'Create a third Admin' 201 $thirdAdmin
+$thirdSession = Complete-FirstSignIn 'Third Admin' $thirdEmail $thirdTemp $thirdPassword
+$third = $thirdSession.Token
+Check 'Third Admin disables the seed Admin' 200 (Invoke-Api POST "/api/users/$adminId/disable" $null $third)
+$lastRefused = Invoke-Api POST '/api/auth/me/delete' @{ password = $thirdPassword; code = (Get-Totp $thirdSession.Secret) } $third
+Check 'Last active Admin cannot delete their account' 409 $lastRefused
+Check-True 'The refusal says why in plain words' ([string]$lastRefused.Data.detail -like '*last active Admin*') ([string]$lastRefused.Data.detail)
+Check 'Last Admin token still works after the refusal' 200 (Invoke-Api GET '/api/auth/me' $null $third)
+Check 'Third Admin enables the seed Admin again' 200 (Invoke-Api POST "/api/users/$adminId/enable" $null $third)
+$relogin2 = Invoke-Api POST '/api/auth/login' @{ email = $adminEmail; password = $adminNewPassword }
+$reverify2 = Invoke-Api POST '/api/auth/mfa/verify' @{ mfaToken = $relogin2.Data.mfaToken; code = (Get-Totp $adminSecret -OffsetSteps 1) }
+Check 'Seed Admin signs in again' 200 $reverify2
+$admin = $reverify2.Data.accessToken
+Check 'An Admin may delete their account when another is active' 204 (Invoke-Api POST '/api/auth/me/delete' @{ password = $thirdPassword; code = (Get-Totp $thirdSession.Secret) } $third)
+
+# A Security Officer deletes themselves.
+$gone = Invoke-Api POST '/api/auth/me/delete' @{ password = $delPassword; code = (Get-Totp $delSession.Secret) } $del
+Check 'Security Officer deletes their account' 204 $gone
+Check 'The old token is rejected after deletion' 401 (Invoke-Api GET '/api/auth/me' $null $del)
+Check 'The old password no longer signs in' 401 (Invoke-Api POST '/api/auth/login' @{ email = $delEmail; password = $delPassword })
+
+$deletedRows = @((Invoke-Api GET '/api/audit-logs?action=user.self_deleted&pageSize=100' $null $admin).Data.items | Where-Object { $_.actorUserId -eq $delId })
+Check-True 'The audit row remains with the user id and role' (($deletedRows.Count -eq 1) -and ($deletedRows[0].actorRole -eq 'SecurityOfficer')) "rows=$($deletedRows.Count)"
+$rowJson = $deletedRows | ConvertTo-Json -Depth 6 -Compress
+Check-True 'The audit row has no email, password or code' (($rowJson -notmatch [regex]::Escape($delEmail)) -and ($rowJson -notmatch [regex]::Escape($delPassword))) 'checked the audit row text'
+$deletedUser = (Invoke-Api GET "/api/users/$delId" $null $admin).Data
+Check-True 'The user record is disabled with a placeholder name and email' (($deletedUser.isDisabled -eq $true) -and ($deletedUser.name -eq "Deleted user $delId") -and ($deletedUser.email -notlike '*delete-me*')) "name=$($deletedUser.name)"
+
+$again = Invoke-Api POST '/api/users' @{ email = $delEmail; name = 'Smoke Leaver Again'; role = 'Auditor'; temporaryPassword = (New-TestPassword) } $admin
+Check 'The same email can be invited again' 201 $again
 
 # --- CORS --------------------------------------------------------------------
 $preflightHeaders = @{ 'Origin' = $AllowedOrigin; 'Access-Control-Request-Method' = 'POST'; 'Access-Control-Request-Headers' = 'content-type,authorization' }

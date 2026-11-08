@@ -173,6 +173,8 @@ public static class AccessRequestEndpoints
         IEmailSender emailSender,
         IOptions<BrevoOptions> emailOptions,
         UserManager<AppUser> userManager,
+        AuthEventLogger events,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
         var newStatus = request.Status?.Trim().ToLowerInvariant();
@@ -185,12 +187,18 @@ public static class AccessRequestEndpoints
         }
 
         var password = request.TemporaryPassword;
+        var passwordErrors = new ValidationErrors();
 
         if (password is { Length: > PasswordMaxLength })
         {
-            var errors = new ValidationErrors();
-            errors.Add("temporaryPassword", $"temporaryPassword must be at most {PasswordMaxLength} characters.");
-            return errors.ToProblem();
+            passwordErrors.Add("temporaryPassword", $"temporaryPassword must be at most {PasswordMaxLength} characters.");
+        }
+
+        UserEndpoints.RejectManualPassword(password, environment, passwordErrors);
+
+        if (passwordErrors.HasErrors)
+        {
+            return passwordErrors.ToProblem();
         }
 
         var item = await db.AccessRequests.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
@@ -205,22 +213,79 @@ public static class AccessRequestEndpoints
             return ApiProblems.Conflict($"Access request {id} is already {item.Status}.");
         }
 
+        var approving = newStatus == AccessRequestStatuses.Approved;
         var oldStatus = item.Status;
-        item.Status = newStatus;
-        item.ReviewedAt = Timestamps.UtcNow();
-        item.ReviewedByEmail = httpContext.User.FindFirst(TokenService.EmailClaim)?.Value?.Trim();
 
-        audit.Add(
-            AuditActions.AccessRequestReviewed,
-            null,
-            new { accessRequestId = id, status = oldStatus },
-            new { accessRequestId = id, status = newStatus, email = item.Email, role = item.Role });
+        // Approving creates the account in the same transaction as the
+        // decision, so a request is never approved without its account. When an
+        // account with that email already exists nothing is created and its
+        // password is left alone.
+        bool? accountCreated = null;
+        string? issuedPassword = null;
+        AppUser? account = null;
 
-        await db.SaveChangesAsync(cancellationToken);
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            if (approving)
+            {
+                accountCreated = await userManager.FindByEmailAsync(item.Email) is null;
+            }
 
-        // The decision is saved first; an email that fails never undoes it.
-        // The reply says whether the email went out so the Admin can pass the
-        // details on by hand. Null means no email was due.
+            if (accountCreated == true)
+            {
+                issuedPassword = string.IsNullOrEmpty(password) ? SignInCredentials.GeneratePassword() : password;
+                account = new AppUser
+                {
+                    UserName = item.Email,
+                    Email = item.Email,
+                    EmailConfirmed = true,
+                    Name = item.Name,
+                    MustChangePassword = true,
+                    CreatedAt = Timestamps.UtcNow()
+                };
+
+                var created = await userManager.CreateAsync(account, issuedPassword);
+
+                if (!created.Succeeded)
+                {
+                    return UserEndpoints.IdentityProblem(created, "temporaryPassword");
+                }
+
+                if (!(await userManager.AddToRoleAsync(account, item.Role)).Succeeded)
+                {
+                    throw new InvalidOperationException($"Could not add user to role {item.Role}.");
+                }
+
+                await audit.WriteAsync(
+                    AuditActions.UserCreated,
+                    null,
+                    null,
+                    new { id = account.Id, email = account.Email, name = account.Name, role = item.Role, accessRequestId = id },
+                    cancellationToken);
+            }
+
+            item.Status = newStatus;
+            item.ReviewedAt = Timestamps.UtcNow();
+            item.ReviewedByEmail = httpContext.User.FindFirst(TokenService.EmailClaim)?.Value?.Trim();
+
+            audit.Add(
+                AuditActions.AccessRequestReviewed,
+                null,
+                new { accessRequestId = id, status = oldStatus },
+                new { accessRequestId = id, status = newStatus, email = item.Email, role = item.Role });
+
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        if (account is not null)
+        {
+            await events.LogAsync(AuthEventTypes.UserCreated, true, account.Id, account.Email, cancellationToken);
+        }
+
+        // The decision and the account are saved first; an email that fails
+        // never undoes them. The reply says whether the email went out so the
+        // Admin can use "resend sign-in email". Null means no email was due.
         bool? emailSent = null;
 
         if (newStatus == AccessRequestStatuses.Declined)
@@ -228,15 +293,10 @@ public static class AccessRequestEndpoints
             emailSent = await emailSender.SendAsync(
                 item.Email, item.Name, EmailTemplates.RequestDeclined(item.Name), cancellationToken);
         }
-        else if (!string.IsNullOrEmpty(password))
+        else if (issuedPassword is not null)
         {
-            // Only mail sign-in details for an account that exists.
-            var account = await userManager.FindByEmailAsync(item.Email);
-            emailSent = account is not null && await emailSender.SendAsync(
-                item.Email,
-                item.Name,
-                EmailTemplates.AccountReady(item.Name, item.Email, password, emailOptions.Value.SignInUrl),
-                cancellationToken);
+            emailSent = await SignInCredentials.SendAsync(
+                emailSender, emailOptions.Value, item.Name, item.Email, issuedPassword, cancellationToken);
         }
 
         var saved = await db.AccessRequests.AsNoTracking()
@@ -244,6 +304,6 @@ public static class AccessRequestEndpoints
             .Select(AccessRequestResponse.Projection)
             .SingleAsync(cancellationToken);
 
-        return TypedResults.Ok(saved with { EmailSent = emailSent });
+        return TypedResults.Ok(saved with { EmailSent = emailSent, AccountCreated = accountCreated });
     }
 }

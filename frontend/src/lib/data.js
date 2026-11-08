@@ -127,6 +127,19 @@ export function listAlerts({ status, type, simId, minScore, sort, order, page, p
   return api.get("/alerts", { query: { status, type, simId, minScore, sort, order, page, pageSize } });
 }
 
+/**
+ * How many alerts are open (flagged or escalated, not cleared), for the top
+ * bar. Two single-row reads of GET /alerts; only the totals are used.
+ * @returns {Promise<number>}
+ */
+export async function countOpenAlerts() {
+  const [flagged, escalated] = await Promise.all([
+    listAlerts({ status: "flagged", pageSize: 1 }),
+    listAlerts({ status: "escalated", pageSize: 1 }),
+  ]);
+  return flagged.total + escalated.total;
+}
+
 /** GET /alerts/{id}, with the SIM, current allocation and recent alerts. */
 export function getAlert(id) {
   return api.get(`/alerts/${id}`);
@@ -299,11 +312,6 @@ export function updateSim(id, values) {
   return write(api.put(`/sims/${id}`, simBody(values)));
 }
 
-/** PATCH /sims/{id}/status with "available" or "inactive"; 409 while allocated. */
-export function setSimStatus(id, status) {
-  return write(api.patch(`/sims/${id}/status`, { status }));
-}
-
 /**
  * PATCH /sims/{id}/tier with a lower-case tier. Returns { simId, tier,
  * previousTier }; the allowance and cost follow the tier.
@@ -367,6 +375,57 @@ export function removeCarrier(id) {
   return write(api.delete(`/carriers/${id}`));
 }
 
+/* ------------------------------------------------------- Carrier usage feed */
+
+/**
+ * PUT /carriers/{id}/feed. `apiKey` is optional: leave it out to keep the
+ * saved key. The key is never returned, only `feedKeySet`.
+ * @param {number} id
+ * @param {{ baseUrl: string, enabled: boolean, startDate?: string, apiKey?: string }} settings
+ */
+export function saveCarrierFeed(id, { baseUrl, enabled, startDate, apiKey }) {
+  const body = { baseUrl: String(baseUrl ?? "").trim(), enabled: Boolean(enabled) };
+  if (startDate) body.startDate = startDate;
+  if (apiKey) body.apiKey = apiKey;
+  return write(api.put(`/carriers/${id}/feed`, body));
+}
+
+/** PUT /auth/me. Changes the signed-in user's own name; returns the profile. */
+export function updateProfileName(name) {
+  return api.put("/auth/me", { name: String(name ?? "").trim() });
+}
+
+/**
+ * POST /auth/mfa/recovery-codes. Makes 10 new recovery codes (the old ones
+ * stop working) after the password and a current authenticator code.
+ * @returns {Promise<{ recoveryCodes: string[] }>}
+ */
+export function regenerateRecoveryCodes({ password, code }) {
+  return api.post("/auth/mfa/recovery-codes", { password, code: String(code ?? "").trim() });
+}
+
+/** POST /auth/me/delete. Deletes the signed-in account (204). */
+export function deleteMyAccount({ password, code }) {
+  return api.post("/auth/me/delete", { password, code: String(code ?? "").trim() });
+}
+
+/**
+ * POST /carriers/{id}/feed/test. Always 200 when the call was made:
+ * `{ ok, message, date }` says how the carrier answered. Typed values are
+ * tried without saving them; a missing one comes from the saved settings.
+ */
+export function testCarrierFeed(id, { baseUrl, apiKey } = {}) {
+  const body = {};
+  if (baseUrl) body.baseUrl = String(baseUrl).trim();
+  if (apiKey) body.apiKey = apiKey;
+  return api.post(`/carriers/${id}/feed/test`, body);
+}
+
+/** POST /carriers/{id}/feed/sync: starts a run (202); 409 when one is running. */
+export function syncCarrierFeed(id) {
+  return write(api.post(`/carriers/${id}/feed/sync`));
+}
+
 /* ---------------------------------------------------- Tier recommendations */
 
 /**
@@ -405,10 +464,19 @@ export function dismissTierRecommendation(id) {
 
 /**
  * GET /admin/scoring/status: schedule, ML service health, totals and the
- * last runs. Totals only, never SIM-level data. Admin only.
+ * last runs. Totals only, never SIM-level data. Security Officer and Auditor.
  */
 export function getScoringStatus() {
   return api.get("/admin/scoring/status");
+}
+
+/**
+ * GET /admin/system-status: health of the API, database, ML service, email
+ * and scoring, user and request counts, and 14 days of sign-ins and scoring
+ * runs. No organisation data and no secrets. Admin only.
+ */
+export function getSystemStatus() {
+  return api.get("/admin/system-status");
 }
 
 /**
@@ -431,22 +499,72 @@ export function listAccessRequests({ status, page, pageSize } = {}) {
 }
 
 /**
- * PATCH /access-requests/{id}/status to approved or declined. 409 when
- * already reviewed. With approved, `temporaryPassword` makes the API email
- * the sign-in details. The reply has `emailSent`: true or false when an email
- * was due, null when not.
+ * How many access requests wait for a decision, for the top bar. Admin only.
+ * @returns {Promise<number>}
  */
-export function reviewAccessRequest(id, status, temporaryPassword) {
-  return write(api.patch(`/access-requests/${id}/status`, { status, ...(temporaryPassword && { temporaryPassword }) }));
+export async function countPendingAccessRequests() {
+  const page = await listAccessRequests({ status: "pending", pageSize: 1 });
+  return page.total;
 }
 
 /**
- * POST /users. The account starts with the temporary password and must
- * change it at first sign-in. 409 when the email is taken.
- * @param {{ email: string, name: string, role: string, temporaryPassword: string }} body
+ * PATCH /access-requests/{id}/status to approved or declined. 409 when
+ * already reviewed. Approving creates the account and the API emails a
+ * generated password; the browser never sees it. The reply has `emailSent`
+ * (true or false when an email was due, null when not) and, for approved,
+ * `accountCreated` (false when an account with that email already existed).
  */
-export function createUser(body) {
-  return write(api.post("/users", body));
+export function reviewAccessRequest(id, status) {
+  return write(api.patch(`/access-requests/${id}/status`, { status }));
+}
+
+/* ------------------------------------------------------- Users (Admin) */
+
+/** GET /users, by id. Admin only. */
+export function listUsers({ page, pageSize } = {}) {
+  return api.get("/users", { query: { page, pageSize } });
+}
+
+/**
+ * POST /users: invite a person. The API generates a password and emails it;
+ * the reply has `emailSent`. 409 when the email is taken.
+ * @param {{ name: string, email: string, role: string }} body
+ */
+export function inviteUser({ name, email, role }) {
+  return write(api.post("/users", { name, email, role }));
+}
+
+/** PUT /users/{id}/role. 409 for your own account or the last active Admin. */
+export function changeUserRole(id, role) {
+  return write(api.put(`/users/${id}/role`, { role }));
+}
+
+/** POST /users/{id}/disable. 409 for your own account or the last active Admin. */
+export function disableUser(id) {
+  return write(api.post(`/users/${id}/disable`));
+}
+
+/** POST /users/{id}/enable. */
+export function enableUser(id) {
+  return write(api.post(`/users/${id}/enable`));
+}
+
+/** POST /users/{id}/unlock: clears a lockout, the password stays. */
+export function unlockUser(id) {
+  return write(api.post(`/users/${id}/unlock`));
+}
+
+/** POST /users/{id}/mfa/reset: the person enrols again at the next sign-in. */
+export function resetUserMfa(id) {
+  return write(api.post(`/users/${id}/mfa/reset`));
+}
+
+/**
+ * POST /users/{id}/signin-email: new generated password, emailed to the
+ * person. The reply has `emailSent`. 409 when the account is disabled.
+ */
+export function resendSignInEmail(id) {
+  return write(api.post(`/users/${id}/signin-email`));
 }
 
 /* --------------------------------------------------------------- Imports */

@@ -13,7 +13,7 @@ Admin and Auditor get 403.
 | `POST /api/imports/{type}?mode=preview` | 200 `ImportResult` (nothing is saved) | 400, 404, 413 |
 | `POST /api/imports/{type}?mode=commit` | 200 `ImportResult` | 400, 404, 413, 422 |
 | `POST /api/imports/{type}?mode=commit&skipInvalid=true` | 200 `ImportResult` (valid rows only) | 400, 404, 413 |
-| `GET /api/imports?type=&page=&pageSize=` | 200 `PagedResult<ImportRun>`, newest first | 400 |
+| `GET /api/imports?type=&source=&page=&pageSize=` | 200 `PagedResult<ImportRun>`, newest first | 400 |
 
 `{type}` is `departments`, `employees`, `sims`, `allocations` or `usage`. `mode` defaults to
 `preview`. The upload is `multipart/form-data` with the file in a field named
@@ -118,6 +118,13 @@ Every commit attempt is a row in `import_runs`, previews are not:
   "message": null
 }
 ```
+
+Two additive fields: `source` is `csv` for uploads and `carrier feed` for runs of a
+carrier usage feed (filter with `?source=carrier%20feed`), and `carrierName` is
+set for feed runs. A feed run has `type` `usage`, the uploader `system` when the
+daily service started it, `validRows` for rows imported and `invalidRows` for
+rows rejected (ICCIDs that are not the carrier's SIMs). See
+[carrier-feed.md](../../docs/carrier-feed.md).
 
 `status` is `committed`, `rejected` (row errors without `skipInvalid`, or a
 file-wide problem; `message` says why, and `sha256` is null when the file

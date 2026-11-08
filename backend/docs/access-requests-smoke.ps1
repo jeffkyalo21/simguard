@@ -12,8 +12,12 @@
         (SecurityOfficer and Auditor get 403, no token gets 401)
       - listing and filtering by status, approve and decline, a second
         review of the same request is a 409, an unknown id is a 404
+      - approving creates the account (requested role, generated password
+        emailed, never returned); an existing account is left alone
       - the review writes a user.access_request_reviewed audit row that the
         Admin can read
+      - -NotDevelopment (API started in another environment): the Admin
+        cannot choose a password for anyone, by invite, approval or reset
       - the request form is rate limited (429) with -RateLimitOnly
       - emails: by default the API has no Brevo key and reports emailSent
         false. With -EmailStubLog <file> the API must run with Brevo__ApiKey
@@ -35,6 +39,7 @@ param(
     [string]$OfficerSecretsFile = (Join-Path $env:TEMP 'simguard-smoke-officer.json'),
     [string]$AuditorSecretsFile = (Join-Path $env:TEMP 'simguard-smoke-auditor.json'),
     [switch]$RateLimitOnly,
+    [switch]$NotDevelopment,
     [string]$EmailStubLog = ''
 )
 
@@ -263,6 +268,28 @@ if (-not $adminEmail -or -not $adminPassword -or -not $adminTotpSecret) {
 $runId = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
 $admin = Get-Token 'Admin' $adminEmail $adminPassword $adminTotpSecret
+
+# Against an API that is NOT in Development the Admin cannot choose anyone's
+# password. Nothing else runs: the other checks need Development accounts.
+if ($NotDevelopment) {
+    $pw = New-TestPassword
+    $none = Invoke-Api POST '/api/users' @{ email = "nodev-$runId@simguard.local"; name = 'No Dev'; role = 'Auditor'; temporaryPassword = $pw } $admin
+    Check 'Invite with a chosen password is refused' 400 $none
+    Check-True 'The error names temporaryPassword' (@($none.Data.errors.PSObject.Properties.Name) -contains 'temporaryPassword')
+    Check 'Password reset by hand is refused' 400 (Invoke-Api POST '/api/users/1/password/reset' @{ temporaryPassword = $pw } $admin)
+    $v = @{ name = 'Visitor nodev'; email = "visitor.nodev.$runId@example.com"; organisation = 'Org nodev'; role = 'SecurityOfficer'; note = 'Smoke test' }
+    Check 'Request for the approval check' 202 (Invoke-Api POST '/api/access-requests' $v)
+    $vId = @((Invoke-Api GET '/api/access-requests?status=pending&pageSize=100' $null $admin).Data.items | Where-Object { $_.email -eq $v.email.ToLowerInvariant() })[0].id
+    Check 'Approval with a chosen password is refused' 400 (Invoke-Api PATCH "/api/access-requests/$vId/status" @{ status = 'approved'; temporaryPassword = $pw } $admin)
+    $still = @((Invoke-Api GET '/api/access-requests?status=pending&pageSize=100' $null $admin).Data.items | Where-Object { $_.id -eq $vId })
+    Check-True 'The refused approval left the request pending' ($still.Count -eq 1)
+    $made = Invoke-Api POST '/api/users' @{ email = "nodev2-$runId@simguard.local"; name = 'No Dev Two'; role = 'Auditor' } $admin
+    Check 'Invite without a password works' 201 $made
+    Check-True 'Invite emailSent is false without a Brevo key' ($made.Data.emailSent -eq $false)
+    Write-Results
+    return
+}
+
 $officerAccount = Get-RoleToken 'Officer' 'SecurityOfficer' $OfficerSecretsFile $admin
 $auditorAccount = Get-RoleToken 'Auditor' 'Auditor' $AuditorSecretsFile $admin
 $officer = $officerAccount.Token
@@ -339,24 +366,33 @@ $b = @($mine | Where-Object { $_.email -like 'visitor.b.*' })[0]
 $declined = Invoke-Api PATCH "/api/access-requests/$($b.id)/status" @{ status = 'declined' } $admin
 Check-True 'Admin declines' (($declined.Status -eq 200) -and ($declined.Data.status -eq 'declined')) "status=$($declined.Status)"
 
-# Email (the API runs without Brevo:ApiKey here, so nothing is really sent).
-Check-True 'Approve without a password: emailSent is null' (($done.Data.PSObject.Properties.Name -contains 'emailSent') -and ($null -eq $done.Data.emailSent))
+# Approval creates the account and emails a generated password. Without
+# -EmailStubLog the API has no Brevo key, so emailSent is false.
 $stub = [bool]$EmailStubLog
-Check-True 'Decline reports whether the email was sent' ($declined.Data.emailSent -eq $stub) "emailSent=$($declined.Data.emailSent)"
+Check-True 'Approval created the account (accountCreated true) and reports emailSent' (($done.Data.accountCreated -eq $true) -and ($done.Data.emailSent -eq $stub)) "accountCreated=$($done.Data.accountCreated) emailSent=$($done.Data.emailSent)"
+Check-True 'Approval response carries no password' ($done.Text -notmatch '(?i)password')
+Check-True 'Decline reports whether the email was sent and creates no account' (($declined.Data.emailSent -eq $stub) -and ($null -eq $declined.Data.accountCreated)) "emailSent=$($declined.Data.emailSent)"
 $c = New-Body 'c'
 Check 'Third request' 202 (Invoke-Api POST '/api/access-requests' $c)
 $cId = @((Invoke-Api GET '/api/access-requests?status=pending&pageSize=100' $null $admin).Data.items | Where-Object { $_.email -eq $c.email.ToLowerInvariant() })[0].id
 Check 'Password longer than 128 characters' 400 (Invoke-Api PATCH "/api/access-requests/$cId/status" @{ status = 'approved'; temporaryPassword = ('p' * 129) } $admin)
 $withPw = Invoke-Api PATCH "/api/access-requests/$cId/status" @{ status = 'approved'; temporaryPassword = 'Temp-pass-12345' } $admin
-Check-True 'Approve with a password but no account: reviewed, emailSent false' (($withPw.Status -eq 200) -and ($withPw.Data.status -eq 'approved') -and ($withPw.Data.emailSent -eq $false)) "status=$($withPw.Status)"
+Check-True 'Approve with a Development password: account created, emailSent matches the setup' (($withPw.Status -eq 200) -and ($withPw.Data.status -eq 'approved') -and ($withPw.Data.accountCreated -eq $true) -and ($withPw.Data.emailSent -eq $stub)) "status=$($withPw.Status) emailSent=$($withPw.Data.emailSent)"
 
-# An approval for an email that has an account (the Officer) sends the sign-in email.
+# The account made by approval signs in with that password and has the requested role.
+$cSession = Complete-FirstSignIn 'Approved visitor c' $c.email.ToLowerInvariant() 'Temp-pass-12345'
+$cMe = Invoke-Api GET '/api/auth/me' $null $cSession.Token
+Check-True 'Approved account has the requested role' (($cMe.Status -eq 200) -and ($cMe.Data.role -eq 'SecurityOfficer')) "role=$($cMe.Data.role)"
+
+# An approval for an email that already has an account (the Officer) creates
+# nothing and leaves that password alone.
 $d = New-Body 'd'
 $d.email = $officerAccount.Email
 Check 'Request from an existing account email' 202 (Invoke-Api POST '/api/access-requests' $d)
 $dId = @((Invoke-Api GET '/api/access-requests?status=pending&pageSize=100' $null $admin).Data.items | Where-Object { $_.email -eq $d.email.ToLowerInvariant() })[0].id
 $sent = Invoke-Api PATCH "/api/access-requests/$dId/status" @{ status = 'approved'; temporaryPassword = 'Temp-pass-67890' } $admin
-Check-True 'Approve with a password for an existing account: emailSent matches the setup' (($sent.Status -eq 200) -and ($sent.Data.emailSent -eq $stub)) "emailSent=$($sent.Data.emailSent)"
+Check-True 'Approve for an existing account: accountCreated false, no email due' (($sent.Status -eq 200) -and ($sent.Data.status -eq 'approved') -and ($sent.Data.accountCreated -eq $false) -and ($null -eq $sent.Data.emailSent)) "accountCreated=$($sent.Data.accountCreated) emailSent=$($sent.Data.emailSent)"
+Check 'The existing account did not get the offered password' 401 (Invoke-Api POST '/api/auth/login' @{ email = $officerAccount.Email; password = 'Temp-pass-67890' })
 
 if ($stub) {
     Start-Sleep -Milliseconds 500
@@ -364,11 +400,40 @@ if ($stub) {
     $received = @($calls | Where-Object { $_.body.subject -like 'We received*' -and $_.body.to[0].email -eq $first.email.ToLowerInvariant() })
     Check-True 'Received email: one per new request, not for the repeated email' ($received.Count -eq 1) "count=$($received.Count)"
     $ready = @($calls | Where-Object { $_.body.subject -like 'Your SimGuard account*' })
-    Check-True 'Account email: one, to the Officer, with sign-in link, email and password' (($ready.Count -eq 1) -and ($ready[0].body.to[0].email -eq $officerAccount.Email.ToLowerInvariant()) -and ($ready[0].body.textContent -like '*Temp-pass-67890*') -and ($ready[0].body.textContent -like '*/login*') -and ($ready[0].body.htmlContent -like '*Temp-pass-67890*')) "count=$($ready.Count)"
-    Check-True 'No email carries the password of the visitor without an account' (@($calls | Where-Object { $_.body.textContent -like '*Temp-pass-12345*' }).Count -eq 0)
+    Check-True 'Account emails: one per created account (a and c), none for the existing Officer account' (($ready.Count -eq 2) -and (@($ready | Where-Object { $_.body.to[0].email -eq $officerAccount.Email.ToLowerInvariant() }).Count -eq 0)) "count=$($ready.Count)"
+    $readyA = @($ready | Where-Object { $_.body.to[0].email -like 'visitor.a.*' })
+    $readyC = @($ready | Where-Object { $_.body.to[0].email -like 'visitor.c.*' })
+    Check-True 'Account email c: sign-in link, email and the Development password' (($readyC.Count -eq 1) -and ($readyC[0].body.textContent -like '*Temp-pass-12345*') -and ($readyC[0].body.textContent -like '*/login*') -and ($readyC[0].body.htmlContent -like '*Temp-pass-12345*'))
+    Check-True 'No email carries the password offered for the existing account' (@($calls | Where-Object { $_.body.textContent -like '*Temp-pass-67890*' }).Count -eq 0)
+
+    # The password the Admin never saw: generated by the API, only in the email.
+    $generated = if ($readyA.Count -eq 1 -and $readyA[0].body.textContent -match 'Temporary password: (\S+)') { $Matches[1] } else { $null }
+    Check-True 'Account email a carries a generated 20 character password' (($null -ne $generated) -and ($generated.Length -eq 20)) "length=$($generated.Length)"
+    if ($generated) {
+        $aSession = Complete-FirstSignIn 'Approved visitor a (generated password)' $first.email.ToLowerInvariant() $generated
+        $aMe = Invoke-Api GET '/api/auth/me' $null $aSession.Token
+        Check-True 'Generated-password account has the requested role' (($aMe.Status -eq 200) -and ($aMe.Data.role -eq 'SecurityOfficer')) "role=$($aMe.Data.role)"
+
+        # Resend: a new generated password replaces the old one, by email only.
+        $aUser = @((Invoke-Api GET '/api/users?role=SecurityOfficer&pageSize=100' $null $admin).Data.items | Where-Object { $_.email -eq $first.email.ToLowerInvariant() })[0]
+        Check-True 'Admin finds the new user' ($null -ne $aUser)
+        $resent = Invoke-Api POST "/api/users/$($aUser.id)/signin-email" $null $admin
+        Check-True 'Resend sign-in email reports emailSent true' (($resent.Status -eq 200) -and ($resent.Data.emailSent -eq $true) -and ($resent.Data.mustChangePassword -eq $true)) "status=$($resent.Status)"
+        Start-Sleep -Milliseconds 300
+        $calls2 = @(Get-Content $EmailStubLog | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
+        $again2 = @($calls2 | Where-Object { $_.body.subject -like 'Your SimGuard account*' -and $_.body.to[0].email -like 'visitor.a.*' })
+        $newPw = if ($again2.Count -eq 2 -and $again2[1].body.textContent -match 'Temporary password: (\S+)') { $Matches[1] } else { $null }
+        Check-True 'Resend sent a different generated password' (($null -ne $newPw) -and ($newPw -ne $generated) -and ($newPw -ne $aSession.Password))
+        Check 'The old password no longer works' 401 (Invoke-Api POST '/api/auth/login' @{ email = $first.email.ToLowerInvariant(); password = $aSession.Password })
+        if ($newPw) {
+            $relogin = Invoke-Api POST '/api/auth/login' @{ email = $first.email.ToLowerInvariant(); password = $newPw }
+            Check-True 'The emailed password signs in (MFA step follows)' (($relogin.Status -eq 200) -and ($relogin.Data.status -eq 'mfaRequired')) "status=$($relogin.Data.status)"
+        }
+    }
+
     $decl = @($calls | Where-Object { $_.body.subject -like 'About your SimGuard*' })
     Check-True 'Decline email sent to the declined visitor' (($decl.Count -eq 1) -and ($decl[0].body.to[0].email -like 'visitor.b.*'))
-    Check-True 'Sent from the verified sender with the API key header' (($ready[0].body.sender.email -eq 'no-reply@mail.sim-guard.app') -and ($ready[0].apiKey -eq 'test-key'))
+    Check-True 'Sent from the verified sender with the API key header' (($ready[0].body.sender.email -eq 'no-reply@sim-guard.app') -and ($ready[0].apiKey -eq 'test-key'))
 }
 
 # A reviewed email can ask again.

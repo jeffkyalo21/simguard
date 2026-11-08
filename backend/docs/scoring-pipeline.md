@@ -202,7 +202,7 @@ Reasons are stored in the alert contract format with real feature names:
 | Trigger | When | Actor in audit |
 | ------- | ---- | -------------- |
 | `schedule` | daily at `Scoring:DailyRunTimeNairobi` (default `02:00`, Africa/Nairobi, UTC+3) while `Scoring:Enabled` (default `true`) | `system`, category `system` |
-| `manual` | `POST /api/admin/scoring/run` | the Admin's email |
+| `manual` | `POST /api/admin/scoring/run` (the "Refresh scores" button) | the Security Officer's email and role |
 | `import` | after every usage import commit that inserted or updated rows | `system`, category `system` |
 
 The schedule lives in configuration only (appsettings, or
@@ -219,13 +219,13 @@ became scorable.
 
 ### POST /api/admin/scoring/run
 
-`AdminOnly`. Queues a manual run of every scorable SIM-day not yet scored and
+`OrgWrite` (Security Officer only; Admin and Auditor get 403). Queues a manual run of every scorable SIM-day not yet scored and
 returns at once. 202: `{ "runId": 4, "merged": false }`; `merged` is true when
 the request joined an already queued run. Audited as `scoring.run_requested`.
 
 ### GET /api/admin/scoring/status
 
-`AdminOnly`. Totals only, never SIM-level data.
+`OrgRead` (Security Officer and Auditor; the Admin gets 403, its health view is `GET /api/admin/system-status`). Totals only, never SIM-level data.
 
 ```json
 {
@@ -298,7 +298,9 @@ Endpoints and response shapes: [api-tier-recommendations.md](api-tier-recommenda
 
 | Action | Admin | SecurityOfficer | Auditor |
 | ------ | :---: | :-------------: | :-----: |
-| Run now, scoring status | yes | no | no |
+| Run now (start a scoring run) | no | yes | no |
+| Scoring status | no | yes | yes |
+| System status (`GET /api/admin/system-status`) | yes | no | no |
 | Read alerts, risk scores, tier recommendations, tier settings and status | no | yes | yes |
 | Change alerts, tier settings, start a tier run, dismiss | no | yes | no |
 

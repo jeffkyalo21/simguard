@@ -105,7 +105,7 @@ public static class CarrierEndpoints
 
         return TypedResults.Created(
             $"/api/carriers/{carrier.Id}",
-            new CarrierResponse(carrier.Id, carrier.Name, carrier.CreatedAt, 0));
+            CarrierResponse.From(carrier, 0));
     }
 
     private static async Task<IResult> RenameCarrier(
@@ -153,7 +153,7 @@ public static class CarrierEndpoints
         }
 
         var simCount = await db.Sims.CountAsync(s => s.CarrierId == id, cancellationToken);
-        return TypedResults.Ok(new CarrierResponse(carrier.Id, carrier.Name, carrier.CreatedAt, simCount));
+        return TypedResults.Ok(CarrierResponse.From(carrier, simCount));
     }
 
     private static async Task<IResult> DeleteCarrier(

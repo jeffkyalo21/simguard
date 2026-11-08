@@ -2,7 +2,7 @@ using System.Net;
 
 namespace SimGuard.Api.Email;
 
-// The three emails of the access request flow. Values are HTML encoded in
+// The emails of the access request and invitation flows. Values are HTML encoded in
 // the HTML part; the text part is the same message in plain text.
 public static class EmailTemplates
 {
@@ -19,7 +19,7 @@ public static class EmailTemplates
          $"Sign in at: {signInUrl}",
          $"Email: {email}",
          $"Temporary password: {temporaryPassword}",
-         "You will be asked to choose a new password and set up two-step sign-in the first time."]);
+         "You will be asked to choose a new password the first time you sign in, and to set up two-step sign-in if you have not already."]);
 
     public static EmailMessage RequestDeclined(string name) => Build(
         "About your SimGuard request",

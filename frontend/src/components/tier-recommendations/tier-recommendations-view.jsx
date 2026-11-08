@@ -243,6 +243,7 @@ export function TierRecommendationsView() {
     <>
       <PageHeader title={text.title} />
       <p className="-mt-3 max-w-2xl text-sm text-muted-foreground">{text.intro}</p>
+      <p className="-mt-3 max-w-2xl text-sm text-muted-foreground">{text.carrierNote}</p>
 
       <RunPanel status={status} canRun={editing} />
 

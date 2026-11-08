@@ -4,7 +4,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { DataTable } from "@/components/data/data-table";
 import { SectionCard } from "@/components/data/section-card";
-import { CreateAccountDialog } from "@/components/admin/create-account-dialog";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { DisabledReason } from "@/components/shared/disabled-reason";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError, errorMessage } from "@/lib/api";
-import { createUser, listAccessRequests, reviewAccessRequest } from "@/lib/data";
+import { listAccessRequests, reviewAccessRequest } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
@@ -23,29 +22,26 @@ export function RequestsPanel() {
   const [status, setStatus] = useState("pending");
   const resource = useResource(() => listAccessRequests({ status, pageSize: 100 }), [status]);
   const managing = usePermission("users.manage");
-  const [creating, setCreating] = useState({ open: false, request: null });
+  const [approving, setApproving] = useState({ open: false, request: null });
   const [declining, setDeclining] = useState({ open: false, request: null });
   const [busy, setBusy] = useState(false);
 
-  async function create(body) {
-    const { request } = creating;
+  // One call: the API creates the account, emails the generated password and
+  // marks the request approved. The password never reaches this page.
+  async function approve() {
+    const { request } = approving;
     setBusy(true);
     try {
-      await createUser(body);
+      const reviewed = await reviewAccessRequest(request.id, "approved");
+      if (reviewed?.accountCreated === false) toast.info(text.toasts.approvedExisting(request.name));
+      else if (reviewed?.emailSent === false) toast.warning(text.toasts.approvedNoEmail(request.name));
+      else toast.success(text.toasts.approved(request.name));
     } catch (error) {
-      toast.error(errorMessage(error));
+      toast.error(error instanceof ApiError && error.status === 409 ? text.toasts.alreadyReviewed : errorMessage(error));
+    } finally {
+      setApproving((current) => ({ ...current, open: false }));
       setBusy(false);
-      return;
     }
-    try {
-      const reviewed = await reviewAccessRequest(request.id, "approved", body.temporaryPassword);
-      if (reviewed?.emailSent) toast.success(text.toasts.created(body.name));
-      else toast.warning(text.toasts.createdNoEmail(body.name));
-    } catch {
-      toast.warning(text.toasts.createdNotMarked(body.name));
-    }
-    setCreating((current) => ({ ...current, open: false }));
-    setBusy(false);
   }
 
   async function decline() {
@@ -88,10 +84,10 @@ export function RequestsPanel() {
                 <Button
                   className="h-9 px-3"
                   disabled={!managing.allowed}
-                  aria-label={text.createFor(row.name)}
-                  onClick={() => setCreating({ open: true, request: row })}
+                  aria-label={text.approveFor(row.name)}
+                  onClick={() => setApproving({ open: true, request: row })}
                 >
-                  {text.createAccount}
+                  {text.approve}
                 </Button>
                 <Button
                   variant="outline"
@@ -138,12 +134,22 @@ export function RequestsPanel() {
           emptyMessage={text.empty[status]}
         />
       </SectionCard>
-      <CreateAccountDialog
-        open={creating.open}
-        onOpenChange={(open) => setCreating((current) => ({ ...current, open }))}
-        request={creating.request}
+      <ConfirmDialog
+        open={approving.open}
+        onOpenChange={(open) => setApproving((current) => ({ ...current, open }))}
+        title={text.approveTitle}
+        description={
+          approving.request
+            ? text.approveText(
+                approving.request.name,
+                approving.request.email,
+                copy.roles[approving.request.role] ?? approving.request.role
+              )
+            : ""
+        }
+        confirmLabel={text.approve}
         busy={busy}
-        onSubmit={create}
+        onConfirm={approve}
       />
       <ConfirmDialog
         open={declining.open}

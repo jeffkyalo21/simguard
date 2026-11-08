@@ -136,6 +136,12 @@ test("forwardablePath blocks traversal and token endpoints", () => {
   assert.equal(forwardablePath(["sims", "12", "usage"], "GET"), "sims/12/usage");
   assert.equal(forwardablePath(["auth", "events"], "GET"), "auth/events");
   assert.equal(forwardablePath(["auth", "events"], "POST"), null);
+  assert.equal(forwardablePath(["auth", "me"], "PUT"), "auth/me");
+  assert.equal(forwardablePath(["auth", "me"], "GET"), null);
+  assert.equal(forwardablePath(["auth", "me", "delete"], "POST"), "auth/me/delete");
+  assert.equal(forwardablePath(["auth", "me", "delete"], "GET"), null);
+  assert.equal(forwardablePath(["auth", "mfa", "recovery-codes"], "POST"), "auth/mfa/recovery-codes");
+  assert.equal(forwardablePath(["auth", "mfa", "verify"], "POST"), null);
   assert.equal(forwardablePath(["auth", "login"], "POST"), null);
   assert.equal(forwardablePath(["Auth", "change-password"], "POST"), null);
   assert.equal(forwardablePath(["sims", ".."], "GET"), null);

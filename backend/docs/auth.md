@@ -173,6 +173,56 @@ token stops working; use the new one.
 Errors: 400 (`currentPassword` incorrect, which counts as a failed attempt,
 or `newPassword` fails the policy or equals the current one), 401, 429.
 
+### PUT /api/auth/me
+
+Policy `AnyRole` (every role). Changes the signed-in user's own name. Email
+and role cannot be changed here.
+
+```json
+{ "name": "Wanjiru Kamau" }
+```
+
+200: the same body as `GET /api/auth/me`. Errors: 400 (empty or over 100
+characters), 401. Audit action `user.profile_updated`.
+
+### POST /api/auth/mfa/recovery-codes
+
+Policy `AnyRole`. Rate limited. Makes 10 new recovery codes; every earlier
+code stops working. The user proves who they are with the current password
+and a current 6-digit authenticator code (a recovery code is not accepted
+here).
+
+```json
+{ "password": "current password", "code": "123456" }
+```
+
+200: `{ "recoveryCodes": ["...", "..."] }`. The codes are shown once.
+Errors: 400 with a field error on `password` or `code` (a wrong value counts
+as a failed attempt and can lock the account), 401, 429. Events:
+`recovery_codes_regenerated` (auth event) and `user.recovery_codes_regenerated`
+(audit, no codes in it).
+
+### POST /api/auth/me/delete
+
+Policy `AnyRole`. Rate limited. Deletes the signed-in user's own account.
+Body as for the recovery codes: `password` and a current `code`.
+
+204 on success. The account is disabled and its personal data is removed:
+name becomes `Deleted user {id}`, the email and user name become
+`deleted-user-{id}@deleted.invalid`, the password, authenticator key and
+recovery codes are removed, and the security stamp changes so every token
+stops working (401). The row stays, so the user id and role in audit rows
+remain valid. In `audit_logs` and `auth_events` the old email is replaced by
+the placeholder (and IP address and user agent are cleared on the user's auth
+events). The same email can be invited again as a new account.
+
+Errors: 400 with a field error on `password` or `code`; 409 when the user is
+the last active Admin ("You are the last active Admin, so your account
+cannot be deleted. Make another user an Admin first."), checked under the same
+database lock as the Admin changes; 401; 429. Audit action `user.self_deleted`
+(old `{ id, role }`, new `{ id, role, isDisabled }`; never a password, code or
+email) and auth event `account_deleted`.
+
 ### GET /api/auth/events
 
 Admin or Auditor. Query: `type`, `from`, `to` (ISO 8601 with offset, e.g.
@@ -204,8 +254,47 @@ max 100). Newest first.
 Event types: `login_succeeded`, `login_failed`, `lockout`, `mfa_failed`,
 `mfa_enrolled`, `mfa_reset`, `recovery_code_used`, `password_changed`,
 `password_reset`, `user_created`, `role_changed`, `user_disabled`,
-`user_enabled`. `userId` is null when the email did not match an account.
+`user_enabled`, `user_unlocked`. `userId` is null when the email did not match an account.
 Passwords, tokens and codes are never stored.
+
+### GET /api/admin/system-status
+
+Policy `AdminOnly`. Read only. Counts and flags only: no organisation data and
+never a secret, key, token or connection string. The Admin's System health
+screen reads it every 30 seconds.
+
+```json
+{
+  "generatedAt": "2026-11-08T10:00:00Z",
+  "api": { "up": true, "version": "1.0.0", "startedAt": "...", "uptimeSeconds": 3600 },
+  "database": { "ok": true, "responseMs": 4 },
+  "mlService": { "configured": true, "reachable": true, "modelVersion": "..." },
+  "scoring": {
+    "enabled": true,
+    "lastRun": { "id": 12, "trigger": "schedule", "status": "succeeded", "requestedAt": "...",
+                 "startedAt": "...", "finishedAt": "...", "durationSeconds": 41.5, "failureReason": null },
+    "nextScheduledRunAt": "..."
+  },
+  "email": { "configured": true },
+  "usersByRole": [ { "role": "Admin", "active": 1, "disabled": 0 } ],
+  "accessRequests": [ { "status": "pending", "count": 2 } ],
+  "signInsPerDay": [ { "date": "2026-10-26", "succeeded": 5, "failed": 1 } ],
+  "scoringRunsPerDay": [ { "date": "2026-10-26", "succeeded": 1, "failed": 0 } ]
+}
+```
+
+- `email.configured` is true or false only. The key is never returned.
+- `lastRun` is the latest finished run (queued and running runs are skipped);
+  `failureReason` is its error summary cut to 300 characters.
+- `usersByRole` lists every role. `accessRequests` lists every status.
+- The two per-day lists have the last 14 UTC days, oldest first, zero filled.
+  Sign-ins count the `login_succeeded` and `login_failed` auth events. Scoring
+  runs are counted on the day they were requested; `failed` includes `partial`
+  runs.
+- If the database is down the call still answers 200 with `database.ok` false
+  and empty lists. A down ML service shows `reachable` false.
+
+Errors: 401, 403.
 
 ### User administration (Admin only)
 
@@ -230,19 +319,49 @@ Passwords, tokens and codes are never stored.
 | --------------- | ---- | ------- | ------ |
 | `GET /api/users?role=&page=&pageSize=` | | 200 `PagedResult<UserResponse>` | 400 |
 | `GET /api/users/{id}` | | 200 | 404 |
-| `POST /api/users` | `{ "email", "name", "role", "employeeId": null, "temporaryPassword" }` | 201, `Location: /api/users/{id}` | 400, 409 |
+| `POST /api/users` (invite) | `{ "email", "name", "role", "employeeId": null }` | 201, `Location: /api/users/{id}` | 400, 409 |
 | `PUT /api/users/{id}/role` | `{ "role": "Auditor" }` | 200 | 400, 404, 409 |
 | `POST /api/users/{id}/disable` | | 200 | 404, 409 |
 | `POST /api/users/{id}/enable` | | 200 | 404 |
+| `POST /api/users/{id}/unlock` | | 200 | 404 |
 | `POST /api/users/{id}/mfa/reset` | | 200 | 404 |
-| `POST /api/users/{id}/password/reset` | `{ "temporaryPassword": "..." }` | 200 | 400, 404 |
+| `POST /api/users/{id}/signin-email` | | 200 | 404, 409 |
+| `POST /api/users/{id}/password/reset` (Development only) | `{ "temporaryPassword": "..." }` | 200 | 400, 404 |
 
-- New accounts and reset passwords have `mustChangePassword = true`.
+- The Admin never chooses or sees another person's password. An invite
+  (`POST /api/users`) creates the account with a random 20 character password
+  and emails it (sign-in link, email, password; see
+  [access-requests.md](access-requests.md) for the email setup). Approving an
+  access request does the same.
+- `UserResponse` has an additive `emailSent` on invite and on
+  `signin-email`: `true` when the provider accepted the email, `false` when
+  not (then use "resend sign-in email"), `null` on every other call.
+- `signin-email` sets a new random password, emails it, sets
+  `mustChangePassword = true` and clears any lockout. It works for an account
+  that never signed in and for one whose owner forgot the password. The old
+  password stops working at once. A disabled account gives 409, and so does
+  your own account ("Ask another Admin"): replacing your own password would
+  leave you depending on an email that may fail.
+- `unlock` clears a lockout and the failed-attempt count; it does not touch
+  the password. Calling it on an unlocked account is a no-op (200).
+- `temporaryPassword` on `POST /api/users`, on access request approval and on
+  `password/reset` is accepted only when the API runs in Development, so the
+  smoke scripts can sign in to accounts they create. In any other environment
+  it is a 400 on field `temporaryPassword`, and `password/reset` always
+  needs it, so it is unusable there.
+- Audit actions: `user.created`, `user.unlocked`, `user.signin_email_sent`
+  (all `system`). Auth events: `user_unlocked` is new; a resend logs
+  `password_reset`.
+- New accounts and passwords set by `signin-email` have `mustChangePassword = true`.
 - `employeeId` is optional and links the account to one Employee (one
   account per employee).
 - An Admin cannot change their own role or disable themselves (409).
 - The last active Admin cannot be demoted or disabled (409). These checks
   run under a database lock, so two Admins cannot remove each other at once.
+  In a one-at-a-time sequence the caller is always an active Admin who is not
+  the target, so the target is never the last one: the own-account rule above
+  is what stops the final Admin from removing themselves, and the lock covers
+  concurrent calls.
 - Password reset also clears a lockout.
 - MFA reset removes the authenticator key and recovery codes; the user
   enrols again at the next sign-in.
@@ -256,7 +375,7 @@ The roles split operator from organisation:
   the system audit trail. It does not see or change the organisation's
   data (403 on every organisation endpoint).
 - **SecurityOfficer** manages the organisation: departments, employees,
-  SIMs, carriers, allocations, SIM status and tier, and alert reviews. It
+  SIMs, carriers, allocations, SIM tier, and alert reviews. It
   cannot manage users or read the audit logs.
 - **Auditor** is read-only: every organisation read, the full audit log and
   the auth event log. It never writes.
@@ -287,7 +406,6 @@ The roles split operator from organisation:
 | `POST /api/employees`, `PUT/DELETE /api/employees/{id}` | no | yes | no | `OrgWrite` |
 | `GET /api/sims`, `/{id}`, `/{id}/allocations`, `/{id}/risk`, `/{id}/activity`, `/{id}/usage`, `/{id}/usage/cycle` | no | yes | yes | `OrgRead` |
 | `POST /api/sims`, `PUT/DELETE /api/sims/{id}` | no | yes | no | `OrgWrite` |
-| `PATCH /api/sims/{id}/status` | no | yes | no | `OrgWrite` |
 | `PATCH /api/sims/{id}/tier` | no | yes | no | `OrgWrite` |
 | `GET /api/carriers` | no | yes | yes | `OrgRead` |
 | `POST /api/carriers`, `PUT/DELETE /api/carriers/{id}` | no | yes | no | `OrgWrite` |
@@ -301,7 +419,9 @@ The roles split operator from organisation:
 | `GET /api/usage/analytics`, `GET /api/tiers` | no | yes | yes | `OrgRead` |
 | `GET /api/tier-recommendations`, `/settings`, `/status` | no | yes | yes | `OrgRead` |
 | `PUT /api/tier-recommendations/settings`, `POST /api/tier-recommendations/run`, `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
-| `POST /api/admin/scoring/run`, `GET /api/admin/scoring/status` (totals only) | yes | no | no | `AdminOnly` |
+| `POST /api/admin/scoring/run` (start a run) | no | yes | no | `OrgWrite` |
+| `GET /api/admin/scoring/status` (totals only) | no | yes | yes | `OrgRead` |
+| `GET /api/admin/system-status` | yes | no | no | `AdminOnly` |
 | `/api/users/*` (list, get, create, role, disable, enable, MFA reset, password reset) | yes | no | no | `AdminOnly` |
 | `GET /api/audit-logs` | `system` rows only | no | all rows | `AuditRead` |
 | `GET /api/auth/events` | yes | no | yes | `AuditRead` |
@@ -425,13 +545,18 @@ prints each step's expected and real status code. See the header of the
 script for how to run it.
 
 `backend/docs/roles-smoke.ps1` checks the role matrix: for each role one
-endpoint per group (organisation read and write, SIM status and tier
+endpoint per group (organisation read and write, SIM tier
 change, users, audit logs, auth events, health) with the expected 2xx or
 403, the tier endpoint and the audit log filtering by role. It uses the
 Development test accounts above when `SIMGUARD_SMOKE_OFFICER_EMAIL`,
 `SIMGUARD_SMOKE_OFFICER_PASSWORD` and the `AUDITOR` equivalents are set,
 otherwise it creates throwaway accounts. The alerts and carriers smoke
 scripts do every organisation action as a Security Officer.
+
+`auth-smoke.ps1` also covers the profile: renaming, new recovery codes (wrong
+password and wrong code refused), deleting an account (wrong password, wrong
+code, last Admin refused, a Security Officer deletes themselves, the old token
+gives 401, the audit row stays, the same email can be invited again).
 
 Run all four on a throwaway database, not on your dev database: auth-smoke
 signs in the seeded Admin for the first time and the others leave test

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { DataState } from "@/components/data/data-state";
 import { DataTable } from "@/components/data/data-table";
-import { LineChart } from "@/components/data/line-chart";
+import { BarChart } from "@/components/data/bar-chart";
 import { ProgressBar } from "@/components/data/progress-bar";
 import { RiskBar } from "@/components/data/risk-bar";
 import { SectionCard } from "@/components/data/section-card";
@@ -168,7 +168,7 @@ function Investigation({ alert }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title={text.riskOverTime}>
           <DataState resource={risk} skeleton={<ChartSkeleton height={240} />}>
-            {(data) => data.history.length ? <LineChart data={data.history} xKey="date" yKey="probability" label={text.riskOverTime} formatX={formatShortDate} formatY={(value) => `${Math.round(value * 100)}%`} yDomain={[0, 1]} height={240} limits={showBands ? [{ y: GATE_BANDS.low, label: `${GATE_BANDS.low * 100}%` }, { y: GATE_BANDS.high, label: `${GATE_BANDS.high * 100}%` }] : []} /> : <p className="py-10 text-center text-sm text-muted-foreground">{text.noRisk}</p>}
+            {(data) => data.history.length ? <BarChart data={data.history} xKey="date" yKey="probability" label={text.riskOverTime} formatX={formatShortDate} formatY={(value) => `${Math.round(value * 100)}%`} yDomain={[0, 1]} height={240} limits={showBands ? [{ y: GATE_BANDS.low, label: `${GATE_BANDS.low * 100}%` }, { y: GATE_BANDS.high, label: `${GATE_BANDS.high * 100}%` }] : []} /> : <p className="py-10 text-center text-sm text-muted-foreground">{text.noRisk}</p>}
           </DataState>
         </SectionCard>
         <SectionCard title={text.recentAlerts}>

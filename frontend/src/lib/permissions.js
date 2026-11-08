@@ -14,9 +14,9 @@ export const PAGES = Object.freeze({
   sims: [OFFICER, AUDITOR],
   allocations: [OFFICER, AUDITOR],
   alerts: [OFFICER, AUDITOR],
-  // Carriers and departments are tabs of Settings; the Auditor opens
-  // Settings to read them but cannot change anything there.
-  settings: [OFFICER, AUDITOR],
+  // Settings holds the carriers (the Auditor reads them) and every
+  // signed-in user's own profile, so every role may open it.
+  settings: [ADMIN, OFFICER, AUDITOR],
   carriers: [OFFICER, AUDITOR],
   departments: [OFFICER, AUDITOR],
   imports: [OFFICER],
@@ -44,7 +44,6 @@ export const PAGE_PATHS = Object.freeze({
 /** Action key -> roles that may perform it. */
 export const ACTIONS = Object.freeze({
   "sims.edit": [OFFICER],
-  "sims.changeStatus": [OFFICER],
   "sims.changeTier": [OFFICER],
   "allocations.edit": [OFFICER],
   "alerts.review": [OFFICER],
@@ -56,7 +55,7 @@ export const ACTIONS = Object.freeze({
   "settings.edit": [OFFICER],
   "auditLog.view": [AUDITOR, ADMIN],
   "users.manage": [ADMIN],
-  "scoring.run": [ADMIN],
+  "scoring.run": [OFFICER],
 });
 
 /** True when `role` may open the page with this key. */

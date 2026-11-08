@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DataState } from "@/components/data/data-state";
 import { DataTable } from "@/components/data/data-table";
-import { LineChart } from "@/components/data/line-chart";
+import { BarChart } from "@/components/data/bar-chart";
 import { ProgressBar } from "@/components/data/progress-bar";
 import { RiskBar } from "@/components/data/risk-bar";
 import { SectionCard } from "@/components/data/section-card";
@@ -17,7 +17,6 @@ import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { activityText, activityTime } from "@/components/sims/activity-text";
-import { SimStatusDialog, canChangeStatus } from "@/components/sims/sim-status-dialog";
 import { TierDialog } from "@/components/sims/tier-dialog";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/use-permission";
@@ -76,6 +75,12 @@ function Details({ sim }) {
 function Usage({ usage }) {
   const hasLimit = usage.data.limit !== null;
   const top = Math.max(Math.ceil(Math.max(usage.data.limit ?? 0, usage.data.used) * 1.15), 1);
+  // One bar per day of the cycle (the running total to that day). Days that
+  // have not happened yet stay empty, so the axis always spans the full cycle.
+  const cycleDays = Array.from({ length: usage.cycleLength }, (_, index) => {
+    const day = index + 1;
+    return usage.series.find((point) => point.day === day) ?? { day, gb: null };
+  });
   const balances = [
     { key: "data", label: text.data, ...usage.data, valueText: hasLimit ? copy.units.ofGb(usage.data.used, usage.data.limit) : copy.units.gb(usage.data.used) },
     { key: "voice", label: text.voice, ...usage.voice, valueText: hasLimit ? copy.units.ofMin(usage.voice.used, usage.voice.limit) : usage.voice.used },
@@ -88,12 +93,10 @@ function Usage({ usage }) {
         {text.cycle(formatDate(usage.cycleStart), formatDate(usage.cycleEnd), formatDate(usage.asOf))}
         {!hasLimit && ` ${text.noAllowance}`}
       </p>
-      <LineChart
-        data={usage.series}
+      <BarChart
+        data={cycleDays}
         xKey="day"
         yKey="gb"
-        xType="number"
-        xDomain={[1, usage.cycleLength]}
         xTicks={[1, usage.cycleLength]}
         label={text.dataThisCycle}
         formatX={copy.units.day}
@@ -158,9 +161,7 @@ export function SimProfile({ id }) {
 
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
   const [tierDialog, setTierDialog] = useState({ open: false, sim: null });
-  const [statusDialog, setStatusDialog] = useState({ open: false, sim: null });
   const tierPermission = usePermission("sims.changeTier");
-  const statusPermission = usePermission("sims.changeStatus");
 
   const sim = simResource.data;
 
@@ -179,10 +180,6 @@ export function SimProfile({ id }) {
   if (!sim) return <ProfileSkeleton />;
 
   const number = formatPhone(sim.phoneNumber);
-  // The role reason wins: an Auditor cannot change any SIM.
-  const statusReason = statusPermission.reason ?? (canChangeStatus(sim) ? null : copy.sims.allocatedReason);
-  const blocked = statusReason !== null;
-  const statusLabel = sim.status === "inactive" ? text.activate : text.suspend;
 
   return (
     <>
@@ -190,7 +187,7 @@ export function SimProfile({ id }) {
 
       <PageHeader
         title={number}
-        badge={<StatusBadge status={sim.status} />}
+        badge={<StatusBadge status={sim.status} hint={copy.sims.statusHint} />}
         actions={
           <>
             <DisabledReason reason={tierPermission.reason ?? ""} disabled={!tierPermission.allowed}>
@@ -201,16 +198,6 @@ export function SimProfile({ id }) {
                 onClick={() => setTierDialog({ open: true, sim })}
               >
                 {text.changeTier}
-              </Button>
-            </DisabledReason>
-            <DisabledReason reason={statusReason ?? ""} disabled={blocked}>
-              <Button
-                variant="outline"
-                className="touch-target h-10 px-4"
-                disabled={blocked}
-                onClick={() => setStatusDialog({ open: true, sim })}
-              >
-                {statusLabel}
               </Button>
             </DisabledReason>
           </>
@@ -265,11 +252,6 @@ export function SimProfile({ id }) {
         sim={tierDialog.sim}
         open={tierDialog.open}
         onOpenChange={(open) => setTierDialog((current) => ({ ...current, open }))}
-      />
-      <SimStatusDialog
-        sim={statusDialog.sim}
-        open={statusDialog.open}
-        onOpenChange={(open) => setStatusDialog((current) => ({ ...current, open }))}
       />
     </>
   );

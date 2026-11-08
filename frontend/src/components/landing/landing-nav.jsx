@@ -14,7 +14,6 @@ const sectionLinks = [
   { href: "#how-it-works", label: text.how },
   { href: "#results", label: text.results },
   { href: "#faq", label: text.faq },
-  { href: "#contact", label: text.contact },
 ];
 
 /**

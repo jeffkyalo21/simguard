@@ -45,7 +45,7 @@ src/
     (marketing)/page.jsx    landing page at "/"
     (auth)/login/...        sign in, mfa, mfa-setup, change-password
     (app)/layout.jsx        app shell: checks the session, checks the session, auth provider
-    (app)/admin             Admin area: scoring status and Run now
+    (app)/admin             Admin area: System health, access requests, users
     api/auth/...            route handlers: login, mfa, enrolment, password, logout, me
     api/backend/[...path]   forwards signed in calls to the backend
     (app)/dashboard, sims, sims/[id]        built screens
@@ -60,11 +60,11 @@ src/
   components/
     landing/    landing sections, landing.css and its motion helpers (used by "/" only)
     dashboard/  dashboard-view
-    admin/      admin-view (scoring status)
+    admin/      admin-view, system-health (status tiles and charts)
     tier-recommendations/  tier-recommendations-view
-    sims/       sims-view, sim-profile, sim-form-dialog, sim-status-dialog, tier-dialog
+    sims/       sims-view, sim-profile, sim-form-dialog, tier-dialog
     data/       data-table, pagination, filter-select, search-input, kpi-card,
-                section-card, bar-list, line-chart, progress-bar, risk-bar, skeletons
+                section-card, bar-list, bar-chart, progress-bar, risk-bar, skeletons
     shared/     status-badge, form-dialog, confirm-dialog, form-field, busy-button,
                 error-state, empty-state, disabled-reason, page-breadcrumb,
                 not-found-content, glass-backdrop
@@ -95,7 +95,7 @@ src/
 
 Screens never call `fetch` themselves. They call functions in
 `src/lib/data.js` (`listSims`, `getSim`, `getDashboard`, `createSim`,
-`setSimStatus` and so on), which call the backend through `/api/backend` and
+`setSimTier` and so on), which call the backend through `/api/backend` and
 return its response shapes (`{ items, page, pageSize, total }` for lists).
 A failed call throws `ApiError` with the status, the field `errors` map and
 any extra ProblemDetails fields in `extensions`. Show it with

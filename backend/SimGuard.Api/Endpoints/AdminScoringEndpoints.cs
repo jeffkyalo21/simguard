@@ -54,8 +54,11 @@ public record ScoringStatusResponse(
     ScoringTotals Totals,
     IReadOnlyList<ScoringRunSummary> Runs);
 
-// Scoring controls for the SimGuard operator (Admin only). The status holds
-// totals only, never SIM-level data. Contract in backend/docs/scoring-pipeline.md.
+// Scoring controls for the organisation: the Security Officer starts a run,
+// the Security Officer and the Auditor read the status. The Admin has neither
+// (the Admin's System health screen is GET /api/admin/system-status). The path
+// keeps its /admin/scoring prefix so existing clients do not break. The status
+// holds totals only, never SIM-level data. Contract in backend/docs/scoring-pipeline.md.
 public static class AdminScoringEndpoints
 {
     private const int RecentRuns = 10;
@@ -63,16 +66,19 @@ public static class AdminScoringEndpoints
     public static IEndpointRouteBuilder MapAdminScoringEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/admin/scoring")
-            .WithTags("Scoring")
-            .RequireAuthorization(AuthPolicies.AdminOnly);
+            .WithTags("Scoring");
 
         group.MapPost("/run", RunNow)
             .WithName("RunScoringNow")
-            .Produces<ScoringRunStarted>(StatusCodes.Status202Accepted);
+            .RequireAuthorization(AuthPolicies.OrgWrite)
+            .Produces<ScoringRunStarted>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         group.MapGet("/status", GetStatus)
             .WithName("GetScoringStatus")
-            .Produces<ScoringStatusResponse>();
+            .RequireAuthorization(AuthPolicies.OrgRead)
+            .Produces<ScoringStatusResponse>()
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         return routes;
     }

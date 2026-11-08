@@ -37,5 +37,11 @@ public class ImportRun
     // Why a run was rejected or failed, when the reason is file-wide.
     public string? Message { get; set; }
 
+    // csv for uploads, "carrier feed" for runs of a carrier usage feed.
+    public string Source { get; set; } = "csv";
+
+    // Set for carrier feed runs.
+    public string? CarrierName { get; set; }
+
     public AppUser? UploadedBy { get; set; }
 }

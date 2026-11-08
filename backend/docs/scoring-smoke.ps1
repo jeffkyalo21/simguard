@@ -10,8 +10,9 @@
     SIM with 15 days of usage and changes tier recommendation state.
 
     Checks:
-      - roles: Run now and scoring status are Admin only (SecurityOfficer and
-        Auditor get 403, no token 401); Admin and Auditor get 403 on a tier
+      - roles: Run now is SecurityOfficer only (Admin and Auditor get 403);
+        scoring status is for SecurityOfficer and Auditor (Admin gets 403);
+        no token 401; Admin and Auditor get 403 on a tier
         run and on tier settings changes; scoring status holds totals only
       - Run now twice: the second run scores nothing, no duplicate risk
         scores or alerts, at most one open alert per SIM, and every scoring
@@ -359,11 +360,12 @@ function New-Iccid([long]$Number) {
 }
 
 # --- Roles -------------------------------------------------------------------
-foreach ($pair in @(@('Officer', $officer), @('Auditor', $auditor))) {
+foreach ($pair in @(@('Admin', $admin), @('Auditor', $auditor))) {
     $label = $pair[0]; $token = $pair[1]
     Check "$label POST /api/admin/scoring/run" 403 (Invoke-Api POST '/api/admin/scoring/run' $null $token)
-    Check "$label GET /api/admin/scoring/status" 403 (Invoke-Api GET '/api/admin/scoring/status' $null $token)
 }
+Check 'Admin GET /api/admin/scoring/status' 403 (Invoke-Api GET '/api/admin/scoring/status' $null $admin)
+Check 'Auditor GET /api/admin/scoring/status (read only)' 200 (Invoke-Api GET '/api/admin/scoring/status' $null $auditor)
 Check 'No token POST /api/admin/scoring/run' 401 (Invoke-Api POST '/api/admin/scoring/run')
 Check 'No token GET /api/admin/scoring/status' 401 (Invoke-Api GET '/api/admin/scoring/status')
 Check 'Anonymous GET /health' 200 (Invoke-Api GET '/health')
@@ -375,18 +377,18 @@ foreach ($pair in @(@('Admin', $admin), @('Auditor', $auditor))) {
 }
 Check 'Auditor GET /api/tier-recommendations/status' 200 (Invoke-Api GET '/api/tier-recommendations/status' $null $auditor)
 
-$status = Invoke-Api GET '/api/admin/scoring/status' $null $admin
-Check 'Admin GET /api/admin/scoring/status' 200 $status
+$status = Invoke-Api GET '/api/admin/scoring/status' $null $officer
+Check 'Officer GET /api/admin/scoring/status' 200 $status
 Check-True 'Scoring status holds totals only (no SIM ids or phone numbers)' (($status.Text -notmatch '"simId"|"simIds"|"scopeSimIds"|"phoneNumber"|"iccid"') -and ($null -ne $status.Data.totals)) "scores=$($status.Data.totals.riskScores)"
 Check-True 'Scoring status: ML service reachable' ($status.Data.mlService.reachable -eq $true) "status=$($status.Data.mlService.status) model=$($status.Data.mlService.modelVersion)"
 
 # --- Run twice, no duplicates ------------------------------------------------
-$first = Start-ScoringRun $BaseUrl $admin 'First'
-Check-True 'First run succeeded, actor is the Admin' (($first.Run.status -eq 'succeeded') -and ($first.Run.trigger -eq 'manual') -and ($first.Run.requestedBy -eq $adminEmail)) "status=$($first.Run.status) simDays=$($first.Run.simDaysScored)"
+$first = Start-ScoringRun $BaseUrl $officer 'First'
+Check-True 'First run succeeded, actor is the Officer' (($first.Run.status -eq 'succeeded') -and ($first.Run.trigger -eq 'manual') -and ($first.Run.requestedBy -eq $officerAccount.Email)) "status=$($first.Run.status) simDays=$($first.Run.simDaysScored)"
 $alertsBefore = Get-OpenAlertCheck $auditor
 $scoresBefore = $first.Status.totals.riskScores
 
-$second = Start-ScoringRun $BaseUrl $admin 'Second'
+$second = Start-ScoringRun $BaseUrl $officer 'Second'
 $alertsAfter = Get-OpenAlertCheck $auditor
 Check-True 'Second run scores nothing new' (($second.Run.status -eq 'succeeded') -and ($second.Run.simDaysScored -eq 0) -and ($second.Run.alertsCreated -eq 0)) "simDays=$($second.Run.simDaysScored) created=$($second.Run.alertsCreated)"
 Check-True 'Risk score total unchanged by the second run' ($second.Status.totals.riskScores -eq $scoresBefore) "before=$scoresBefore after=$($second.Status.totals.riskScores)"
@@ -396,7 +398,7 @@ Check-True 'At most one open scoring alert per SIM' (($alertsAfter.Pipeline -gt 
 Check-True 'Every open scoring alert has a flag day (status flagged)' ($alertsAfter.NotFlagged -eq 0) "not flagged=$($alertsAfter.NotFlagged)"
 
 $runAudit = Invoke-Api GET '/api/audit-logs?action=scoring.run_requested&pageSize=5' $null $admin
-Check-True 'Run now audited with the Admin email (category system)' (@(@($runAudit.Data.items) | Where-Object { $_.actorEmail -eq $adminEmail -and $_.category -eq 'system' }).Count -gt 0) "rows=$($runAudit.Data.total)"
+Check-True 'Run now audited with the Officer email and role (category system)' (@(@($runAudit.Data.items) | Where-Object { $_.actorEmail -eq $officerAccount.Email -and $_.actorRole -eq 'SecurityOfficer' -and $_.category -eq 'system' }).Count -gt 0) "rows=$($runAudit.Data.total)"
 
 # --- A usage import triggers a run ---------------------------------------------
 $demoSim = (Get-Content (Join-Path $SamplesDir 'sims.csv') -TotalCount 2)[1].Split(',')
@@ -415,12 +417,12 @@ foreach ($day in 0..14) {
     $row[15] = $tier
     $usageLines += ($row -join ',')
 }
-$scoresBeforeImport = (Invoke-Api GET '/api/admin/scoring/status' $null $admin).Data.totals.riskScores
+$scoresBeforeImport = (Invoke-Api GET '/api/admin/scoring/status' $null $officer).Data.totals.riskScores
 $usageCommit = Invoke-Import 'usage' (New-Csv $usageLines) 'scoring-usage.csv' $officer 'mode=commit'
 Check 'Officer imports 15 days of usage for it' 200 $usageCommit
 Start-Sleep -Seconds 1
-$importRun = @((Invoke-Api GET '/api/admin/scoring/status' $null $admin).Data.runs) | Where-Object { $_.trigger -eq 'import' } | Select-Object -First 1
-$importDone = if ($importRun) { Wait-ScoringRun $BaseUrl $admin $importRun.id } else { $null }
+$importRun = @((Invoke-Api GET '/api/admin/scoring/status' $null $officer).Data.runs) | Where-Object { $_.trigger -eq 'import' } | Select-Object -First 1
+$importDone = if ($importRun) { Wait-ScoringRun $BaseUrl $officer $importRun.id } else { $null }
 Check-True 'The usage import queued a scoring run (trigger import, actor system, 1 SIM)' (($null -ne $importRun) -and ($importRun.requestedBy -eq 'system') -and ($importRun.scopeSimCount -eq 1)) "run=$($importRun.id)"
 Check-True 'The import run scored the one new SIM-day (2025-03-31)' (($importDone.Run.status -eq 'succeeded') -and ($importDone.Run.simDaysScored -eq 1) -and ($importDone.Status.totals.riskScores -eq $scoresBeforeImport + 1)) "status=$($importDone.Run.status) simDays=$($importDone.Run.simDaysScored)"
 
@@ -473,12 +475,12 @@ if (-not $SecondaryBaseUrl) {
     $ignored = Invoke-Api POST '/api/tier-recommendations/run?force=true' $null $officer2 $SecondaryBaseUrl
     Check 'force=true ignored outside Development (409)' 409 $ignored "next=$($ignored.Data.nextAllowedRunDate)"
 
-    $s2 = Invoke-Api GET '/api/admin/scoring/status' $null $admin2 $SecondaryBaseUrl
+    $s2 = Invoke-Api GET '/api/admin/scoring/status' $null $officer2 $SecondaryBaseUrl
     Check-True 'Secondary reports the ML service unreachable' ($s2.Data.mlService.reachable -eq $false) "status=$($s2.Data.mlService.status)"
     $scoresBeforeDown = $s2.Data.totals.riskScores
     $alertsBeforeDown = Get-OpenAlertCheck $auditor
 
-    $down = Start-ScoringRun $SecondaryBaseUrl $admin2 'ML down'
+    $down = Start-ScoringRun $SecondaryBaseUrl $officer2 'ML down'
     Check-True 'Run with the ML service down ends failed with a reason' (($down.Run.status -eq 'failed') -and ($down.Run.errorSummary -match 'unreachable|unavailable')) "status=$($down.Run.status)"
     Check-True 'Existing scores kept after the failed run' ($down.Status.totals.riskScores -eq $scoresBeforeDown) "before=$scoresBeforeDown after=$($down.Status.totals.riskScores)"
     Check-True 'Open alerts unchanged after the failed run' ((Get-OpenAlertCheck $auditor).Open -eq $alertsBeforeDown.Open)

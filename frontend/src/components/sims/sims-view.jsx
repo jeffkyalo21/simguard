@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { MoreHorizontal, Pencil, Plus, Power, PowerOff } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus } from "lucide-react";
 import { DataTable } from "@/components/data/data-table";
 import { FilterSelect } from "@/components/data/filter-select";
 import { Pagination } from "@/components/data/pagination";
@@ -12,7 +12,6 @@ import { PageHeader } from "@/components/layout/page-header";
 import { DisabledReason } from "@/components/shared/disabled-reason";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SimFormDialog } from "@/components/sims/sim-form-dialog";
-import { SimStatusDialog, canChangeStatus, nextStatus } from "@/components/sims/sim-status-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -51,11 +50,8 @@ function writeQuery(pathname, current, changes, { replace = false } = {}) {
   else window.history.pushState(null, "", url);
 }
 
-function RowActions({ sim, onEdit, onStatus, denied }) {
+function RowActions({ sim, onEdit, denied }) {
   const number = formatPhone(sim.phoneNumber);
-  const target = nextStatus(sim);
-  const blocked = !canChangeStatus(sim);
-  const StatusIcon = target === "inactive" ? PowerOff : Power;
 
   // A role that cannot change SIMs sees the menu button disabled, with why.
   if (denied) {
@@ -80,13 +76,6 @@ function RowActions({ sim, onEdit, onStatus, denied }) {
           <Pencil aria-hidden="true" />
           {copy.actions.edit}
         </DropdownMenuItem>
-        <DisabledReason reason={copy.sims.allocatedReason} disabled={blocked} focusable={false}>
-          <DropdownMenuItem disabled={blocked} onSelect={() => onStatus(sim)} className="w-full">
-            <StatusIcon aria-hidden="true" />
-            {target === "inactive" ? copy.sims.setInactive : copy.sims.setAvailable}
-            {blocked && <span className="sr-only">{copy.sims.allocatedReason}</span>}
-          </DropdownMenuItem>
-        </DisabledReason>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -127,7 +116,6 @@ export function SimsView() {
 
   // Dialogs keep the SIM they opened with, so nothing changes while closing.
   const [form, setForm] = useState({ open: false, sim: null });
-  const [status, setStatus] = useState({ open: false, sim: null });
 
   function setFilter(key) {
     return (value) => writeQuery(pathname, window.location.search, { [key]: value, page: 1 });
@@ -152,7 +140,7 @@ export function SimsView() {
       cell: (sim) => (sim.allowance ? copy.units.gb(toGb(sim.allowance.dataMb)) : copy.common.noValue),
     },
     { key: "cost", header: copy.columns.monthlyCost, className: "tabular-nums", cell: (sim) => formatKes(sim.monthlyCost) },
-    { key: "status", header: copy.columns.status, cell: (sim) => <StatusBadge status={sim.status} /> },
+    { key: "status", header: copy.columns.status, cell: (sim) => <StatusBadge status={sim.status} hint={copy.sims.statusHint} /> },
     {
       key: "actions",
       header: copy.columns.actions,
@@ -162,7 +150,6 @@ export function SimsView() {
         <RowActions
           sim={sim}
           onEdit={(target) => setForm({ open: true, sim: target })}
-          onStatus={(target) => setStatus({ open: true, sim: target })}
           denied={editing.reason}
         />
       ),
@@ -234,11 +221,6 @@ export function SimsView() {
         open={form.open}
         sim={form.sim}
         onOpenChange={(open) => setForm((current) => ({ ...current, open }))}
-      />
-      <SimStatusDialog
-        sim={status.sim}
-        open={status.open}
-        onOpenChange={(open) => setStatus((current) => ({ ...current, open }))}
       />
     </>
   );

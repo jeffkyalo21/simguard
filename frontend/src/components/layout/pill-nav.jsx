@@ -3,10 +3,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, Menu, Search } from "lucide-react";
+import { LogOut, Menu, Search } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { IconButton } from "@/components/layout/icon-button";
 import { Logo } from "@/components/layout/logo";
+import { NotificationsLink } from "@/components/layout/notifications-link";
 import { isActive, navItemsFor } from "@/components/layout/nav-items";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -226,7 +227,7 @@ function SearchControl() {
         <form
           role="search"
           onSubmit={handleSubmit}
-          className="search-pop absolute inset-y-0 right-0 z-10 flex w-[min(240px,calc(100vw-6rem))] items-center rounded-full border border-glass-border bg-popover shadow-[var(--glass-shadow)]"
+          className="search-pop absolute inset-y-0 right-0 z-10 flex w-[min(340px,calc(100vw-6rem))] items-center rounded-full border border-glass-border bg-popover shadow-[var(--glass-shadow)]"
         >
           <label className="relative flex h-full w-full items-center">
             <span className="sr-only">{text.search}</span>
@@ -320,10 +321,7 @@ export function PillNav() {
         <div className="flex justify-end min-[1100px]:w-[200px]">
           <div className="glass-pill relative flex items-center gap-0.5 p-0.5">
             {canOpen(role, "sims") && <SearchControl />}
-            <IconButton label={text.notifications} className="hidden sm:inline-flex">
-              <Bell aria-hidden="true" />
-              <span className="notify-dot" aria-hidden="true" />
-            </IconButton>
+            <NotificationsLink />
             <ThemeToggle />
             <UserMenu />
           </div>

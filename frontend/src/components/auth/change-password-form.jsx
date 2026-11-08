@@ -127,7 +127,7 @@ export function ChangePasswordForm() {
         </h2>
         <ul id="password-rules" className="mt-2 flex flex-col gap-1.5 text-sm">
           {rules.map((rule) => (
-            <li key={rule.key} className={cn("flex items-center gap-2", rule.met ? "text-risk-cleared-foreground" : "text-muted-foreground")}>
+            <li key={rule.key} className={cn("flex items-center gap-2", rule.met ? "text-foreground" : "text-muted-foreground")}>
               {rule.met ? <Check className="size-4" aria-hidden="true" /> : <Circle className="size-4" aria-hidden="true" />}
               <span>
                 {text.rules[rule.key]}

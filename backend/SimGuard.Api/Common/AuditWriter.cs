@@ -17,6 +17,9 @@ public static class AuditActions
     public const string CarrierCreated = "carrier.created";
     public const string CarrierRenamed = "carrier.renamed";
     public const string CarrierDeleted = "carrier.deleted";
+    public const string CarrierFeedSaved = "carrier.feed_saved";
+    public const string CarrierFeedTested = "carrier.feed_tested";
+    public const string CarrierFeedSyncRequested = "carrier.feed_sync_requested";
     public const string AllocationCreated = "allocation.created";
     public const string AllocationReturned = "allocation.returned";
     public const string DepartmentCreated = "department.created";
@@ -31,6 +34,11 @@ public static class AuditActions
     public const string UserEnabled = "user.enabled";
     public const string UserMfaReset = "user.mfa_reset";
     public const string UserPasswordReset = "user.password_reset";
+    public const string UserUnlocked = "user.unlocked";
+    public const string UserProfileUpdated = "user.profile_updated";
+    public const string UserRecoveryCodesRegenerated = "user.recovery_codes_regenerated";
+    public const string UserSelfDeleted = "user.self_deleted";
+    public const string UserSignInEmailSent = "user.signin_email_sent";
     public const string AlertStatusChanged = "alert.status_changed";
     public const string ImportCommitted = "import.committed";
     public const string AccessRequestReviewed = "user.access_request_reviewed";

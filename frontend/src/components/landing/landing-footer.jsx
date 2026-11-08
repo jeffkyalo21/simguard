@@ -68,11 +68,6 @@ export function LandingFooter() {
               </p>
               <ul className="flex flex-col">
                 <li>
-                  <ScrollLink href="#contact" className={linkClass}>
-                    {text.footer.contactUs}
-                  </ScrollLink>
-                </li>
-                <li>
                   <RegisterButton className={linkClass}>{text.registerLabel}</RegisterButton>
                 </li>
                 <li>

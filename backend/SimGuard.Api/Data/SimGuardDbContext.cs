@@ -17,6 +17,7 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<Carrier> Carriers => Set<Carrier>();
+    public DbSet<CarrierSecret> CarrierSecrets => Set<CarrierSecret>();
     public DbSet<Sim> Sims => Set<Sim>();
     public DbSet<Allocation> Allocations => Set<Allocation>();
     public DbSet<Alert> Alerts => Set<Alert>();
@@ -121,6 +122,33 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
             // Names are unique ignoring case. EF Core cannot model an index
             // on lower(name), so the AddCarriers migration creates
             // idx_carriers_name_lower with raw SQL.
+
+            // Usage feed settings and cursor.
+            entity.Property(e => e.FeedBaseUrl).HasColumnName("feed_base_url").HasMaxLength(300);
+            entity.Property(e => e.FeedEnabled).HasColumnName("feed_enabled").HasDefaultValue(false);
+            entity.Property(e => e.FeedKeySet).HasColumnName("feed_key_set").HasDefaultValue(false);
+            entity.Property(e => e.FeedStartDate).HasColumnName("feed_start_date").HasColumnType("date");
+            entity.Property(e => e.LastSyncDate).HasColumnName("last_sync_date").HasColumnType("date");
+            entity.Property(e => e.LastSyncStatus).HasColumnName("last_sync_status").HasMaxLength(20);
+            entity.Property(e => e.LastSyncAt).HasColumnName("last_sync_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.LastSyncMessage).HasColumnName("last_sync_message").HasMaxLength(500);
+        });
+
+        // Protected (Data Protection) carrier feed API keys. Write-only.
+        modelBuilder.Entity<CarrierSecret>(entity =>
+        {
+            entity.ToTable("carrier_secrets");
+            entity.HasKey(e => e.CarrierId);
+            entity.Property(e => e.CarrierId).HasColumnName("carrier_id").ValueGeneratedNever();
+            entity.Property(e => e.ProtectedValue).HasColumnName("protected_value").IsRequired();
+            entity.Property(e => e.UpdatedAt)
+                .HasColumnName("updated_at")
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<Carrier>()
+                .WithOne()
+                .HasForeignKey<CarrierSecret>(e => e.CarrierId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // SIMs
@@ -715,6 +743,16 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
             entity.Property(e => e.Message)
                 .HasColumnName("message")
                 .HasMaxLength(500);
+
+            entity.Property(e => e.Source)
+                .HasColumnName("source")
+                .HasMaxLength(20)
+                .IsRequired()
+                .HasDefaultValue("csv");
+
+            entity.Property(e => e.CarrierName)
+                .HasColumnName("carrier_name")
+                .HasMaxLength(40);
 
             entity.HasIndex(e => e.StartedAt)
                 .HasDatabaseName("idx_import_runs_started_at");

@@ -205,12 +205,21 @@ export function mapBackendError({ status, problem, retryAfter, context = "sessio
 
 /**
  * Splits and checks the forwarded path. Rejects empty, "." and ".."
- * segments, and every auth endpoint except the auth event log (tokens
- * only ever travel through /api/auth/*).
+ * segments, and every auth endpoint except the few listed in
+ * FORWARDED_AUTH_ROUTES (tokens only ever travel through /api/auth/*).
  * @param {string[] | undefined} segments
  * @param {string} method
  * @returns {string | null} the backend path after /api/, or null
  */
+// The only auth routes the data forwarder passes on: none of them returns a
+// token. Profile name, new recovery codes and deleting the signed-in account.
+const FORWARDED_AUTH_ROUTES = [
+  "GET auth/events",
+  "PUT auth/me",
+  "POST auth/mfa/recovery-codes",
+  "POST auth/me/delete",
+];
+
 export function forwardablePath(segments, method) {
   if (!Array.isArray(segments) || segments.length === 0) return null;
 
@@ -221,8 +230,8 @@ export function forwardablePath(segments, method) {
   }
 
   if (segments[0].toLowerCase() === "auth") {
-    const isEvents = segments.length === 2 && segments[1].toLowerCase() === "events";
-    if (!isEvents || String(method).toUpperCase() !== "GET") return null;
+    const route = `${String(method).toUpperCase()} ${segments.join("/").toLowerCase()}`;
+    if (!FORWARDED_AUTH_ROUTES.includes(route)) return null;
   }
 
   return segments.map((segment) => encodeURIComponent(segment)).join("/");
