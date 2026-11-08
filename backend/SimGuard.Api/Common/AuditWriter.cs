@@ -33,6 +33,7 @@ public static class AuditActions
     public const string UserPasswordReset = "user.password_reset";
     public const string AlertStatusChanged = "alert.status_changed";
     public const string ImportCommitted = "import.committed";
+    public const string AccessRequestReviewed = "user.access_request_reviewed";
     public const string DemoSeeded = "dev.demo_seeded";
     public const string ScoringRunRequested = "scoring.run_requested";
     public const string ScoringRunFailed = "scoring.run_failed";

@@ -278,6 +278,8 @@ The roles split operator from organisation:
 | `POST /api/auth/mfa/enroll/start`, `POST /api/auth/mfa/enroll/confirm` | enrolment token | enrolment token | enrolment token | `MfaEnrollment` |
 | `GET /api/auth/me`, `POST /api/auth/change-password` | yes | yes | yes | `SignedIn` |
 | `GET /health` (database check only, for hosting) | anonymous | anonymous | anonymous | none |
+| `POST /api/access-requests` (landing page form, rate limited, see [access-requests.md](access-requests.md)) | anonymous | anonymous | anonymous | none |
+| `GET /api/access-requests`, `PATCH /api/access-requests/{id}/status` | yes | no | no | `AdminOnly` |
 | `GET /health/database` | yes | yes | yes | `AnyRole` |
 | `GET /api/departments`, `/{id}`, `/{id}/employees` | no | yes | yes | `OrgRead` |
 | `POST /api/departments`, `PUT/DELETE /api/departments/{id}` | no | yes | no | `OrgWrite` |

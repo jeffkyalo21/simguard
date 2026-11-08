@@ -105,6 +105,7 @@ api.MapUsageEndpoints();
 api.MapDashboardEndpoints();
 api.MapAuditLogEndpoints();
 api.MapImportEndpoints();
+api.MapAccessRequestEndpoints();
 api.MapTierRecommendationEndpoints();
 api.MapAdminScoringEndpoints();
 

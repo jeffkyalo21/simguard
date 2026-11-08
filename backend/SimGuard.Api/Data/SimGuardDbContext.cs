@@ -25,6 +25,7 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
     public DbSet<DailyUsage> DailyUsage => Set<DailyUsage>();
     public DbSet<AuthEvent> AuthEvents => Set<AuthEvent>();
     public DbSet<ImportRun> ImportRuns => Set<ImportRun>();
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -725,6 +726,36 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
                 .WithMany()
                 .HasForeignKey(e => e.UploadedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Requests for an account from the landing page.
+        modelBuilder.Entity<AccessRequest>(entity =>
+        {
+            entity.ToTable("access_requests", table =>
+            {
+                table.HasCheckConstraint("chk_access_requests_role", "role IN ('SecurityOfficer', 'Auditor')");
+                table.HasCheckConstraint("chk_access_requests_status", "status IN ('pending', 'approved', 'declined')");
+            });
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").UseSerialColumn();
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(256).IsRequired();
+            entity.Property(e => e.Organisation).HasColumnName("organisation").HasMaxLength(150).IsRequired();
+            entity.Property(e => e.Role).HasColumnName("role").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Note).HasColumnName("note").HasMaxLength(500);
+            entity.Property(e => e.Status).HasColumnName("status").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ReviewedByEmail).HasColumnName("reviewed_by_email").HasMaxLength(256);
+
+            entity.HasIndex(e => e.CreatedAt).HasDatabaseName("idx_access_requests_created_at");
+
+            // One pending request per email (stored in lower case).
+            entity.HasIndex("Email")
+                .HasDatabaseName("idx_access_requests_pending_email")
+                .IsUnique()
+                .HasFilter("status = 'pending'");
         });
 
         ConfigureScoring(modelBuilder);
