@@ -47,12 +47,14 @@ public record ImportRunResponse(
     int Unchanged,
     int ErrorCount,
     int WarningCount,
-    string? Message)
+    string? Message,
+    string Source = "csv",
+    string? CarrierName = null)
 {
     public static readonly Expression<Func<ImportRun, ImportRunResponse>> Projection =
         r => new ImportRunResponse(
             r.Id, r.Type, r.FileName, r.Sha256, r.UploadedByUserId, r.UploadedByEmail,
             r.StartedAt, r.FinishedAt, r.Status, r.SkipInvalid,
             r.TotalRows, r.ValidRows, r.InvalidRows, r.Inserted, r.Updated, r.Unchanged,
-            r.ErrorCount, r.WarningCount, r.Message);
+            r.ErrorCount, r.WarningCount, r.Message, r.Source, r.CarrierName);
 }

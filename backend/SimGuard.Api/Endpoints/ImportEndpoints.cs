@@ -52,6 +52,7 @@ public static class ImportEndpoints
 
     private static async Task<IResult> GetImportRuns(
         string? type,
+        string? source,
         int? page,
         int? pageSize,
         SimGuardDbContext db,
@@ -72,6 +73,14 @@ public static class ImportEndpoints
         }
 
         var query = db.ImportRuns.AsNoTracking();
+
+        // Optional, additive: csv or "carrier feed".
+        var sourceFilter = source?.Trim();
+
+        if (!string.IsNullOrEmpty(sourceFilter))
+        {
+            query = query.Where(r => r.Source == sourceFilter);
+        }
 
         if (!string.IsNullOrEmpty(typeFilter))
         {

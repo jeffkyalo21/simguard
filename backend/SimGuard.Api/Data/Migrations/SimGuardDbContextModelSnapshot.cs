@@ -677,6 +677,45 @@ namespace SimGuard.Api.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("NOW()");
 
+                    b.Property<string>("FeedBaseUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("feed_base_url");
+
+                    b.Property<bool>("FeedEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("feed_enabled");
+
+                    b.Property<bool>("FeedKeySet")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("feed_key_set");
+
+                    b.Property<DateOnly?>("FeedStartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("feed_start_date");
+
+                    b.Property<DateTime?>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sync_at");
+
+                    b.Property<DateOnly?>("LastSyncDate")
+                        .HasColumnType("date")
+                        .HasColumnName("last_sync_date");
+
+                    b.Property<string>("LastSyncMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_sync_message");
+
+                    b.Property<string>("LastSyncStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("last_sync_status");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -686,6 +725,26 @@ namespace SimGuard.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("carriers", (string)null);
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.CarrierSecret", b =>
+                {
+                    b.Property<int>("CarrierId")
+                        .HasColumnType("integer")
+                        .HasColumnName("carrier_id");
+
+                    b.Property<string>("ProtectedValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("protected_value");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("CarrierId");
+
+                    b.ToTable("carrier_secrets", (string)null);
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.DailyUsage", b =>
@@ -874,6 +933,11 @@ namespace SimGuard.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("CarrierName")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("carrier_name");
+
                     b.Property<int>("ErrorCount")
                         .HasColumnType("integer")
                         .HasColumnName("error_count");
@@ -909,6 +973,14 @@ namespace SimGuard.Api.Data.Migrations
                     b.Property<bool>("SkipInvalid")
                         .HasColumnType("boolean")
                         .HasColumnName("skip_invalid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("csv")
+                        .HasColumnName("source");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1671,6 +1743,15 @@ namespace SimGuard.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.CarrierSecret", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.Carrier", null)
+                        .WithOne()
+                        .HasForeignKey("SimGuard.Api.Models.CarrierSecret", "CarrierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.DailyUsage", b =>
