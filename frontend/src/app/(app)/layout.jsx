@@ -3,7 +3,6 @@ import { AuthProvider } from "@/components/auth/auth-provider";
 import { RouteGuard } from "@/components/auth/route-guard";
 import { PillNav } from "@/components/layout/pill-nav";
 import { getCurrentUser } from "@/lib/auth/server";
-import { MockStoreProvider } from "@/lib/mock/store";
 
 // Every page in this group needs a signed in user, checked against the
 // backend (/auth/me) on each request. The proxy already sent anyone without
@@ -26,19 +25,16 @@ export default async function AppLayout({ children }) {
   // transitions (see template.jsx). The glass theme comes from <body>.
   return (
     <AuthProvider user={{ email, name, role }}>
-      {/* TEMPORARY (#17): mock data store, replaced by the API in #20. */}
-      <MockStoreProvider>
-        <div className="flex min-h-dvh flex-col">
-          <PillNav />
-          <main
-            id="main"
-            tabIndex={-1}
-            className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-6 pt-10 pb-16"
-          >
-            <RouteGuard>{children}</RouteGuard>
-          </main>
-        </div>
-      </MockStoreProvider>
+      <div className="flex min-h-dvh flex-col">
+        <PillNav />
+        <main
+          id="main"
+          tabIndex={-1}
+          className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-6 px-6 pt-10 pb-16"
+        >
+          <RouteGuard>{children}</RouteGuard>
+        </main>
+      </div>
     </AuthProvider>
   );
 }

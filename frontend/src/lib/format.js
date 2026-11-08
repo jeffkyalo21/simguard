@@ -134,8 +134,3 @@ export function dayToUtc(day, edge) {
   const date = new Date(`${day}T${time}${NAIROBI_OFFSET}`);
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
-
-/** Today in Nairobi as "YYYY-MM-DD", for date inputs and their limits. */
-export function todayDay(now = new Date()) {
-  return now.toLocaleDateString("en-CA", { timeZone: TIME_ZONE });
-}

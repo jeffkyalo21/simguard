@@ -28,7 +28,7 @@ export function AuthProvider({ user: initialUser, children }) {
     return null;
   }, []);
 
-  // A full page load drops every client cache (router, mock store) with the
+  // A full page load drops every client cache (router, loaded data) with the
   // session, so the next person on this browser starts clean.
   const signOut = useCallback(async () => {
     await signOutRequest();
