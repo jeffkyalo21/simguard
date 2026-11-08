@@ -347,7 +347,6 @@ export const copy = {
       how: "How it works",
       results: "Results",
       faq: "FAQ",
-      contact: "Contact",
     },
     heroLead: "Control",
     heroAccent: "every SIM.",
@@ -529,12 +528,6 @@ export const copy = {
     },
     ctaTitle: "Take control of your SIMs.",
     ctaText: "Register and see it on your own SIMs.",
-    contact: {
-      title: "Talk to us",
-      intro: "Questions about your fleet? Send a note.",
-      submit: "Send message",
-      again: "Send another message",
-    },
     // The Register dialog and the /register page. An Admin reads the request
     // and creates the account.
     register: {
@@ -570,38 +563,12 @@ export const copy = {
         generic: "Could not send your request. Try again.",
       },
     },
-    // The contact form. Nothing is sent.
-    leadForm: {
-      name: "Name",
-      email: "Work email",
-      emailPlaceholder: "name@company.com",
-      company: "Company",
-      sims: "Number of SIMs",
-      simsPlaceholder: "Choose a range",
-      simsOptions: [
-        { value: "under-50", label: "Under 50" },
-        { value: "50-250", label: "50 to 250" },
-        { value: "250-1000", label: "250 to 1000" },
-        { value: "over-1000", label: "Over 1000" },
-      ],
-      message: "Message (optional)",
-      note: "Demo only. Nothing is sent.",
-      success: "Thanks. We will reply within two working days.",
-      errors: {
-        name: "Enter your name.",
-        emailRequired: "Enter your work email.",
-        emailInvalid: "Enter a valid email.",
-        company: "Enter your company.",
-        sims: "Choose the number of SIMs.",
-      },
-    },
     footer: {
       label: "Footer",
       tagline: "Spot SIM misuse before it costs you.",
       product: "Product",
       detects: "Detects",
       touch: "Get in touch",
-      contactUs: "Contact us",
       copyright: "© 2026 SimGuard",
     },
   },

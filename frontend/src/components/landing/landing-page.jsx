@@ -1,6 +1,5 @@
 import { GlassBackdrop } from "@/components/shared/glass-backdrop";
 import { Audience } from "@/components/landing/audience";
-import { Contact } from "@/components/landing/contact";
 import { CtaBand } from "@/components/landing/cta-band";
 import { RegisterDialogProvider } from "@/components/landing/register-dialog";
 import { Faq } from "@/components/landing/faq";
@@ -40,7 +39,6 @@ export function LandingPage() {
           <Audience />
           <Trust />
           <Faq />
-          <Contact />
           <CtaBand />
         </main>
         <LandingFooter />

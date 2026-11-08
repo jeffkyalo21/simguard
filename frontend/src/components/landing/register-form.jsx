@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CircleAlert, CircleCheck } from "lucide-react";
-import { SelectField, controlClass } from "@/components/landing/lead-form";
+import { SelectField, controlClass } from "@/components/landing/form-controls";
 import { BusyButton } from "@/components/shared/busy-button";
 import { FormField } from "@/components/shared/form-field";
 import { Input } from "@/components/ui/input";
