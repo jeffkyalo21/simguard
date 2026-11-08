@@ -364,7 +364,7 @@ try {
     Check 'Test connection with no key and no address in the request body is fine' 200 (Invoke-Api POST "$feedPath/test" $null $officer)
 
     # --- Catch up several days ---------------------------------------------------
-    $scoringBefore = (Invoke-Api GET '/api/admin/scoring/status' $null $admin).Data
+    $scoringBefore = (Invoke-Api GET '/api/admin/scoring/status' $null $officer).Data
     $maxRunBefore = [int](@($scoringBefore.runs | ForEach-Object { $_.id }) + 0 | Measure-Object -Maximum).Maximum
     Invoke-Mock '/admin/set-date' @{ date = $days[3] } | Out-Null
     $first = Sync-Now $carrierA.id
@@ -387,7 +387,7 @@ try {
     # Scoring is queued after the import (trigger import, new run).
     $queued = $null
     for ($i = 0; $i -lt 30 -and -not $queued; $i++) {
-        $status = (Invoke-Api GET '/api/admin/scoring/status' $null $admin).Data
+        $status = (Invoke-Api GET '/api/admin/scoring/status' $null $officer).Data
         $queued = @($status.runs | Where-Object { $_.trigger -eq 'import' -and $_.id -gt $maxRunBefore }) | Select-Object -First 1
         if (-not $queued) { Start-Sleep -Milliseconds 500 }
     }
