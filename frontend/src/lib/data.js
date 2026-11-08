@@ -469,10 +469,19 @@ export function dismissTierRecommendation(id) {
 
 /**
  * GET /admin/scoring/status: schedule, ML service health, totals and the
- * last runs. Totals only, never SIM-level data. Admin only.
+ * last runs. Totals only, never SIM-level data. Security Officer and Auditor.
  */
 export function getScoringStatus() {
   return api.get("/admin/scoring/status");
+}
+
+/**
+ * GET /admin/system-status: health of the API, database, ML service, email
+ * and scoring, user and request counts, and 14 days of sign-ins and scoring
+ * runs. No organisation data and no secrets. Admin only.
+ */
+export function getSystemStatus() {
+  return api.get("/admin/system-status");
 }
 
 /**

@@ -12,6 +12,7 @@ import { SectionCard } from "@/components/data/section-card";
 import { ListSkeleton } from "@/components/data/skeletons";
 import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
+import { ScoreRefresh } from "@/components/dashboard/score-refresh";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 import { ErrorState } from "@/components/shared/error-state";
 import { Button } from "@/components/ui/button";
@@ -138,7 +139,10 @@ export function DashboardView() {
         }
       />
 
-      {data?.asOf && <p className="-mt-2 text-sm text-muted-foreground">{text.asOf(formatDate(data.asOf))}</p>}
+      <div className="-mt-2 flex flex-wrap items-center gap-x-6 gap-y-2">
+        {data?.asOf && <p className="text-sm text-muted-foreground">{text.asOf(formatDate(data.asOf))}</p>}
+        <ScoreRefresh />
+      </div>
 
       <SetupChecklist />
 

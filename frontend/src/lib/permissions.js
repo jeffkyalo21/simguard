@@ -56,7 +56,7 @@ export const ACTIONS = Object.freeze({
   "settings.edit": [OFFICER],
   "auditLog.view": [AUDITOR, ADMIN],
   "users.manage": [ADMIN],
-  "scoring.run": [ADMIN],
+  "scoring.run": [OFFICER],
 });
 
 /** True when `role` may open the page with this key. */

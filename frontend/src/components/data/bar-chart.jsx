@@ -13,9 +13,22 @@ import {
 
 const axisTick = { fill: "var(--chart-axis)", fontSize: 12 };
 
-function ChartTooltip({ active, payload, label, formatLabel, formatValue }) {
+function ChartTooltip({ active, payload, label, formatLabel, formatValue, series }) {
   // A day without a value (for example a future day of the cycle) has no tooltip.
   if (!active || !payload?.length || payload[0].value == null) return null;
+
+  if (series) {
+    return (
+      <div className="rounded-lg border border-glass-border bg-popover px-3 py-2 text-xs shadow-md">
+        <p className="text-muted-foreground">{formatLabel(label)}</p>
+        {series.map((item) => (
+          <p key={item.key} className="font-medium tabular-nums">
+            {item.label}: {formatValue(payload.find((entry) => entry.dataKey === item.key)?.value ?? 0)}
+          </p>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-glass-border bg-popover px-3 py-2 text-xs shadow-md">
@@ -34,7 +47,11 @@ function ChartTooltip({ active, payload, label, formatLabel, formatValue }) {
  *   xTicks?: (string | number)[], formatX?: (v: any) => string,
  *   formatY?: (v: number) => string, yDomain?: [number | string, number | string],
  *   limit?: { y: number, label: string }, limits?: { y: number, label: string }[],
- *   height?: number }} props
+ *   allowDecimals?: boolean, series?: { key: string, label: string, fill: string }[], height?: number }} props
+ *
+ * With `series` the chart draws one bar per series side by side for each row
+ * (instead of `yKey`), with a legend that names each series, so colour is not
+ * the only cue.
  */
 export function BarChart({
   data,
@@ -45,11 +62,24 @@ export function BarChart({
   formatX = String,
   formatY = String,
   yDomain = [0, "auto"],
+  allowDecimals = true,
   limit,
   limits = [],
+  series,
   height = 220,
 }) {
   return (
+    <div className="flex w-full flex-col gap-2">
+      {series && (
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {series.map((item) => (
+            <li key={item.key} className="flex items-center gap-2">
+              <span className="size-3 shrink-0 rounded-sm border border-glass-border" style={{ background: item.fill }} aria-hidden="true" />
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      )}
     <div role="img" aria-label={label} className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         {/* The wrapper is the labelled image, so the svg is not a tab stop. */}
@@ -72,6 +102,7 @@ export function BarChart({
           />
           <YAxis
             domain={yDomain}
+            allowDecimals={allowDecimals}
             tickFormatter={formatY}
             tick={axisTick}
             axisLine={false}
@@ -81,15 +112,28 @@ export function BarChart({
           <Tooltip
             cursor={{ fill: "var(--chart-grid)" }}
             isAnimationActive={false}
-            content={<ChartTooltip formatLabel={formatX} formatValue={formatY} />}
+            content={<ChartTooltip formatLabel={formatX} formatValue={formatY} series={series} />}
           />
-          <Bar
-            dataKey={yKey}
-            fill="var(--foreground)"
-            radius={[2, 2, 0, 0]}
-            maxBarSize={28}
-            isAnimationActive={false}
-          />
+          {series ? (
+            series.map((item) => (
+              <Bar
+                key={item.key}
+                dataKey={item.key}
+                fill={item.fill}
+                radius={[2, 2, 0, 0]}
+                maxBarSize={16}
+                isAnimationActive={false}
+              />
+            ))
+          ) : (
+            <Bar
+              dataKey={yKey}
+              fill="var(--foreground)"
+              radius={[2, 2, 0, 0]}
+              maxBarSize={28}
+              isAnimationActive={false}
+            />
+          )}
           {limit && (
             <ReferenceLine
               y={limit.y}
@@ -109,6 +153,7 @@ export function BarChart({
           ))}
         </RechartsBarChart>
       </ResponsiveContainer>
+    </div>
     </div>
   );
 }
