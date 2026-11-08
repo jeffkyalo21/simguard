@@ -432,21 +432,62 @@ export function listAccessRequests({ status, page, pageSize } = {}) {
 
 /**
  * PATCH /access-requests/{id}/status to approved or declined. 409 when
- * already reviewed. With approved, `temporaryPassword` makes the API email
- * the sign-in details. The reply has `emailSent`: true or false when an email
- * was due, null when not.
+ * already reviewed. Approving creates the account and the API emails a
+ * generated password; the browser never sees it. The reply has `emailSent`
+ * (true or false when an email was due, null when not) and, for approved,
+ * `accountCreated` (false when an account with that email already existed).
  */
-export function reviewAccessRequest(id, status, temporaryPassword) {
-  return write(api.patch(`/access-requests/${id}/status`, { status, ...(temporaryPassword && { temporaryPassword }) }));
+export function reviewAccessRequest(id, status) {
+  return write(api.patch(`/access-requests/${id}/status`, { status }));
+}
+
+/* ------------------------------------------------------- Users (Admin) */
+
+/** GET /users, by id. Admin only. */
+export function listUsers({ page, pageSize } = {}) {
+  return api.get("/users", { query: { page, pageSize } });
 }
 
 /**
- * POST /users. The account starts with the temporary password and must
- * change it at first sign-in. 409 when the email is taken.
- * @param {{ email: string, name: string, role: string, temporaryPassword: string }} body
+ * POST /users: invite a person. The API generates a password and emails it;
+ * the reply has `emailSent`. 409 when the email is taken.
+ * @param {{ name: string, email: string, role: string }} body
  */
-export function createUser(body) {
-  return write(api.post("/users", body));
+export function inviteUser({ name, email, role }) {
+  return write(api.post("/users", { name, email, role }));
+}
+
+/** PUT /users/{id}/role. 409 for your own account or the last active Admin. */
+export function changeUserRole(id, role) {
+  return write(api.put(`/users/${id}/role`, { role }));
+}
+
+/** POST /users/{id}/disable. 409 for your own account or the last active Admin. */
+export function disableUser(id) {
+  return write(api.post(`/users/${id}/disable`));
+}
+
+/** POST /users/{id}/enable. */
+export function enableUser(id) {
+  return write(api.post(`/users/${id}/enable`));
+}
+
+/** POST /users/{id}/unlock: clears a lockout, the password stays. */
+export function unlockUser(id) {
+  return write(api.post(`/users/${id}/unlock`));
+}
+
+/** POST /users/{id}/mfa/reset: the person enrols again at the next sign-in. */
+export function resetUserMfa(id) {
+  return write(api.post(`/users/${id}/mfa/reset`));
+}
+
+/**
+ * POST /users/{id}/signin-email: new generated password, emailed to the
+ * person. The reply has `emailSent`. 409 when the account is disabled.
+ */
+export function resendSignInEmail(id) {
+  return write(api.post(`/users/${id}/signin-email`));
 }
 
 /* --------------------------------------------------------------- Imports */

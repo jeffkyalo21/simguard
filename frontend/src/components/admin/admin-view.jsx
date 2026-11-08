@@ -9,6 +9,7 @@ import { DataTable } from "@/components/data/data-table";
 import { SectionCard } from "@/components/data/section-card";
 import { ListSkeleton } from "@/components/data/skeletons";
 import { RequestsPanel } from "@/components/admin/requests-panel";
+import { UsersPanel } from "@/components/admin/users-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { DisabledReason } from "@/components/shared/disabled-reason";
 import { Button } from "@/components/ui/button";
@@ -159,6 +160,9 @@ export function AdminView() {
         </TabsContent>
         <TabsContent value="requests" className="flex flex-col gap-6">
           <RequestsPanel />
+        </TabsContent>
+        <TabsContent value="users" className="flex flex-col gap-6">
+          <UsersPanel />
         </TabsContent>
       </Tabs>
     </>
