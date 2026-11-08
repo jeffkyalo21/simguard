@@ -110,6 +110,16 @@ public static class CarrierFeedEndpoints
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
+        // Choosing a different start date at or before the last synced day
+        // makes the next sync pull again from that day (a backfill or re-pull;
+        // rows are upserted, so nothing is duplicated). Before the first sync
+        // the start date alone decides where to begin.
+        if (startDate is not null && startDate != carrier.FeedStartDate
+            && carrier.LastSyncDate is not null && startDate <= carrier.LastSyncDate)
+        {
+            carrier.LastSyncDate = startDate.Value.AddDays(-1);
+        }
+
         carrier.FeedBaseUrl = baseUrl;
         carrier.FeedEnabled = enabled;
         carrier.FeedStartDate = startDate;
@@ -258,6 +268,7 @@ public static class CarrierFeedEndpoints
         baseUrl = carrier.FeedBaseUrl,
         enabled = carrier.FeedEnabled,
         startDate = carrier.FeedStartDate?.ToString("yyyy-MM-dd"),
+        lastSyncDate = carrier.LastSyncDate?.ToString("yyyy-MM-dd"),
         keySet = carrier.FeedKeySet,
         keyChanged
     };
