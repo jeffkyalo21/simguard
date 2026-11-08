@@ -257,6 +257,45 @@ Event types: `login_succeeded`, `login_failed`, `lockout`, `mfa_failed`,
 `user_enabled`, `user_unlocked`. `userId` is null when the email did not match an account.
 Passwords, tokens and codes are never stored.
 
+### GET /api/admin/system-status
+
+Policy `AdminOnly`. Read only. Counts and flags only: no organisation data and
+never a secret, key, token or connection string. The Admin's System health
+screen reads it every 30 seconds.
+
+```json
+{
+  "generatedAt": "2026-11-08T10:00:00Z",
+  "api": { "up": true, "version": "1.0.0", "startedAt": "...", "uptimeSeconds": 3600 },
+  "database": { "ok": true, "responseMs": 4 },
+  "mlService": { "configured": true, "reachable": true, "modelVersion": "..." },
+  "scoring": {
+    "enabled": true,
+    "lastRun": { "id": 12, "trigger": "schedule", "status": "succeeded", "requestedAt": "...",
+                 "startedAt": "...", "finishedAt": "...", "durationSeconds": 41.5, "failureReason": null },
+    "nextScheduledRunAt": "..."
+  },
+  "email": { "configured": true },
+  "usersByRole": [ { "role": "Admin", "active": 1, "disabled": 0 } ],
+  "accessRequests": [ { "status": "pending", "count": 2 } ],
+  "signInsPerDay": [ { "date": "2026-10-26", "succeeded": 5, "failed": 1 } ],
+  "scoringRunsPerDay": [ { "date": "2026-10-26", "succeeded": 1, "failed": 0 } ]
+}
+```
+
+- `email.configured` is true or false only. The key is never returned.
+- `lastRun` is the latest finished run (queued and running runs are skipped);
+  `failureReason` is its error summary cut to 300 characters.
+- `usersByRole` lists every role. `accessRequests` lists every status.
+- The two per-day lists have the last 14 UTC days, oldest first, zero filled.
+  Sign-ins count the `login_succeeded` and `login_failed` auth events. Scoring
+  runs are counted on the day they were requested; `failed` includes `partial`
+  runs.
+- If the database is down the call still answers 200 with `database.ok` false
+  and empty lists. A down ML service shows `reachable` false.
+
+Errors: 401, 403.
+
 ### User administration (Admin only)
 
 `UserResponse`, returned by every endpoint below:
@@ -381,7 +420,9 @@ The roles split operator from organisation:
 | `GET /api/usage/analytics`, `GET /api/tiers` | no | yes | yes | `OrgRead` |
 | `GET /api/tier-recommendations`, `/settings`, `/status` | no | yes | yes | `OrgRead` |
 | `PUT /api/tier-recommendations/settings`, `POST /api/tier-recommendations/run`, `POST /api/tier-recommendations/{id}/dismiss` | no | yes | no | `OrgWrite` |
-| `POST /api/admin/scoring/run`, `GET /api/admin/scoring/status` (totals only) | yes | no | no | `AdminOnly` |
+| `POST /api/admin/scoring/run` (start a run) | no | yes | no | `OrgWrite` |
+| `GET /api/admin/scoring/status` (totals only) | no | yes | yes | `OrgRead` |
+| `GET /api/admin/system-status` | yes | no | no | `AdminOnly` |
 | `/api/users/*` (list, get, create, role, disable, enable, MFA reset, password reset) | yes | no | no | `AdminOnly` |
 | `GET /api/audit-logs` | `system` rows only | no | all rows | `AuditRead` |
 | `GET /api/auth/events` | yes | no | yes | `AuditRead` |

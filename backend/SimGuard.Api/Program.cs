@@ -139,6 +139,7 @@ api.MapImportEndpoints();
 api.MapAccessRequestEndpoints();
 api.MapTierRecommendationEndpoints();
 api.MapAdminScoringEndpoints();
+api.MapSystemStatusEndpoints();
 
 // Demo data tools exist only in Development; elsewhere the routes are not
 // mapped at all, so they return 404.

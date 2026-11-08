@@ -2321,10 +2321,10 @@
       ]
     },
     {
-      "name": "Scoring (Admin)",
+      "name": "Scoring and system health",
       "item": [
         {
-          "name": "Run scoring now",
+          "name": "Run scoring now (Security Officer)",
           "request": {
             "method": "POST",
             "header": [],
@@ -2343,7 +2343,7 @@
           }
         },
         {
-          "name": "Scoring status",
+          "name": "Scoring status (Security Officer, Auditor)",
           "request": {
             "method": "GET",
             "header": [],
@@ -2360,8 +2360,27 @@
               ]
             }
           }
+        },
+        {
+          "name": "System status (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/system-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "system-status"
+              ]
+            }
+          }
         }
-      ]
+      ],
+      "description": "Run now is for the Security Officer only. Scoring status is for the Security Officer and Auditor. System status is for the Admin only."
     },
     {
       "name": "Dev only (Development)",

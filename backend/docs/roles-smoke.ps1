@@ -89,6 +89,7 @@ function Invoke-Api {
     [pscustomobject]@{
         Status = [int]$response.StatusCode
         Data   = $data
+        Text   = $text
     }
 }
 
@@ -273,7 +274,10 @@ $matrix = @(
     @{ Group = 'users';         Expect = @{ Admin = 200; Officer = 403; Auditor = 403 } },
     @{ Group = 'audit logs';    Expect = @{ Admin = 200; Officer = 403; Auditor = 200 } },
     @{ Group = 'auth events';   Expect = @{ Admin = 200; Officer = 403; Auditor = 200 } },
-    @{ Group = 'health';        Expect = @{ Admin = 200; Officer = 200; Auditor = 200 } }
+    @{ Group = 'health';        Expect = @{ Admin = 200; Officer = 200; Auditor = 200 } },
+    @{ Group = 'scoring status'; Expect = @{ Admin = 403; Officer = 200; Auditor = 200 } },
+    @{ Group = 'scoring run';   Expect = @{ Admin = 403; Officer = 202; Auditor = 403 } },
+    @{ Group = 'system status'; Expect = @{ Admin = 200; Officer = 403; Auditor = 403 } }
 )
 
 $createdDepartments = @()
@@ -293,6 +297,9 @@ foreach ($row in $matrix) {
             'audit logs'    { $label = 'GET /api/audit-logs'; $r = Invoke-Api GET '/api/audit-logs?pageSize=1' $null $token }
             'auth events'   { $label = 'GET /api/auth/events'; $r = Invoke-Api GET '/api/auth/events?pageSize=1' $null $token }
             'health'        { $label = 'GET /health/database'; $r = Invoke-Api GET '/health/database' $null $token }
+            'scoring status' { $label = 'GET /api/admin/scoring/status'; $r = Invoke-Api GET '/api/admin/scoring/status' $null $token }
+            'scoring run'   { $label = 'POST /api/admin/scoring/run'; $r = Invoke-Api POST '/api/admin/scoring/run' $null $token }
+            'system status' { $label = 'GET /api/admin/system-status'; $r = Invoke-Api GET '/api/admin/system-status' $null $token }
         }
         Check "[$($row.Group)] $role $label" $row.Expect[$role] $r
     }
@@ -324,6 +331,52 @@ $auditorAll = Invoke-Api GET '/api/audit-logs?pageSize=100' $null $auditor
 $categories = @($auditorAll.Data.items | ForEach-Object { $_.category } | Sort-Object -Unique)
 Check-True 'Auditor sees system and organisation rows' (($categories -contains 'system') -and ($categories -contains 'organisation')) "categories=$($categories -join ',')"
 Check-True 'Auditor sees more rows than Admin' ($auditorAll.Data.total -gt $adminAll.Data.total) "auditor=$($auditorAll.Data.total) admin=$($adminAll.Data.total)"
+
+# --- Scoring run: audited with the actor role ----------------------------------
+Check 'No token POST /api/admin/scoring/run' 401 (Invoke-Api POST '/api/admin/scoring/run')
+Check 'No token GET /api/admin/system-status' 401 (Invoke-Api GET '/api/admin/system-status')
+$runAudit = Invoke-Api GET '/api/audit-logs?action=scoring.run_requested&pageSize=20' $null $auditor
+$officerRuns = @($runAudit.Data.items | Where-Object { $_.actorEmail -eq $officerAccount.Email })
+Check-True 'Scoring run request audited with the Officer email and role' (($officerRuns.Count -gt 0) -and (@($officerRuns | Where-Object { $_.actorRole -ne 'SecurityOfficer' }).Count -eq 0)) "rows=$($officerRuns.Count)"
+$again = Invoke-Api POST '/api/admin/scoring/run' $null $officer
+Check 'Second run request while one is queued or running' 202 $again "merged=$($again.Data.merged)"
+
+# --- System status (Admin only) ----------------------------------------------
+$sys = Invoke-Api GET '/api/admin/system-status' $null $admin
+Check 'Admin GET /api/admin/system-status' 200 $sys
+$d = $sys.Data
+Check-True 'API up with a version and an uptime' (($d.api.up -eq $true) -and $d.api.version -and ($d.api.uptimeSeconds -ge 0)) "version=$($d.api.version)"
+Check-True 'Database ok with a response time' (($d.database.ok -eq $true) -and ($d.database.responseMs -ge 0)) "ms=$($d.database.responseMs)"
+Check-True 'ML service and email fields are booleans' (($d.mlService.reachable -is [bool]) -and ($d.email.configured -is [bool])) "ml=$($d.mlService.reachable) email=$($d.email.configured)"
+Check-True '14 days of sign-ins and of scoring runs' ((@($d.signInsPerDay).Count -eq 14) -and (@($d.scoringRunsPerDay).Count -eq 14))
+Check-True 'Response has no secret, key, token or connection string' ($sys.Text -notmatch '(?i)password|secret|connectionstring|host=|username=|apikey|api_key|bearer|xkeysib|jwt|token|eyJ') 'checked the response text'
+Check-True 'Response has no organisation data (no SIM, phone, ICCID or employee)' ($sys.Text -notmatch '(?i)iccid|phoneNumber|simId|employee') 'checked the response text'
+
+# Counts match what the other endpoints say.
+foreach ($roleName in @('Admin', 'SecurityOfficer', 'Auditor')) {
+    $list = Invoke-Api GET "/api/users?role=$roleName&pageSize=100" $null $admin
+    $row = @($d.usersByRole | Where-Object { $_.role -eq $roleName })[0]
+    $active = @($list.Data.items | Where-Object { -not $_.isDisabled }).Count
+    $disabled = @($list.Data.items | Where-Object { $_.isDisabled }).Count
+    Check-True "Users count for $roleName matches GET /api/users" (($list.Data.total -le 100) -and ($row.active -eq $active) -and ($row.disabled -eq $disabled)) "status active=$($row.active) disabled=$($row.disabled); list active=$active disabled=$disabled"
+}
+foreach ($statusName in @('pending', 'approved', 'declined')) {
+    $list = Invoke-Api GET "/api/access-requests?status=$statusName&pageSize=1" $null $admin
+    $row = @($d.accessRequests | Where-Object { $_.status -eq $statusName })[0]
+    Check-True "Access request count for $statusName matches the list" ($row.count -eq $list.Data.total) "status=$($row.count) list=$($list.Data.total)"
+}
+$from = "$($d.signInsPerDay[0].date)T00:00:00Z"
+$okEvents = Invoke-Api GET "/api/auth/events?type=login_succeeded&from=$from&pageSize=1" $null $admin
+$failEvents = Invoke-Api GET "/api/auth/events?type=login_failed&from=$from&pageSize=1" $null $admin
+$sumOk = ($d.signInsPerDay | Measure-Object -Property succeeded -Sum).Sum
+$sumFail = ($d.signInsPerDay | Measure-Object -Property failed -Sum).Sum
+Check-True 'Sign-in totals match the auth events' (($sumOk -eq $okEvents.Data.total) -and ($sumFail -eq $failEvents.Data.total)) "status ok=$sumOk failed=$sumFail; events ok=$($okEvents.Data.total) failed=$($failEvents.Data.total)"
+$runs = Invoke-Api GET '/api/admin/scoring/status' $null $officer
+$sinceDay = [datetime]::Parse($d.scoringRunsPerDay[0].date).ToUniversalTime()
+$finished = @($runs.Data.runs | Where-Object { $_.status -in @('succeeded', 'failed', 'partial') -and [datetime]$_.requestedAt -ge $sinceDay })
+$sumRunsOk = ($d.scoringRunsPerDay | Measure-Object -Property succeeded -Sum).Sum
+$sumRunsFail = ($d.scoringRunsPerDay | Measure-Object -Property failed -Sum).Sum
+Check-True 'Scoring run totals match the run list' ((@($runs.Data.runs).Count -ge 10) -or (($sumRunsOk + $sumRunsFail) -eq $finished.Count)) "status=$($sumRunsOk + $sumRunsFail) list=$($finished.Count)"
 
 # --- Cleanup -----------------------------------------------------------------
 Check 'Officer deletes the test SIM' 204 (Invoke-Api DELETE "/api/sims/$simId" $null $officer)
