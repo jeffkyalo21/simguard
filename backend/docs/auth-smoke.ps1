@@ -364,6 +364,32 @@ Check 'Admin resets password (clears lockout)' 200 (Invoke-Api POST "/api/users/
 $unlocked = Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = $resetPassword }
 Check 'Login after password reset' 200 $unlocked "status=$($unlocked.Data.status)"
 
+# Unlock: lock the account again, then clear the lockout without touching the password.
+for ($i = 1; $i -le 5; $i++) {
+    Check "Relock wrong password $i" 401 (Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = "wrong-again-$i-xyz" })
+}
+Check 'Locked account refuses the right password' 401 (Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = $resetPassword })
+$unlock = Invoke-Api POST "/api/users/$($lockUser.Data.id)/unlock" $null $admin
+Check 'Admin unlocks the account' 200 $unlock
+Check-True 'Unlock clears lockedOutUntil' ($null -eq $unlock.Data.lockedOutUntil)
+Check 'Login after unlock (same password)' 200 (Invoke-Api POST '/api/auth/login' @{ email = $lockoutEmail; password = $resetPassword })
+Check 'Unlock of an unlocked account is fine' 200 (Invoke-Api POST "/api/users/$($lockUser.Data.id)/unlock" $null $admin)
+Check 'Unlock of an unknown user' 404 (Invoke-Api POST '/api/users/2147483000/unlock' $null $admin)
+
+# Invite without a password: the API generates one and emails it. No Brevo key
+# here, so emailSent is false; the account exists and must change its password.
+$inviteEmail = "invite-$runId@simguard.local"
+$invite = Invoke-Api POST '/api/users' @{ email = $inviteEmail; name = 'Smoke Invite'; role = 'Auditor' } $admin
+Check 'Invite without a password' 201 $invite
+Check-True 'Invite reports emailSent false, mustChangePassword true' (($invite.Data.emailSent -eq $false) -and ($invite.Data.mustChangePassword -eq $true)) "emailSent=$($invite.Data.emailSent)"
+Check-True 'Invite response carries no password' ($invite.Text -notmatch '(?i)password"\s*:\s*"') $invite.Text
+$resend = Invoke-Api POST "/api/users/$($invite.Data.id)/signin-email" $null $admin
+Check 'Resend sign-in email' 200 $resend
+Check-True 'Resend reports emailSent false and no password' (($resend.Data.emailSent -eq $false) -and ($resend.Text -notmatch '(?i)password"\s*:\s*"')) "emailSent=$($resend.Data.emailSent)"
+Check 'Resend for an unknown user' 404 (Invoke-Api POST '/api/users/2147483000/signin-email' $null $admin)
+Check 'Disable the invited user' 200 (Invoke-Api POST "/api/users/$($invite.Data.id)/disable" $null $admin)
+Check 'Resend for a disabled user' 409 (Invoke-Api POST "/api/users/$($invite.Data.id)/signin-email" $null $admin)
+
 $events = Invoke-Api GET '/api/auth/events?pageSize=100' $null $admin
 $types = @($events.Data.items | ForEach-Object { $_.eventType } | Sort-Object -Unique)
 Check 'GET /api/auth/events as Admin' 200 $events "types: $($types -join ',')"

@@ -31,6 +31,8 @@ public static class AuditActions
     public const string UserEnabled = "user.enabled";
     public const string UserMfaReset = "user.mfa_reset";
     public const string UserPasswordReset = "user.password_reset";
+    public const string UserUnlocked = "user.unlocked";
+    public const string UserSignInEmailSent = "user.signin_email_sent";
     public const string AlertStatusChanged = "alert.status_changed";
     public const string ImportCommitted = "import.committed";
     public const string AccessRequestReviewed = "user.access_request_reviewed";

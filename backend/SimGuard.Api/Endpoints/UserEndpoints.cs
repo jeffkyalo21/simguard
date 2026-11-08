@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Options;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
 using SimGuard.Api.Dtos;
+using SimGuard.Api.Email;
 using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Endpoints;
@@ -66,6 +68,19 @@ public static class UserEndpoints
             .Produces<UserResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapPost("/{id:int}/unlock", UnlockUser)
+            .WithName("UnlockUser")
+            .Produces<UserResponse>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        // Sets a new generated password and emails it. The Admin never sees it.
+        group.MapPost("/{id:int}/signin-email", ResendSignInEmail)
+            .WithName("ResendUserSignInEmail")
+            .Produces<UserResponse>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        // Development only: sets a password the caller chose, for test scripts.
         group.MapPost("/{id:int}/password/reset", ResetPassword)
             .WithName("ResetUserPassword")
             .Produces<UserResponse>()
@@ -133,12 +148,17 @@ public static class UserEndpoints
             : TypedResults.Ok(user);
     }
 
+    // Invites a person: the API generates a password and emails it. Only in
+    // Development can the caller choose the password (test scripts).
     private static async Task<IResult> CreateUser(
         CreateUserRequest request,
         SimGuardDbContext db,
         UserManager<AppUser> userManager,
         AuthEventLogger events,
         AuditWriter audit,
+        IWebHostEnvironment environment,
+        IEmailSender emailSender,
+        IOptions<BrevoOptions> emailOptions,
         CancellationToken cancellationToken)
     {
         var errors = new ValidationErrors();
@@ -151,15 +171,15 @@ public static class UserEndpoints
             errors.Add("employeeId", "employeeId must be a positive integer.");
         }
 
-        if (string.IsNullOrEmpty(request.TemporaryPassword))
-        {
-            errors.Add("temporaryPassword", "temporaryPassword is required.");
-        }
+        RejectManualPassword(request.TemporaryPassword, environment, errors);
 
         if (errors.HasErrors)
         {
             return errors.ToProblem();
         }
+
+        var issuedByApi = string.IsNullOrEmpty(request.TemporaryPassword);
+        var password = issuedByApi ? SignInCredentials.GeneratePassword() : request.TemporaryPassword!;
 
         if (request.EmployeeId is { } employeeId)
         {
@@ -193,7 +213,7 @@ public static class UserEndpoints
 
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
-            var created = await userManager.CreateAsync(user, request.TemporaryPassword!);
+            var created = await userManager.CreateAsync(user, password);
 
             if (!created.Succeeded)
             {
@@ -219,9 +239,19 @@ public static class UserEndpoints
 
         await events.LogAsync(AuthEventTypes.UserCreated, true, user.Id, email, cancellationToken);
 
+        // The account is saved first; a failed email never undoes it. The
+        // Admin can use "resend sign-in email" when emailSent is false.
+        bool? emailSent = null;
+
+        if (issuedByApi)
+        {
+            emailSent = await SignInCredentials.SendAsync(
+                emailSender, emailOptions.Value, name, email, password, cancellationToken);
+        }
+
         return TypedResults.Created(
             $"/api/users/{user.Id}",
-            await FindUserResponseAsync(db, user.Id, cancellationToken));
+            (await FindUserResponseAsync(db, user.Id, cancellationToken))! with { EmailSent = emailSent });
     }
 
     private static async Task<IResult> ChangeRole(
@@ -425,8 +455,103 @@ public static class UserEndpoints
         return TypedResults.Ok(await FindUserResponseAsync(db, id, cancellationToken));
     }
 
-    // Sets a temporary password, clears any lockout and forces a password
-    // change at the next sign-in.
+    // Clears any lockout, so the person can try to sign in again.
+    private static async Task<IResult> UnlockUser(
+        int id,
+        SimGuardDbContext db,
+        UserManager<AppUser> userManager,
+        AuthEventLogger events,
+        AuditWriter audit,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+
+        if (user is null)
+        {
+            return ApiProblems.NotFound($"User {id} was not found.");
+        }
+
+        if (user.LockoutEnd > DateTimeOffset.UtcNow || user.AccessFailedCount > 0)
+        {
+            await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+            {
+                EnsureSucceeded(await userManager.SetLockoutEndDateAsync(user, null));
+                EnsureSucceeded(await userManager.ResetAccessFailedCountAsync(user));
+                await audit.WriteAsync(
+                    AuditActions.UserUnlocked,
+                    null,
+                    null,
+                    new { id = user.Id, email = user.Email },
+                    cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            await events.LogAsync(AuthEventTypes.UserUnlocked, true, user.Id, user.Email, cancellationToken);
+        }
+
+        return TypedResults.Ok(await FindUserResponseAsync(db, id, cancellationToken));
+    }
+
+    // Replaces the password with a new generated one and emails it. Works for
+    // an account that never signed in and for one whose owner is locked out.
+    // The Admin never sees the password. The person must change it at the next
+    // sign-in, and any lockout is cleared.
+    private static async Task<IResult> ResendSignInEmail(
+        int id,
+        SimGuardDbContext db,
+        UserManager<AppUser> userManager,
+        AuthEventLogger events,
+        AuditWriter audit,
+        IEmailSender emailSender,
+        IOptions<BrevoOptions> emailOptions,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+
+        if (user is null)
+        {
+            return ApiProblems.NotFound($"User {id} was not found.");
+        }
+
+        if (user.IsDisabled)
+        {
+            return ApiProblems.Conflict("This account is disabled. Enable it before sending sign-in details.");
+        }
+
+        var password = SignInCredentials.GeneratePassword();
+
+        await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+        {
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+            EnsureSucceeded(await userManager.ResetPasswordAsync(user, resetToken, password));
+
+            user.MustChangePassword = true;
+            EnsureSucceeded(await userManager.UpdateAsync(user));
+            EnsureSucceeded(await userManager.SetLockoutEndDateAsync(user, null));
+            EnsureSucceeded(await userManager.ResetAccessFailedCountAsync(user));
+
+            // The password itself is never recorded.
+            await audit.WriteAsync(
+                AuditActions.UserSignInEmailSent,
+                null,
+                null,
+                new { id = user.Id, email = user.Email, mustChangePassword = true },
+                cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        await events.LogAsync(AuthEventTypes.PasswordReset, true, user.Id, user.Email, cancellationToken);
+
+        var emailSent = await SignInCredentials.SendAsync(
+            emailSender, emailOptions.Value, user.Name, user.Email!, password, cancellationToken);
+
+        return TypedResults.Ok(
+            (await FindUserResponseAsync(db, id, cancellationToken))! with { EmailSent = emailSent });
+    }
+
+    // Development only. Sets a temporary password the caller chose, clears any
+    // lockout and forces a password change at the next sign-in.
     private static async Task<IResult> ResetPassword(
         int id,
         ResetPasswordRequest request,
@@ -434,12 +559,20 @@ public static class UserEndpoints
         UserManager<AppUser> userManager,
         AuthEventLogger events,
         AuditWriter audit,
+        IWebHostEnvironment environment,
         CancellationToken cancellationToken)
     {
+        var errors = new ValidationErrors();
+
         if (string.IsNullOrEmpty(request.TemporaryPassword))
         {
-            var errors = new ValidationErrors();
             errors.Add("temporaryPassword", "temporaryPassword is required.");
+        }
+
+        RejectManualPassword(request.TemporaryPassword, environment, errors);
+
+        if (errors.HasErrors)
+        {
             return errors.ToProblem();
         }
 
@@ -453,7 +586,7 @@ public static class UserEndpoints
         await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
         {
             var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
-            var reset = await userManager.ResetPasswordAsync(user, resetToken, request.TemporaryPassword);
+            var reset = await userManager.ResetPasswordAsync(user, resetToken, request.TemporaryPassword!);
 
             if (!reset.Succeeded)
             {
@@ -508,7 +641,19 @@ public static class UserEndpoints
         return normalized;
     }
 
-    private static IResult IdentityProblem(IdentityResult result, string passwordField)
+    // An Admin must not choose another person's password. Development keeps
+    // it so the smoke scripts can create accounts they can sign in to.
+    internal static void RejectManualPassword(string? password, IWebHostEnvironment environment, ValidationErrors errors)
+    {
+        if (!string.IsNullOrEmpty(password) && !environment.IsDevelopment())
+        {
+            errors.Add(
+                "temporaryPassword",
+                "A password cannot be set by hand. SimGuard generates it and emails it to the person.");
+        }
+    }
+
+    internal static IResult IdentityProblem(IdentityResult result, string passwordField)
     {
         if (result.Errors.Any(e => e.Code is nameof(IdentityErrorDescriber.DuplicateEmail)
                 or nameof(IdentityErrorDescriber.DuplicateUserName)))

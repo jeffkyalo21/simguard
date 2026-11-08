@@ -1,8 +1,8 @@
 namespace SimGuard.Api.Models;
 
 // A visitor's request for an account, sent from the landing page. An Admin
-// reviews it and creates the account by hand (POST /api/users). Contract in
-// backend/docs/access-requests.md.
+// reviews it; approving creates the account and emails its sign-in details.
+// Contract in backend/docs/access-requests.md.
 public class AccessRequest
 {
     public int Id { get; set; }

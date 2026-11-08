@@ -204,7 +204,7 @@ max 100). Newest first.
 Event types: `login_succeeded`, `login_failed`, `lockout`, `mfa_failed`,
 `mfa_enrolled`, `mfa_reset`, `recovery_code_used`, `password_changed`,
 `password_reset`, `user_created`, `role_changed`, `user_disabled`,
-`user_enabled`. `userId` is null when the email did not match an account.
+`user_enabled`, `user_unlocked`. `userId` is null when the email did not match an account.
 Passwords, tokens and codes are never stored.
 
 ### User administration (Admin only)
@@ -230,14 +230,38 @@ Passwords, tokens and codes are never stored.
 | --------------- | ---- | ------- | ------ |
 | `GET /api/users?role=&page=&pageSize=` | | 200 `PagedResult<UserResponse>` | 400 |
 | `GET /api/users/{id}` | | 200 | 404 |
-| `POST /api/users` | `{ "email", "name", "role", "employeeId": null, "temporaryPassword" }` | 201, `Location: /api/users/{id}` | 400, 409 |
+| `POST /api/users` (invite) | `{ "email", "name", "role", "employeeId": null }` | 201, `Location: /api/users/{id}` | 400, 409 |
 | `PUT /api/users/{id}/role` | `{ "role": "Auditor" }` | 200 | 400, 404, 409 |
 | `POST /api/users/{id}/disable` | | 200 | 404, 409 |
 | `POST /api/users/{id}/enable` | | 200 | 404 |
+| `POST /api/users/{id}/unlock` | | 200 | 404 |
 | `POST /api/users/{id}/mfa/reset` | | 200 | 404 |
-| `POST /api/users/{id}/password/reset` | `{ "temporaryPassword": "..." }` | 200 | 400, 404 |
+| `POST /api/users/{id}/signin-email` | | 200 | 404, 409 |
+| `POST /api/users/{id}/password/reset` (Development only) | `{ "temporaryPassword": "..." }` | 200 | 400, 404 |
 
-- New accounts and reset passwords have `mustChangePassword = true`.
+- The Admin never chooses or sees another person's password. An invite
+  (`POST /api/users`) creates the account with a random 20 character password
+  and emails it (sign-in link, email, password; see
+  [access-requests.md](access-requests.md) for the email setup). Approving an
+  access request does the same.
+- `UserResponse` has an additive `emailSent` on invite and on
+  `signin-email`: `true` when the provider accepted the email, `false` when
+  not (then use "resend sign-in email"), `null` on every other call.
+- `signin-email` sets a new random password, emails it, sets
+  `mustChangePassword = true` and clears any lockout. It works for an account
+  that never signed in and for one whose owner forgot the password. The old
+  password stops working at once. A disabled account gives 409.
+- `unlock` clears a lockout and the failed-attempt count; it does not touch
+  the password. Calling it on an unlocked account is a no-op (200).
+- `temporaryPassword` on `POST /api/users`, on access request approval and on
+  `password/reset` is accepted only when the API runs in Development, so the
+  smoke scripts can sign in to accounts they create. In any other environment
+  it is a 400 on field `temporaryPassword`, and `password/reset` always
+  needs it, so it is unusable there.
+- Audit actions: `user.created`, `user.unlocked`, `user.signin_email_sent`
+  (all `system`). Auth events: `user_unlocked` is new; a resend logs
+  `password_reset`.
+- New accounts and passwords set by `signin-email` have `mustChangePassword = true`.
 - `employeeId` is optional and links the account to one Employee (one
   account per employee).
 - An Admin cannot change their own role or disable themselves (409).
