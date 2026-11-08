@@ -275,6 +275,7 @@ $auditor = $auditorAccount.Token
 $departmentsHeader = 'name'
 $employeesHeader = 'name,email,department,job_role'
 $simsHeader = 'iccid,phone_number,carrier,tier,status'
+$allocationsHeader = 'iccid,employee_email,start_date'
 $usageHeader = 'iccid,date,total_download_mb,total_upload_mb,data_session_count,data_duration_s,hotspot_sessions,public_apn_sessions,unique_towers,geo_flag_count,peak_mb,offpeak_mb,total_mb,roaming_sessions,billed_mb,tier,voice_minutes_used,sms_count,voice_minutes_remaining,sms_remaining'
 
 # --- Roles -------------------------------------------------------------------
@@ -290,7 +291,7 @@ Check 'No token POST preview' 401 (Invoke-Import 'departments' $probe 'probe.csv
 Check 'Officer GET /api/imports' 200 (Invoke-Api GET '/api/imports' $null $officer)
 
 # --- Templates ---------------------------------------------------------------
-$headers = [ordered]@{ departments = $departmentsHeader; employees = $employeesHeader; sims = $simsHeader; usage = $usageHeader }
+$headers = [ordered]@{ departments = $departmentsHeader; employees = $employeesHeader; sims = $simsHeader; allocations = $allocationsHeader; usage = $usageHeader }
 foreach ($type in $headers.Keys) {
     $t = Invoke-Api GET "/api/imports/$type/template" $null $officer
     Check "Template $type" 200 $t
@@ -457,6 +458,43 @@ $carrierAudit = Invoke-Api GET "/api/audit-logs?action=sim.updated&simId=$($sim2
 $carrierRow = @($carrierAudit.Data.items)[0]
 Check-True 'Carrier change audited per SIM (Airtel to Telkom)' (($carrierAudit.Data.total -eq 1) -and ($carrierRow.oldValues.operator -eq 'Airtel') -and ($carrierRow.newValues.operator -eq 'Telkom')) "rows=$($carrierAudit.Data.total)"
 
+# --- Allocations -------------------------------------------------------------
+# Iccid 1 and 2 are available, Iccid 3 is inactive. ann and ben were imported above.
+$allocBad = New-Csv @(
+    $allocationsHeader,
+    "$(Iccid 1),ANN.$runId@example.com,2025-02-01",
+    "$(Iccid 2),ben.$runId@example.com,",
+    "$(Iccid 3),ann.$runId@example.com,",
+    "$(Iccid 77),ann.$runId@example.com,",
+    "$(Iccid 2),ann.$runId@example.com,",
+    "$(Iccid 1),nobody.$runId@example.com,2025-13-40"
+)
+$r = Invoke-Import 'allocations' $allocBad 'allocations.csv' $officer
+Check-True 'Allocations preview: 2 to insert, errors for inactive SIM, unknown SIM, repeated ICCID' (($r.Status -eq 200) -and ($r.Data.inserted -eq 2) -and (Has-Error $r 4 'iccid') -and (Has-Error $r 5 'iccid') -and (Has-Error $r 6 'iccid')) (Counts $r)
+$simBefore = @((Invoke-Api GET "/api/sims?search=$(Iccid 1)" $null $officer).Data.items)[0]
+Check-True 'Allocations preview saves nothing (SIM still available)' ($simBefore.status -eq 'available') "status=$($simBefore.status)"
+Check 'Allocations commit with errors is rejected' 422 (Invoke-Import 'allocations' $allocBad 'allocations.csv' $officer 'mode=commit')
+$r = Invoke-Import 'allocations' $allocBad 'allocations.csv' $officer 'mode=commit&skipInvalid=true'
+Check-True 'Allocations skipInvalid commit inserted 2' (($r.Status -eq 200) -and ($r.Data.inserted -eq 2)) (Counts $r)
+
+$simAfter = @((Invoke-Api GET "/api/sims?search=$(Iccid 1)" $null $officer).Data.items)[0]
+Check-True 'Allocated SIM became assigned' ($simAfter.status -eq 'assigned') "status=$($simAfter.status)"
+$alloc = @((Invoke-Api GET "/api/allocations?simId=$($simAfter.id)&active=true" $null $officer).Data.items)[0]
+Check-True 'Allocation has the start date and is active' (($null -ne $alloc) -and ($alloc.isActive -eq $true) -and ($alloc.assignmentDate -like '2025-02-01*')) "date=$($alloc.assignmentDate)"
+$allocAudit = Invoke-Api GET "/api/audit-logs?action=allocation.created&simId=$($simAfter.id)" $null $auditor
+Check-True 'Allocation audited per SIM (SecurityOfficer)' (($allocAudit.Data.total -eq 1) -and (@($allocAudit.Data.items)[0].actorRole -eq 'SecurityOfficer')) "rows=$($allocAudit.Data.total)"
+
+$allocClean = New-Csv @(
+    $allocationsHeader,
+    "$(Iccid 1),ann.$runId@example.com,",
+    "$(Iccid 2),ben.$runId@example.com,"
+)
+$r = Invoke-Import 'allocations' $allocClean 'allocations.csv' $officer 'mode=commit'
+Check-True 'Allocations second commit: same employee is unchanged' (($r.Status -eq 200) -and ($r.Data.unchanged -eq 2) -and ($r.Data.inserted -eq 0)) (Counts $r)
+$allocOther = New-Csv @($allocationsHeader, "$(Iccid 1),ben.$runId@example.com,")
+$r = Invoke-Import 'allocations' $allocOther 'allocations.csv' $officer 'mode=commit'
+Check-True 'Allocations: a different employee for an allocated SIM is a row error (422)' (($r.Status -eq 422) -and (Has-Error $r 2 'employee_email')) (Counts $r)
+
 # --- Usage -------------------------------------------------------------------
 function UsageRow([string]$Iccid, [datetime]$Day, [string]$Tier, [string]$TotalMb = '120.75', [string]$Sms = '4') {
     return "$Iccid,$($Day.ToString('yyyy-MM-dd')),100.5,20.25,3,600,0,0,2,0,80,40.75,$TotalMb,0,120.75,$Tier,5.5,$Sms,194.5,96"
@@ -505,7 +543,7 @@ Check-True 'The updated usage row reads back' ((@($usage.Data.days)[0].totalMb -
 
 # --- Demo files --------------------------------------------------------------
 $timings = @()
-$demo = [ordered]@{ departments = 'departments.csv'; employees = 'employees.csv'; sims = 'sims.csv'; usage = 'usage.csv' }
+$demo = [ordered]@{ departments = 'departments.csv'; employees = 'employees.csv'; sims = 'sims.csv'; allocations = 'allocations.csv'; usage = 'usage.csv' }
 $haveSamples = Test-Path (Join-Path $SamplesDir 'usage_perf_100k.csv')
 Check-True 'Demo files exist (run ml-service/scripts/make_import_files.py)' $haveSamples $SamplesDir
 
@@ -528,7 +566,7 @@ if ($haveSamples) {
         }
     }
 
-    foreach ($type in @('departments', 'employees', 'sims')) {
+    foreach ($type in @('departments', 'employees', 'sims', 'allocations')) {
         $bytes = [System.IO.File]::ReadAllBytes((Join-Path $SamplesDir $demo[$type]))
         $again = Invoke-Import $type $bytes $demo[$type] $officer 'mode=commit'
         Check-True "Demo $($demo[$type]) second commit: all unchanged" (($again.Status -eq 200) -and ($again.Data.unchanged -eq $again.Data.totalRows) -and ($again.Data.inserted -eq 0) -and ($again.Data.updated -eq 0)) (Counts $again)

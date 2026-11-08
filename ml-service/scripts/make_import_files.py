@@ -10,12 +10,13 @@ data/import_samples/ (git-ignored):
     departments.csv       one department per tier
     employees.csv         one employee per SIM
     sims.csv              one SIM per generator sim_id
+    allocations.csv       each SIM to its employee (start date left empty)
     usage.csv             every generator row (90000), sim_id replaced by iccid
     usage_perf_100k.csv   100000 more rows for the timing test (see below)
     sim_mapping.csv       sim_id to iccid, phone number, carrier, employee
 
 The formats are the ones in backend/docs/imports.md. Import them in that
-order (departments, employees, sims, usage).
+order (departments, employees, sims, allocations, usage).
 
 The generator has no department, employee or carrier data, so this script
 derives a simple, documented assignment:
@@ -172,7 +173,12 @@ def main() -> None:
     counts["sims.csv"] = write_csv(
         out / "sims.csv",
         ["iccid", "phone_number", "carrier", "tier", "status"],
-        ([m["iccid"], m["phone_number"], m["carrier"], m["tier"], "available"] for m in sims),
+        ([m["iccid"], m["phone_number"], m["carrier"], m["tier"], ""] for m in sims),
+    )
+    counts["allocations.csv"] = write_csv(
+        out / "allocations.csv",
+        ["iccid", "employee_email", "start_date"],
+        ([m["iccid"], m["employee_email"], ""] for m in sims),
     )
 
     usage_header = ["iccid", "date", *USAGE_FIELDS]

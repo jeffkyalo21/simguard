@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Imports the demo data (departments, employees, SIMs, daily usage) through
+    Imports the demo data (departments, employees, SIMs, allocations, daily usage) through
     the CSV import API (issue #14, see backend/docs/imports.md).
 
 .DESCRIPTION
     Signs in as a SecurityOfficer, then for each file in this order:
-    departments.csv, employees.csv, sims.csv, usage.csv from
+    departments.csv, employees.csv, sims.csv, allocations.csv, usage.csv from
     ml-service/data/import_samples (written by
     ml-service/scripts/make_import_files.py):
 
@@ -142,6 +142,7 @@ $files = @(
     @{ Type = 'departments'; File = 'departments.csv' },
     @{ Type = 'employees'; File = 'employees.csv' },
     @{ Type = 'sims'; File = 'sims.csv' },
+    @{ Type = 'allocations'; File = 'allocations.csv' },
     @{ Type = 'usage'; File = 'usage.csv' }
 )
 

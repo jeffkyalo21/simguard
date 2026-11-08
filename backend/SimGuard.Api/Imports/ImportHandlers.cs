@@ -8,7 +8,8 @@ public static class ImportHandlers
         new DepartmentImportHandler(),
         new EmployeeImportHandler(),
         new SimImportHandler(),
-        new UsageImportHandler()
+        new UsageImportHandler(),
+        new AllocationImportHandler()
     ];
 
     public static readonly IReadOnlyDictionary<string, IImportHandler> ByType =

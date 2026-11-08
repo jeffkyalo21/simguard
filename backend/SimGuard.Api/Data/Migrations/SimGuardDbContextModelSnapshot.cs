@@ -894,7 +894,7 @@ namespace SimGuard.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("chk_import_runs_status", "status IN ('committed', 'rejected', 'failed')");
 
-                            t.HasCheckConstraint("chk_import_runs_type", "type IN ('departments', 'employees', 'sims', 'usage')");
+                            t.HasCheckConstraint("chk_import_runs_type", "type IN ('departments', 'employees', 'sims', 'allocations', 'usage')");
                         });
                 });
 

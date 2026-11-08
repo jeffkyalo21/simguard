@@ -654,7 +654,7 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
             {
                 table.HasCheckConstraint(
                     "chk_import_runs_type",
-                    "type IN ('departments', 'employees', 'sims', 'usage')");
+                    "type IN ('departments', 'employees', 'sims', 'allocations', 'usage')");
 
                 table.HasCheckConstraint(
                     "chk_import_runs_status",

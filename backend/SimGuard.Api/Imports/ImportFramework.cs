@@ -10,6 +10,7 @@ public static class ImportTypes
     public const string Employees = "employees";
     public const string Sims = "sims";
     public const string Usage = "usage";
+    public const string Allocations = "allocations";
 }
 
 public static class ImportRunStatuses
@@ -53,8 +54,12 @@ public sealed class ImportIssues
 public sealed class ImportContext(
     SimGuardDbContext db,
     AuditWriter audit,
-    bool isCommit)
+    bool isCommit,
+    int? userId = null)
 {
+    // The signed-in user, used to find the employee who assigns allocations.
+    public int? UserId { get; } = userId;
+
     public SimGuardDbContext Db { get; } = db;
     public AuditWriter Audit { get; } = audit;
 

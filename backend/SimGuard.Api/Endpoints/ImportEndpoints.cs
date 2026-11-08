@@ -189,7 +189,7 @@ public static class ImportEndpoints
             run.Sha256 = Convert.ToHexStringLower(await SHA256.HashDataAsync(hashStream, cancellationToken));
         }
 
-        var context = new ImportContext(db, audit, isCommit);
+        var context = new ImportContext(db, audit, isCommit, run.UserId);
         var job = handler.CreateJob(context);
         int totalRows;
         int validRows;

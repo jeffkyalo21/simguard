@@ -1,6 +1,6 @@
 # CSV imports
 
-Bulk import of departments, employees, SIMs and daily usage from CSV files in
+Bulk import of departments, employees, SIMs, allocations and daily usage from CSV files in
 the standard SimGuard format. Issue #14. Everything here needs an access
 token (see [auth.md](auth.md)) with the SecurityOfficer role (`OrgWrite`);
 Admin and Auditor get 403.
@@ -15,7 +15,7 @@ Admin and Auditor get 403.
 | `POST /api/imports/{type}?mode=commit&skipInvalid=true` | 200 `ImportResult` (valid rows only) | 400, 404, 413 |
 | `GET /api/imports?type=&page=&pageSize=` | 200 `PagedResult<ImportRun>`, newest first | 400 |
 
-`{type}` is `departments`, `employees`, `sims` or `usage`. `mode` defaults to
+`{type}` is `departments`, `employees`, `sims`, `allocations` or `usage`. `mode` defaults to
 `preview`. The upload is `multipart/form-data` with the file in a field named
 `file`.
 
@@ -181,6 +181,33 @@ carrier changed, `sim.tier_changed` (`{ tier }` old and new) and
 `sim.status_changed` (`{ status }` old and new). New SIMs are covered by the
 `import.committed` entry only.
 
+## Allocations
+
+Columns: `iccid` (required, an existing SIM), `employee_email` (required,
+an existing employee, matched ignoring case), `start_date` (optional,
+`yyyy-mm-dd`).
+
+Creates active allocations by the same rules as `POST /api/allocations`:
+
+- The SIM must exist (import SIMs first) and the employee must exist
+  (import employees first). Either missing is a row error.
+- The SIM must be `available`. An `assigned` or `inactive` SIM without a
+  matching allocation is a row error.
+- A SIM has at most one active allocation. If it is already allocated to the
+  same employee the row is `unchanged` (its start date is not touched). If
+  it is allocated to a different employee the row is an error: return the
+  allocation first. An ICCID that appears twice in the file is an error on
+  the later row.
+- A new allocation sets the SIM status to `assigned`.
+- `start_date` becomes the allocation's assignment date (midnight UTC). When
+  empty, the assignment date is the time of the import.
+- `assigned_by` is the signed-in user's linked employee. When the account has
+  no linked employee, it is the allocated employee.
+
+Each new allocation writes its own `allocation.created` audit entry, in the
+same shape as the endpoint, in addition to `import.committed`. Allocations
+are only inserted: `updated` is always 0.
+
 ## Daily usage
 
 Columns, in this order in the template (any order is accepted):
@@ -258,7 +285,7 @@ Imports may also write per-row entries, listed with each type below.
 
 `ml-service/scripts/make_import_files.py` writes import-ready files from
 the generator data into `ml-service/data/import_samples/` (git-ignored):
-4 departments, 1000 employees, 1000 SIMs, 90000 usage rows and a 100000
+4 departments, 1000 employees, 1000 SIMs, 1000 allocations (each SIM to its employee), 90000 usage rows and a 100000
 row usage file for timing. How departments, employees, carriers, ICCIDs and
 phone numbers are assigned is in [ml-service/README.md](../../ml-service/README.md).
 All 1000 demo SIMs have 90 consecutive days, so all are scorable.
