@@ -34,9 +34,9 @@ export class ApiError extends Error {
   /**
    * @param {{ status: number, title?: string, detail?: string,
    *   errors?: Record<string, string[]>, extensions?: Record<string, unknown>,
-   *   cause?: unknown }} problem
+   *   body?: unknown, cause?: unknown }} problem
    */
-  constructor({ status, title, detail, errors, extensions, cause }) {
+  constructor({ status, title, detail, errors, extensions, body, cause }) {
     super(detail || title || `Request failed with status ${status}`, { cause });
     this.name = "ApiError";
     /** 0 when the request never reached the server. */
@@ -46,6 +46,8 @@ export class ApiError extends Error {
     this.errors = errors ?? {};
     /** Other ProblemDetails members, for example simCount on a 409. */
     this.extensions = extensions ?? {};
+    /** The whole parsed response body, for answers that are not ProblemDetails (an import's 422). */
+    this.body = body;
   }
 }
 
@@ -86,6 +88,7 @@ async function readBody(response) {
  */
 export async function request(method, path, { body, query, signal, headers } = {}) {
   let response;
+  const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
 
   try {
     response = await fetch(buildUrl(path, query), {
@@ -95,10 +98,11 @@ export async function request(method, path, { body, query, signal, headers } = {
       cache: "no-store",
       headers: {
         Accept: "application/json",
-        ...(body !== undefined && { "Content-Type": "application/json" }),
+        // A FormData body sets its own multipart Content-Type and boundary.
+        ...(body !== undefined && !isFormData && { "Content-Type": "application/json" }),
         ...headers,
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
     });
   } catch (cause) {
     if (cause?.name === "AbortError") {
@@ -129,6 +133,7 @@ export async function request(method, path, { body, query, signal, headers } = {
       detail: detail ?? (typeof data === "string" ? data : undefined),
       errors,
       extensions,
+      body: data,
     });
   }
 

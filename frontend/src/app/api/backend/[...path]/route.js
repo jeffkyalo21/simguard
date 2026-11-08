@@ -11,9 +11,12 @@ import {
 // BACKEND_URL/api/<path>?<query> with the session token as a Bearer header.
 // Status codes and ProblemDetails bodies come back unchanged. A backend 401
 // ends the session. Auth endpoints (which return tokens) are not forwarded,
-// except GET auth/events.
+// except GET auth/events. Request bodies (JSON or a multipart CSV upload) are
+// streamed through without buffering.
 
 const TIMEOUT_MS = 30_000;
+// CSV imports upload up to 25 MB and validate every row, so they get longer.
+const IMPORT_TIMEOUT_MS = 300_000;
 const REQUEST_HEADERS = ["accept", "content-type"];
 const RESPONSE_HEADERS = ["content-type", "content-disposition", "location", "retry-after"];
 
@@ -35,16 +38,20 @@ async function forward(request, { params }) {
   }
 
   const hasBody = !["GET", "HEAD"].includes(request.method);
+  const timeout = path.toLowerCase().startsWith("imports") ? IMPORT_TIMEOUT_MS : TIMEOUT_MS;
   let response;
 
   try {
     response = await fetch(`${backendUrl()}/api/${path}${request.nextUrl.search}`, {
       method: request.method,
       headers,
-      body: hasBody ? await request.arrayBuffer() : undefined,
+      // The request body is passed on as a stream, so a 25 MB upload is not
+      // held in memory here. "half" duplex is required for a streamed body.
+      body: hasBody ? request.body : undefined,
+      ...(hasBody && { duplex: "half" }),
       cache: "no-store",
       redirect: "manual",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeout),
     });
   } catch {
     return errorResponse({ code: ERROR_CODES.network });

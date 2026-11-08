@@ -7,6 +7,7 @@ import {
   Settings,
   ShieldCheck,
   Smartphone,
+  Upload,
 } from "lucide-react";
 import { canOpen } from "@/lib/permissions";
 import { copy } from "@/lib/copy";
@@ -20,6 +21,7 @@ export const navItems = [
   { href: "/alerts", page: "alerts", label: copy.nav.alerts, Icon: Bell },
   { href: "/usage", page: "usage", label: copy.nav.usage, Icon: BarChart3 },
   { href: "/allocations", page: "allocations", label: copy.nav.allocations, Icon: ArrowLeftRight },
+  { href: "/imports", page: "imports", label: copy.nav.imports, Icon: Upload },
   { href: "/audit-log", page: "auditLog", label: copy.nav.auditLog, Icon: ScrollText },
   { href: "/settings", page: "settings", label: copy.nav.settings, Icon: Settings },
 ];

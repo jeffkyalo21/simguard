@@ -12,7 +12,7 @@
 // every screen on the page reloads what it shows (src/lib/data-version.js).
 // There is no mock data: a screen shows the backend's answer or an error.
 
-import { ApiError, api } from "@/lib/api";
+import { API_BASE, ApiError, api } from "@/lib/api";
 import { bumpDataVersion } from "@/lib/data-version";
 import { normalizePhone } from "@/lib/validation";
 
@@ -417,4 +417,53 @@ export function getScoringStatus() {
  */
 export function runScoring() {
   return write(api.post("/admin/scoring/run"));
+}
+
+/* --------------------------------------------------------------- Imports */
+
+/** CSV import types in the order they should be imported. */
+export const IMPORT_TYPES = ["departments", "employees", "sims", "allocations", "usage"];
+
+/** The file size the API accepts, in bytes. */
+export const IMPORT_MAX_BYTES = 25 * 1024 * 1024;
+
+/** GET /imports/{type}/template: a plain link, the browser downloads the CSV. */
+export function importTemplateUrl(type) {
+  return `${API_BASE}/imports/${type}/template`;
+}
+
+function importForm(file) {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  return form;
+}
+
+/** POST /imports/{type}?mode=preview: validates the file, saves nothing. */
+export function previewImport(type, file, { signal } = {}) {
+  return api.post(`/imports/${type}`, importForm(file), { query: { mode: "preview" }, signal });
+}
+
+/**
+ * POST /imports/{type}?mode=commit. A 422 (row errors without
+ * skipInvalid) comes back as a normal result with status "rejected", shown
+ * like preview errors; every other failure throws an ApiError.
+ */
+export async function commitImport(type, file, { skipInvalid = false } = {}) {
+  try {
+    return await write(
+      api.post(`/imports/${type}`, importForm(file), { query: { mode: "commit", skipInvalid: skipInvalid || undefined } })
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 422 && error.body?.status === "rejected") {
+      // The rejected run is in the history now.
+      bumpDataVersion();
+      return error.body;
+    }
+    throw error;
+  }
+}
+
+/** GET /imports: past commit attempts, newest first. */
+export function listImportRuns({ page, pageSize } = {}) {
+  return api.get("/imports", { query: { page, pageSize } });
 }
