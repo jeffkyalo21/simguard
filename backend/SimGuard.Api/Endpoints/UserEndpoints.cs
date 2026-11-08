@@ -622,7 +622,7 @@ public static class UserEndpoints
         return TypedResults.Ok(await FindUserResponseAsync(db, id, cancellationToken));
     }
 
-    private static async Task<IDbContextTransaction> BeginAdminChangeAsync(
+    internal static async Task<IDbContextTransaction> BeginAdminChangeAsync(
         SimGuardDbContext db,
         CancellationToken cancellationToken)
     {
@@ -631,7 +631,7 @@ public static class UserEndpoints
         return transaction;
     }
 
-    private static Task<int> CountActiveAdminsAsync(
+    internal static Task<int> CountActiveAdminsAsync(
         SimGuardDbContext db,
         CancellationToken cancellationToken) =>
         QueryUserRows(db)
@@ -679,7 +679,7 @@ public static class UserEndpoints
         return errors.ToProblem();
     }
 
-    private static void EnsureSucceeded(IdentityResult result)
+    internal static void EnsureSucceeded(IdentityResult result)
     {
         if (!result.Succeeded)
         {

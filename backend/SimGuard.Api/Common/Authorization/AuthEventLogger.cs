@@ -19,12 +19,14 @@ public static class AuthEventTypes
     public const string UserDisabled = "user_disabled";
     public const string UserEnabled = "user_enabled";
     public const string UserUnlocked = "user_unlocked";
+    public const string RecoveryCodesRegenerated = "recovery_codes_regenerated";
+    public const string AccountDeleted = "account_deleted";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>
     {
         LoginSucceeded, LoginFailed, Lockout, MfaFailed, MfaEnrolled, MfaReset,
         RecoveryCodeUsed, PasswordChanged, PasswordReset, UserCreated, RoleChanged,
-        UserDisabled, UserEnabled, UserUnlocked
+        UserDisabled, UserEnabled, UserUnlocked, RecoveryCodesRegenerated, AccountDeleted
     };
 }
 

@@ -20,11 +20,11 @@ public static class AuthEndpoints
     public const string MfaRequired = "mfaRequired";
     public const string MfaEnrollmentRequired = "mfaEnrollmentRequired";
 
-    private const int RecoveryCodeCount = 10;
+    internal const int RecoveryCodeCount = 10;
     private const string AuthenticatorIssuer = "SimGuard";
     private const string InvalidCredentials = "Invalid email or password.";
     private const string InvalidMfa = "The MFA token or code is invalid or has expired.";
-    private const string RecoveryCodesLoginProvider = "[AspNetUserStore]";
+    internal const string RecoveryCodesLoginProvider = "[AspNetUserStore]";
     private const string RecoveryCodesTokenName = "RecoveryCodes";
 
     // Hashed once and checked against unknown emails so that a missing account
@@ -493,7 +493,7 @@ public static class AuthEndpoints
         return TypedResults.Ok(result);
     }
 
-    private static async Task RecordFailureAsync(
+    internal static async Task RecordFailureAsync(
         UserManager<AppUser> userManager,
         AuthEventLogger events,
         AppUser user,
@@ -510,7 +510,7 @@ public static class AuthEndpoints
         }
     }
 
-    private static async Task<AppUser?> FindCurrentUserAsync(
+    internal static async Task<AppUser?> FindCurrentUserAsync(
         ClaimsPrincipal principal,
         UserManager<AppUser> userManager)
     {
@@ -518,10 +518,10 @@ public static class AuthEndpoints
         return userId is null ? null : await userManager.FindByIdAsync(userId.Value.ToString());
     }
 
-    private static string NormalizeCode(string code) =>
+    internal static string NormalizeCode(string code) =>
         code.Replace(" ", string.Empty);
 
-    private static bool IsTotpCode(string code) =>
+    internal static bool IsTotpCode(string code) =>
         code.Length == 6 && code.All(char.IsAsciiDigit);
 
     // Groups of four lower-case characters, easier to type by hand.

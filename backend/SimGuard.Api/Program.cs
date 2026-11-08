@@ -128,6 +128,7 @@ api.MapCarrierFeedEndpoints();
 api.MapSimEndpoints();
 api.MapAllocationEndpoints();
 api.MapAuthEndpoints();
+api.MapProfileEndpoints();
 api.MapUserEndpoints();
 api.MapAlertEndpoints();
 api.MapRiskEndpoints();
