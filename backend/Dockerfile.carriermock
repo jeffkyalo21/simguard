@@ -1,0 +1,17 @@
+# Carrier usage feed mock. Build context: backend/
+# (docker build -f backend/Dockerfile.carriermock backend). No data is baked in:
+# mount the data folder and set CarrierMock__DataDir.
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY SimGuard.CarrierMock/SimGuard.CarrierMock.csproj SimGuard.CarrierMock/
+RUN dotnet restore SimGuard.CarrierMock/SimGuard.CarrierMock.csproj
+COPY SimGuard.CarrierMock/ SimGuard.CarrierMock/
+RUN dotnet publish SimGuard.CarrierMock/SimGuard.CarrierMock.csproj -c Release -o /out --no-restore /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+COPY --from=build /out .
+ENV ASPNETCORE_URLS=http://+:8080 DOTNET_EnableDiagnostics=0
+USER $APP_UID
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "SimGuard.CarrierMock.dll"]
