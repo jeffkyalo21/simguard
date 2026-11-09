@@ -34,3 +34,6 @@ docs/SimGuard wireframes
 # Deployment
 deploy/.env
 deploy/data-pack/
+
+# Several organisations: env files with secrets, orgs.list and the generated Caddy sites
+deploy/orgs/

@@ -1,0 +1,24 @@
+# Shared public entry point for every organisation on this VM. Only this
+# service publishes ports (80 and 443). Each organisation's web app is reached
+# over the shared "edge" network; the APIs, ML services, mocks and databases
+# have no route from here or from the internet.
+#
+# The site entries (one per organisation) are generated from deploy/orgs/orgs.list
+# by deploy/scripts/render-caddy.sh into deploy/orgs/caddy/sites.caddy.
+{
+	# Optional: "local_certs" for the local test (Caddy's own CA instead of Let's Encrypt).
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+(simguard_site) {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+import /etc/caddy/sites/*.caddy

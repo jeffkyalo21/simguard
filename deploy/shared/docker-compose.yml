@@ -1,0 +1,48 @@
+# The shared Caddy for all organisations. One per VM.
+#   deploy/scripts/edge.sh up|down|reload|status
+# Variables (HTTP_PORT, HTTPS_PORT, CADDY_GLOBAL_OPTIONS) come from
+# deploy/orgs/edge.env when it exists, else from deploy/.env, else the defaults.
+# It joins only the edge network, so it can reach each organisation's frontend
+# (alias <project>-web) and nothing else.
+name: ${SIMGUARD_EDGE_PROJECT:-simguard-edge}
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    networks: [edge]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Generated site entries. A folder (not a file) so a rewrite is picked up on reload.
+      - ${SIMGUARD_CADDY_SITES_DIR:-../orgs/caddy}:/etc/caddy/sites:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+networks:
+  # Created once by deploy/scripts/edge.sh (docker network create), shared with
+  # every organisation stack, so any stack can start and stop on its own.
+  edge:
+    external: true
+    name: ${SIMGUARD_EDGE_NETWORK:-simguard-edge}
+
+volumes:
+  # Certificates live here. For the live stack that already has certificates,
+  # set SIMGUARD_CADDY_DATA_VOLUME=simguard_caddy_data (its old volume) so they are kept.
+  caddy_data:
+    name: ${SIMGUARD_CADDY_DATA_VOLUME:-simguard-edge_caddy_data}
+  caddy_config:
+    name: ${SIMGUARD_CADDY_CONFIG_VOLUME:-simguard-edge_caddy_config}
