@@ -118,7 +118,7 @@ dotnet run --project backend/SimGuard.CarrierMock --urls http://127.0.0.1:5391
 
 A carrier without a configured key gets a random one, printed once at start.
 Other settings: `CarrierMock__DataDir`, `CarrierMock__SessionsFile`,
-`CarrierMock__StartDate` (the first "current date"; default the first day in
+`CarrierMock__StartDate` (the first "current date"; a date, `last` for the last day in the data, or by default the first day in
 the data). The admin routes have no key, so run the mock on localhost only.
 
 In Settings, Carriers, Usage feed, use the address `http://127.0.0.1:5391`
