@@ -2,6 +2,16 @@
 """Build the demo data pack in deploy/data-pack/ (git-ignored).
 
     python3 deploy/scripts/prepare-data.py [--out DIR] [--no-sessions] [--rotate-keys]
+                                           [--org-name SLUG] [--sim-offset N] [--sim-count N]
+
+Organisation slices: --sim-offset and --sim-count pick SIMs by their position in
+the sorted SIM ids (0 to 999); --org-name names the slice and sets the default
+folder deploy/data-pack-<slug>. A slice holds only its SIMs, their employees,
+allocations and usage, all four departments, its own mock-data (only its SIMs,
+sessions included) and its own mock.env with newly generated keys. Names and
+emails are computed over all 1000 SIMs first, so a person is the same in every
+slice and emails never collide between slices. Without these options the whole
+pack is written, as before.
 
 The output folder is --out, else the SIMGUARD_DATA_PACK_OUT environment
 variable, else deploy/data-pack. The people are realistic Kenyan names built by
@@ -32,6 +42,7 @@ import argparse
 import csv
 import importlib.util
 import os
+import re
 import secrets
 import shutil
 import sys
@@ -105,11 +116,22 @@ def write_parts(out: Path, number: int, kind: str, header, rows) -> list[tuple[s
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--org-name", help="slug of an organisation slice (lower case letters, digits, hyphens)")
+    parser.add_argument("--sim-offset", type=int, default=0, help="first SIM (position in the sorted SIM ids)")
+    parser.add_argument("--sim-count", type=int, default=None, help="number of SIMs (default: all from the offset)")
     parser.add_argument("--no-sessions", action="store_true", help="leave the large per-session file out of mock-data")
     parser.add_argument("--rotate-keys", action="store_true", help="replace the keys in an existing mock.env")
     args = parser.parse_args()
-    out: Path = args.out.resolve()
+    if args.org_name and not re.fullmatch(r"[a-z][a-z0-9-]{0,19}", args.org_name):
+        sys.exit("--org-name must be a slug: lower case letters, digits, hyphens, starting with a letter.")
+    if args.out is not None:
+        out = args.out
+    elif args.org_name and not os.environ.get("SIMGUARD_DATA_PACK_OUT"):
+        out = REPO / "deploy" / f"data-pack-{args.org_name}"
+    else:
+        out = DEFAULT_OUT
+    out = out.resolve()
 
     gen = load_generator()
     if not gen.SOURCE.exists():
@@ -123,10 +145,18 @@ def main() -> None:
 
     rows, tiers = gen.read_source()
     mapping = gen.load_mapping(out / "mock-data" / "sim_mapping.csv", tiers)  # file absent: derived from sim_id
-    people = demo_people.people_for(tiers, tiers)
+    people = demo_people.people_for(tiers, tiers)  # over ALL SIMs, so slices never collide
     for sim_id, person in people.items():
         mapping[sim_id]["employee_email"] = person["email"]
-    sims = [mapping[s] for s in sorted(tiers)]
+    all_ids = sorted(tiers)
+    end = len(all_ids) if args.sim_count is None else args.sim_offset + args.sim_count
+    if args.sim_offset < 0 or args.sim_count is not None and args.sim_count < 1 or args.sim_offset >= len(all_ids):
+        sys.exit(f"--sim-offset/--sim-count select no SIMs (there are {len(all_ids)}).")
+    chosen = all_ids[args.sim_offset:end]
+    is_slice = len(chosen) != len(all_ids)
+    chosen_set = set(chosen)
+    rows = [r for r in rows if int(r["sim_id"]) in chosen_set]
+    sims = [mapping[s] for s in chosen]
     rows.sort(key=lambda r: (int(r["sim_id"]), r["date"]))
 
     def usage_rows():
@@ -159,6 +189,7 @@ def main() -> None:
     lines = [
         "SimGuard demo data pack",
         "",
+        *( [f"Organisation slice: {args.org_name or 'unnamed'}, SIM ids {chosen[0]} to {chosen[-1]} ({len(chosen)} SIMs).", ""] if is_slice else [] ),
         "Sign in as a Security Officer, open Imports, and import these files in",
         "this order. For each one choose the import type shown, preview it, then commit.",
         "Wait for each commit to finish before starting the next one.",
@@ -188,7 +219,16 @@ def main() -> None:
     gen.write_csv(mock / "usage.csv", usage_header, usage_rows())
     sessions = gen.ML_SERVICE_ROOT / "data" / "synthetic_cdr_sessions.csv"
     if not args.no_sessions and sessions.exists():
-        shutil.copyfile(sessions, mock / "synthetic_cdr_sessions.csv")
+        if not is_slice:
+            shutil.copyfile(sessions, mock / "synthetic_cdr_sessions.csv")
+        else:  # only the sessions of this slice's SIMs
+            target = mock / "synthetic_cdr_sessions.csv"
+            with sessions.open(newline="", encoding="utf-8") as src, target.open("w", newline="", encoding="utf-8") as dst:
+                reader, writer = csv.reader(src), csv.writer(dst, lineterminator="\n")
+                header = next(reader)
+                col = header.index("sim_id")
+                writer.writerow(header)
+                writer.writerows(r for r in reader if int(r[col]) in chosen_set)
 
     # mock.env: one generated key per carrier. Never printed.
     env_path = out / "mock.env"
