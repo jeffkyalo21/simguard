@@ -472,6 +472,11 @@ not declare its own policy, so a new endpoint is protected by default.
 | `SimGuard:Seed:AdminEmail` | first run only | | |
 | `SimGuard:Seed:AdminPassword` | first run only | | at least 12 characters |
 | `SimGuard:Seed:AdminName` | no | `Administrator` | |
+| `SimGuard:Seed:RecoverAdmin` | no | off | emergency recovery, see "Emergency Admin recovery"; only the exact value `true` turns it on |
+| `Database:MigrateOnStartup` | no | `false` | `true` applies pending EF migrations at startup (environment variable `Database__MigrateOnStartup`) |
+| `Hosting:UseHttpsRedirection` | no | `true` | set `false` behind a TLS terminating proxy (`Hosting__UseHttpsRedirection=false`) |
+| `Hosting:DataProtectionKeysPath` | no | none | folder for the Data Protection key ring (it encrypts stored carrier API keys); in a container make it a volume. Without it the default per-user folder is used |
+| `ForwardedHeaders:KnownProxies`, `ForwardedHeaders:KnownNetworks` | no | loopback only | addresses and CIDR ranges (for example the private Compose network) whose `X-Forwarded-For` is trusted, so the per-IP rate limit sees the real client |
 | `SimGuard:Seed:OfficerEmail`, `OfficerPassword`, `OfficerName` | no (Development only) | name `Security Officer` | test SecurityOfficer |
 | `SimGuard:Seed:AuditorEmail`, `AuditorPassword`, `AuditorName` | no (Development only) | name `Auditor` | test Auditor |
 
@@ -538,6 +543,37 @@ Migration `AddAuthentication` adds:
 
 `audit_logs.user_id` is unchanged and still points to `employees`.
 
+## Emergency Admin recovery
+
+For the server owner, when every Admin is locked out (lost authenticator,
+forgotten password, disabled or demoted account). It is not an API endpoint:
+it runs only while the API starts, and only when all three are set as
+environment variables:
+
+```
+SimGuard__Seed__RecoverAdmin=true
+SimGuard__Seed__AdminEmail=<the Admin's email>
+SimGuard__Seed__AdminPassword=<a new temporary password, 12+ characters>
+```
+
+At startup the API then makes sure that account exists and is an Admin:
+
+- missing: created as an Admin with that password;
+- existing: given the Admin role (any other role is removed), enabled,
+  unlocked, MFA reset (all recovery codes cleared), the password replaced by
+  the given one, `mustChangePassword` set and every old token invalidated.
+  Other accounts are never touched.
+
+The first sign-in after recovery is the normal one: MFA enrolment, then the
+forced password change. The log shows a warning to remove the variables, and
+a `system` audit entry `admin.recovered` is written (old and new state of the
+account: email, roles, disabled, locked; `outcome` `created` or `repaired`).
+No password, hash or secret goes into the log or the entry. With the variable
+missing, `false`, or without email or password (the log then says nothing was
+changed), nothing happens. Remove the variables and restart after signing in;
+keep at least two Admin accounts so this is rarely needed.
+`backend/docs/recovery-smoke.ps1` covers it.
+
 ## Smoke test
 
 `backend/docs/auth-smoke.ps1` runs the whole flow against a running API and
@@ -558,7 +594,12 @@ password and wrong code refused), deleting an account (wrong password, wrong
 code, last Admin refused, a Security Officer deletes themselves, the old token
 gives 401, the audit row stays, the same email can be invited again).
 
-Run all four on a throwaway database, not on your dev database: auth-smoke
+`backend/docs/recovery-smoke.ps1` starts and stops the API itself against one
+empty throwaway database and checks the recovery cases: existing Admin
+repaired, missing Admin created, an Officer untouched, nothing happens when
+the variable is off or incomplete, no password in the log or audit entry.
+
+Run all of them on a throwaway database, not on your dev database: auth-smoke
 signs in the seeded Admin for the first time and the others leave test
 accounts and audit rows behind.
 
@@ -580,3 +621,10 @@ accounts and audit rows behind.
 - A TOTP code can be used more than once within its 30 second window.
 - The rate limiter and lockout use the client IP as seen by the API. Behind
   a reverse proxy, configure forwarded headers first.
+
+### Production start checks
+
+Outside Development the API refuses to start when `Jwt:Key` or
+`MlService:SharedSecret` is missing or a placeholder (empty, one repeated
+character, or containing `changeme`, `replace`, `example`, `your-`, `<`, `>`
+and similar). The message names the setting, never its value.

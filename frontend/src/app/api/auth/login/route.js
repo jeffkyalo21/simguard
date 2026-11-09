@@ -7,6 +7,7 @@ import {
   readRequestJson,
   rejectCrossOrigin,
   setPending,
+  visitorAddressHeaders,
 } from "@/lib/auth/server";
 
 // Step 1 of sign-in: email and password. The MFA challenge or setup token
@@ -24,7 +25,11 @@ export async function POST(request) {
     return errorResponse({ code: ERROR_CODES.validation, fields: {} });
   }
 
-  const result = await callBackend("/auth/login", { method: "POST", body: { email, password } });
+  const result = await callBackend("/auth/login", {
+    method: "POST",
+    body: { email, password },
+    headers: visitorAddressHeaders(request),
+  });
   if (!result.ok) return backendErrorResponse(result, "login");
 
   const { status, mfaToken, expiresAt } = result.data ?? {};

@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+**/*.user
+SimGuard.Api.Tests/
+docs/
+scripts/
+appsettings.Development.json
+**/appsettings.Development.json
+**/.env*

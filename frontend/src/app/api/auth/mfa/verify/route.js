@@ -10,6 +10,7 @@ import {
   readRequestJson,
   rejectCrossOrigin,
   setSession,
+  visitorAddressHeaders,
 } from "@/lib/auth/server";
 
 // Step 2 of a normal sign-in: a TOTP code or one recovery code.
@@ -30,6 +31,7 @@ export async function POST(request) {
   const result = await callBackend("/auth/mfa/verify", {
     method: "POST",
     body: { mfaToken: pending.token, code },
+    headers: visitorAddressHeaders(request),
   });
   if (!result.ok) return backendErrorResponse(result, "mfa");
 

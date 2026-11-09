@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
+using SimGuard.Api.Endpoints;
 using SimGuard.Api.Models;
 
 namespace SimGuard.Api.Data;
@@ -16,6 +17,11 @@ namespace SimGuard.Api.Data;
 // environment variables) and no account has that email yet. There are no
 // default passwords. Every seeded account must change its password and
 // enrol MFA at first sign-in. Passwords are never logged.
+//
+// Emergency recovery for the server owner: when SimGuard:Seed:RecoverAdmin is
+// true together with SimGuard:Seed:AdminEmail and SimGuard:Seed:AdminPassword,
+// that account is made an enabled, unlocked Admin with MFA reset and a forced
+// password change (see RecoverAdminAsync). It runs only here, at startup.
 public static class IdentitySeeder
 {
     public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
@@ -61,7 +67,11 @@ public static class IdentitySeeder
             }
         }
 
-        if (!await userManager.Users.AnyAsync(cancellationToken))
+        var recovered = string.Equals(
+            configuration["SimGuard:Seed:RecoverAdmin"]?.Trim(), "true", StringComparison.OrdinalIgnoreCase)
+            && await RecoverAdminAsync(provider, userManager, configuration, events, logger, cancellationToken);
+
+        if (!recovered && !await userManager.Users.AnyAsync(cancellationToken))
         {
             await SeedFirstAdminAsync(userManager, configuration, events, logger, cancellationToken);
         }
@@ -74,6 +84,112 @@ public static class IdentitySeeder
             await SeedDevUserAsync(
                 userManager, configuration, events, logger, "Auditor", AppRoles.Auditor,
                 "Auditor", cancellationToken);
+        }
+    }
+
+    // Returns true when the recovery ran (account created or repaired).
+    private static async Task<bool> RecoverAdminAsync(
+        IServiceProvider provider,
+        UserManager<AppUser> userManager,
+        IConfiguration configuration,
+        AuthEventLogger events,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var email = configuration["SimGuard:Seed:AdminEmail"]?.Trim();
+        var password = configuration["SimGuard:Seed:AdminPassword"];
+
+        if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+        {
+            logger.LogError(
+                "SimGuard:Seed:RecoverAdmin is true but SimGuard:Seed:AdminEmail or SimGuard:Seed:AdminPassword " +
+                "is missing. Nothing was changed.");
+            return false;
+        }
+
+        logger.LogWarning(
+            "ADMIN RECOVERY is on (SimGuard:Seed:RecoverAdmin=true). Remove SimGuard__Seed__RecoverAdmin and " +
+            "SimGuard__Seed__AdminPassword from the server settings and restart as soon as you have signed in.");
+
+        var db = provider.GetRequiredService<SimGuardDbContext>();
+        var audit = provider.GetRequiredService<AuditWriter>();
+        var user = await userManager.FindByEmailAsync(email);
+
+        if (user is null)
+        {
+            if (!await CreateUserAsync(
+                    userManager, events, logger, email, password, "Administrator", AppRoles.Admin, cancellationToken))
+            {
+                return false;
+            }
+
+            audit.AddSystem(AuditActions.AdminRecovered, null, null, new { email, outcome = "created" });
+            await db.SaveChangesAsync(cancellationToken);
+            logger.LogWarning("Admin recovery: created the Admin account {Email}.", email);
+            return true;
+        }
+
+        try
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+            var previousRoles = await userManager.GetRolesAsync(user);
+            var wasDisabled = user.IsDisabled;
+            var wasLocked = user.LockoutEnd > DateTimeOffset.UtcNow;
+
+            var others = previousRoles.Where(role => role != AppRoles.Admin).ToList();
+            if (others.Count > 0)
+            {
+                Ensure(await userManager.RemoveFromRolesAsync(user, others));
+            }
+
+            if (!previousRoles.Contains(AppRoles.Admin))
+            {
+                Ensure(await userManager.AddToRoleAsync(user, AppRoles.Admin));
+            }
+
+            user.IsDisabled = false;
+            user.EmailConfirmed = true;
+            user.MustChangePassword = true;
+            Ensure(await userManager.UpdateAsync(user));
+
+            var resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+            Ensure(await userManager.ResetPasswordAsync(user, resetToken, password));
+            Ensure(await userManager.SetLockoutEndDateAsync(user, null));
+            Ensure(await userManager.ResetAccessFailedCountAsync(user));
+            Ensure(await userManager.SetTwoFactorEnabledAsync(user, false));
+            Ensure(await userManager.ResetAuthenticatorKeyAsync(user));
+            Ensure(await AuthEndpoints.ClearRecoveryCodesAsync(userManager, user));
+            Ensure(await userManager.UpdateSecurityStampAsync(user));
+
+            // No password, hash or secret in the entry.
+            audit.AddSystem(
+                AuditActions.AdminRecovered,
+                null,
+                new { email, roles = previousRoles, isDisabled = wasDisabled, locked = wasLocked },
+                new { email, outcome = "repaired", role = AppRoles.Admin, isDisabled = false, locked = false, mfaReset = true, mustChangePassword = true });
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            await events.LogAsync(AuthEventTypes.MfaReset, true, user.Id, user.Email, cancellationToken);
+            logger.LogWarning("Admin recovery: repaired the Admin account {Email}.", email);
+            return true;
+        }
+        catch (InvalidOperationException exception) when (exception.Message.StartsWith("Admin recovery failed", StringComparison.Ordinal))
+        {
+            // The transaction is rolled back: the account is exactly as it was.
+            logger.LogError("{Error} Nothing was changed.", exception.Message);
+            return false;
+        }
+    }
+
+    private static void Ensure(IdentityResult result)
+    {
+        if (!result.Succeeded)
+        {
+            // Descriptions never contain the password. The outer catch logs the type only.
+            throw new InvalidOperationException(
+                "Admin recovery failed: " + string.Join(" ", result.Errors.Select(e => e.Description)));
         }
     }
 

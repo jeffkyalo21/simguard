@@ -1,0 +1,189 @@
+# SimGuard production stack: postgres, backend, ML service, web app, carrier
+# mock and the Caddy proxy on one VM. Only caddy publishes ports (80, 443).
+#
+# Run from the repository root:
+#   deploy/scripts/preflight.sh          # checks deploy/.env, folders and DNS
+#   docker compose -f deploy/docker-compose.yml up -d --build
+# Variables come from deploy/.env (copy deploy/.env.example, chmod 600, never commit it).
+# Never run "down -v" on a live server: it deletes the data volume.
+name: ${COMPOSE_PROJECT_NAME:-simguard}
+
+x-service: &service
+  restart: unless-stopped
+  networks: [internal]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  postgres:
+    <<: *service
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${SIMGUARD_DB_NAME:?set SIMGUARD_DB_NAME in deploy/.env}
+      POSTGRES_USER: ${SIMGUARD_DB_OWNER:?set SIMGUARD_DB_OWNER in deploy/.env}
+      POSTGRES_PASSWORD: ${SIMGUARD_DB_OWNER_PASSWORD:?set SIMGUARD_DB_OWNER_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - pgbackups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  backend:
+    <<: *service
+    build: {context: ../backend, dockerfile: Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-simguard}-backend:latest
+    mem_limit: 1g
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=${SIMGUARD_DB_NAME};Username=${SIMGUARD_DB_OWNER};Password=${SIMGUARD_DB_OWNER_PASSWORD}
+      Database__MigrateOnStartup: "true"
+      Logging__LogLevel__Default: Information
+      Logging__LogLevel__Microsoft.EntityFrameworkCore: Warning
+      Jwt__Key: ${JWT_KEY:?set JWT_KEY in deploy/.env}
+      MlService__BaseUrl: http://ml:8001
+      MlService__SharedSecret: ${ML_SHARED_SECRET:?set ML_SHARED_SECRET in deploy/.env}
+      # TLS ends at Caddy; trust X-Forwarded-For from the private network only.
+      Hosting__UseHttpsRedirection: "false"
+      ForwardedHeaders__KnownNetworks__0: ${SIMGUARD_SUBNET:-172.29.77.0/24}
+      # The demo feed is the carrier mock on the private network, plain http. Set
+      # CARRIER_FEED_ALLOW_INSECURE_HTTP=false once real carriers (https) replace it.
+      CarrierFeed__AllowInsecureHttp: ${CARRIER_FEED_ALLOW_INSECURE_HTTP:-true}
+      # Email (Brevo). Without an API key no email is sent.
+      Brevo__ApiKey: ${BREVO_API_KEY:-}
+      Brevo__SignInUrl: ${BREVO_SIGN_IN_URL:-https://${DOMAIN:-sim-guard.app}/login}
+      Brevo__SenderEmail: ${BREVO_SENDER_EMAIL:-no-reply@sim-guard.app}
+      # First Admin (only while there are no accounts) and emergency recovery.
+      SimGuard__Seed__AdminEmail: ${SIMGUARD_ADMIN_EMAIL:-}
+      SimGuard__Seed__AdminPassword: ${SIMGUARD_ADMIN_PASSWORD:-}
+      SimGuard__Seed__RecoverAdmin: ${SIMGUARD_RECOVER_ADMIN:-false}
+    volumes:
+      - dpkeys:/keys
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\\r\\nHost: x\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  # One-shot: creates or refreshes the read-only role once the backend has
+  # migrated. It runs again on every "up", so a recreated view never loses its grant.
+  dbgrants:
+    image: postgres:16
+    restart: "no"
+    networks: [internal]
+    depends_on:
+      backend: {condition: service_healthy}
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${SIMGUARD_DB_NAME}
+      PGUSER: ${SIMGUARD_DB_OWNER}
+      PGPASSWORD: ${SIMGUARD_DB_OWNER_PASSWORD}
+      ML_USER: ${SIMGUARD_ML_USER:?set SIMGUARD_ML_USER in deploy/.env}
+      ML_PASSWORD: ${SIMGUARD_ML_PASSWORD:?set SIMGUARD_ML_PASSWORD in deploy/.env}
+    volumes:
+      - ./postgres/ml-readonly.sql:/ml-readonly.sql:ro
+    entrypoint: ["psql", "-v", "ON_ERROR_STOP=1", "-q", "-f", "/ml-readonly.sql"]
+
+  ml:
+    <<: *service
+    build: {context: ../ml-service, dockerfile: Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-simguard}-ml:latest
+    mem_limit: 2g
+    depends_on:
+      dbgrants: {condition: service_completed_successfully}
+    environment:
+      ML_ENVIRONMENT: Production
+      READER: postgres
+      ML_DATABASE_URL: postgresql://${SIMGUARD_ML_USER}:${SIMGUARD_ML_PASSWORD}@postgres:5432/${SIMGUARD_DB_NAME}
+      ML_SHARED_SECRET: ${ML_SHARED_SECRET:?set ML_SHARED_SECRET in deploy/.env}
+      ML_ARTIFACT_DIR: /models/artifacts
+      ML_PROPHET_N_JOBS: ${ML_PROPHET_N_JOBS:-2}
+    volumes:
+      - ${SIMGUARD_ML_ARTIFACTS_DIR:?set SIMGUARD_ML_ARTIFACTS_DIR in deploy/.env}:/models/artifacts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=4).status == 200 else 1)"]
+      interval: 15s
+      timeout: 6s
+      retries: 8
+      start_period: 60s
+
+  carriermock:
+    <<: *service
+    build: {context: ../backend, dockerfile: Dockerfile.carriermock}
+    image: ${COMPOSE_PROJECT_NAME:-simguard}-carriermock:latest
+    mem_limit: 1g
+    env_file:
+      # CarrierMock__Keys__<carrier>, written by deploy/scripts/prepare-data.py
+      - ${SIMGUARD_MOCK_ENV_FILE:?set SIMGUARD_MOCK_ENV_FILE in deploy/.env}
+    environment:
+      CarrierMock__DataDir: /data/mock-data
+      CarrierMock__SessionsFile: /data/mock-data/synthetic_cdr_sessions.csv
+      # "last" (default) = the last date in the data; or a date yyyy-MM-dd.
+      CarrierMock__StartDate: ${CARRIER_MOCK_DATE:-last}
+    volumes:
+      - ${SIMGUARD_MOCK_DATA_DIR:?set SIMGUARD_MOCK_DATA_DIR in deploy/.env}:/data/mock-data:ro
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET / HTTP/1.0\\r\\nHost: x\\r\\n\\r\\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  frontend:
+    <<: *service
+    build: {context: ../frontend, dockerfile: Dockerfile}
+    image: ${COMPOSE_PROJECT_NAME:-simguard}-frontend:latest
+    mem_limit: 768m
+    depends_on:
+      backend: {condition: service_healthy}
+    environment:
+      BACKEND_URL: http://backend:8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 6s
+      retries: 8
+      start_period: 30s
+
+  caddy:
+    <<: *service
+    image: caddy:2
+    depends_on:
+      frontend: {condition: service_healthy}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      DOMAIN: ${DOMAIN:-sim-guard.app}
+      CADDY_GLOBAL_OPTIONS: ${CADDY_GLOBAL_OPTIONS:-}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${SIMGUARD_SUBNET:-172.29.77.0/24}
+
+volumes:
+  pgdata:
+  pgbackups:
+  dpkeys:
+  caddy_data:
+  caddy_config:

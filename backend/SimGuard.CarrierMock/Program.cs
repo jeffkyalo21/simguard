@@ -34,10 +34,14 @@ foreach (var name in data.CarrierNames)
     keys[name] = key;
 }
 
+// CarrierMock:StartDate is a date (yyyy-MM-dd), "last" for the last day in the
+// data, or empty for the first day in the data.
 var startDate = DateOnly.TryParseExact(config["CarrierMock:StartDate"], "yyyy-MM-dd",
     CultureInfo.InvariantCulture, DateTimeStyles.None, out var configured)
     ? configured
-    : data.FirstDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+    : string.Equals(config["CarrierMock:StartDate"]?.Trim(), "last", StringComparison.OrdinalIgnoreCase)
+        ? data.LastDate ?? DateOnly.FromDateTime(DateTime.UtcNow)
+        : data.FirstDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
 var state = new MockState(startDate);
 
