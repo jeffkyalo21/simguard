@@ -1,6 +1,4 @@
 
-using System.Net;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
@@ -43,20 +41,12 @@ builder.AddSimGuardSecurity();
 
 // The Next.js server calls this API for every visitor, so the client address
 // (used by the rate limits) comes from X-Forwarded-For. It is trusted only
-// from loopback and the proxies listed in ForwardedHeaders:KnownProxies.
+// from loopback, ForwardedHeaders:KnownProxies and ForwardedHeaders:KnownNetworks.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
-    options.ForwardLimit = 1;
+    HostingChecks.ConfigureForwardedHeaders(options, builder.Configuration));
 
-    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
-    {
-        if (IPAddress.TryParse(proxy, out var address))
-        {
-            options.KnownProxies.Add(address);
-        }
-    }
-});
+HostingChecks.RequireProductionSecrets(builder.Configuration, builder.Environment);
+HostingChecks.ConfigureDataProtection(builder);
 
 var app = builder.Build();
 
@@ -91,7 +81,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+// Behind the proxy (TLS ends there) set Hosting__UseHttpsRedirection=false.
+if (app.Configuration.GetValue("Hosting:UseHttpsRedirection", true))
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors(SecurityServiceExtensions.CorsPolicy);
 app.UseAuthentication();

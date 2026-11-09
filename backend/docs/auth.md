@@ -474,6 +474,9 @@ not declare its own policy, so a new endpoint is protected by default.
 | `SimGuard:Seed:AdminName` | no | `Administrator` | |
 | `SimGuard:Seed:RecoverAdmin` | no | off | emergency recovery, see "Emergency Admin recovery"; only the exact value `true` turns it on |
 | `Database:MigrateOnStartup` | no | `false` | `true` applies pending EF migrations at startup (environment variable `Database__MigrateOnStartup`) |
+| `Hosting:UseHttpsRedirection` | no | `true` | set `false` behind a TLS terminating proxy (`Hosting__UseHttpsRedirection=false`) |
+| `Hosting:DataProtectionKeysPath` | no | none | folder for the Data Protection key ring (it encrypts stored carrier API keys); in a container make it a volume. Without it the default per-user folder is used |
+| `ForwardedHeaders:KnownProxies`, `ForwardedHeaders:KnownNetworks` | no | loopback only | addresses and CIDR ranges (for example the private Compose network) whose `X-Forwarded-For` is trusted, so the per-IP rate limit sees the real client |
 | `SimGuard:Seed:OfficerEmail`, `OfficerPassword`, `OfficerName` | no (Development only) | name `Security Officer` | test SecurityOfficer |
 | `SimGuard:Seed:AuditorEmail`, `AuditorPassword`, `AuditorName` | no (Development only) | name `Auditor` | test Auditor |
 
@@ -618,3 +621,10 @@ accounts and audit rows behind.
 - A TOTP code can be used more than once within its 30 second window.
 - The rate limiter and lockout use the client IP as seen by the API. Behind
   a reverse proxy, configure forwarded headers first.
+
+### Production start checks
+
+Outside Development the API refuses to start when `Jwt:Key` or
+`MlService:SharedSecret` is missing or a placeholder (empty, one repeated
+character, or containing `changeme`, `replace`, `example`, `your-`, `<`, `>`
+and similar). The message names the setting, never its value.
