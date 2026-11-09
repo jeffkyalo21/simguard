@@ -1,0 +1,24 @@
+# Public entry point. Only this service publishes ports (80 and 443).
+# Everything is proxied to the web app; the web app talks to the API over the
+# private network, so the API, ML service, mock and database have no public route.
+{
+	# Optional: "local_certs" for the local test (Caddy's own CA instead of Let's Encrypt).
+	{$CADDY_GLOBAL_OPTIONS}
+}
+
+{$DOMAIN:sim-guard.app} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy frontend:3000 {
+		# The web app forwards this to the API for the per-IP rate limit. Caddy
+		# overwrites any value a visitor sends.
+		header_up X-Forwarded-For {remote_host}
+	}
+}

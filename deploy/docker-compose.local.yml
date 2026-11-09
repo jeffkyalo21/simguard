@@ -1,5 +1,9 @@
-# Local proof only: publishes postgres on host port 5439. Do not use on a server.
-#   docker compose -p sgdeploy -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml up -d
+# Local proof only. Do not use on a server.
+#   docker compose -p sgdeploy --env-file <env> -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml up -d
+# Publishes postgres on 127.0.0.1:5439. Caddy listens on 8088 (http) and 8443
+# (https) through HTTP_PORT and HTTPS_PORT in the env file. Also set in the env
+# file: DOMAIN=localhost and CADDY_GLOBAL_OPTIONS=local_certs (Caddy's own CA
+# instead of Let's Encrypt).
 services:
   postgres:
     ports:
