@@ -331,6 +331,38 @@ Files over the import limits (25 MB, 250000 rows)
 are split into numbered parts, imported in order. `--rotate-keys` replaces the
 carrier keys; `--no-sessions` leaves the large per-session file out.
 
+#### One pack per organisation (slices)
+
+With several organisations each one gets its own part of the 1000 SIMs.
+`--sim-offset` and `--sim-count` pick SIMs by position in the sorted SIM ids,
+`--org-name <slug>` names the slice and sets the default folder
+`deploy/data-pack-<slug>` (git-ignored). A slice holds only its SIMs with their
+employees, allocations and usage, all four departments (unchanged), its own
+`mock-data/` (only its SIMs, sessions included) and its own `mock.env` with
+newly generated carrier keys. An existing `mock.env` is never overwritten.
+Names and emails are computed over all 1000 SIMs first, so a person has the
+same name and email in every pack and no email appears in two slices.
+
+```bash
+# laptop, repository root: the first organisation gets SIMs 0 to 699 (700), the second 700 to 999 (300)
+python3 deploy/scripts/prepare-data.py --org-name main   --out deploy/data-pack --sim-offset 0   --sim-count 700
+python3 deploy/scripts/prepare-data.py --org-name second                         --sim-offset 700 --sim-count 300
+```
+
+The second command writes `deploy/data-pack-second/`. Import each pack in its
+own organisation as in step 9, and copy `mock-data/` and `mock.env` of a pack
+to that organisation's folder (`/srv/simguard/<slug>/`). Expected totals are in
+each pack's `README.txt`: main 700 employees, SIMs, allocations and 63000 usage
+rows; second 300 and 27000. Without the three options the whole pack is
+written, as before.
+
+Writing a slice into the folder of the live pack changes `02_employees.csv`,
+`03_sims.csv`, `04_allocations.csv`, `05_usage.csv`, `README.txt` and all four
+files in `mock-data/` (fewer SIMs). `01_departments.csv` stays the same.
+`mock.env` stays untouched, so the live carrier keys remain valid. Do not copy
+the new `mock-data/` over a running stack that still holds the other 300 SIMs
+unless you also want the mock to stop serving them.
+
 ## Admin accounts survive
 
 Accounts live in the database, in the `pgdata` volume. They survive container
@@ -601,3 +633,6 @@ Chosen unattended; change them if you disagree.
 46. **Local proof settings**: `DOMAIN=sgorg.localhost`, project prefix `sgorg` (projects `sgorg-a`, `sgorg-b`, `sgorg-edge`), network `sgorg-edge-net`, `local_certs`, ports 8088 and 8443, images `sgorg-*`, `Brevo__ApiKey` blank. The proof script connects to 127.0.0.1 but sends the organisation's host as SNI and `Host` (Windows does not resolve `*.localhost`), and verifies the certificate against the root certificate copied from the Caddy container.
 47. **Migration proof**: a stack was started from the old layout (`git archive` of the commit before this branch, project `sgorg-live`, with data), then the checkout was replaced by this branch's files and the documented commands were run. The Development override was used before and after so an Officer could exist; it changes only the backend environment, and the backend container was not recreated by the migration.
 48. **Not tested here**: real Let's Encrypt issuance and wildcard DNS (the local proof uses Caddy's own CA), Ubuntu (everything ran from Git Bash on Windows with Docker Desktop), a 4 GB VM under load, two scoring runs at the same time, sending email, `update.sh` with a real `git pull`, the cron lines.
+49. **Slices**: `--sim-offset` and `--sim-count` count positions in the sorted SIM ids (the ids are 0 to 999, so offset equals id). Names and emails are drawn over all 1000 SIMs first and then cut, so a person is identical in every slice and emails cannot collide. `--org-name` must be a slug and only sets the default folder `deploy/data-pack-<slug>`. Slice folders are git-ignored.
+50. **Which folder is the "live" pack**: the main slice was written to `deploy/data-pack` of this worktree (git-ignored, with its own older `mock.env`, kept byte-identical). The pack in the main checkout (`simguard/deploy/data-pack`) was only read, to list what would change if the main slice replaced it: everything except `01_departments.csv` and `mock.env`.
+51. **Pack imports** ran against two throwaway databases (`sg_check_main`, `sg_check_second`) in a throwaway postgres container on 127.0.0.1:55432 and two Development APIs on 127.0.0.1:5871 and 5872, all removed afterwards. All five types were imported, usage included (scoring was disabled for the run): 4/700/700/700/63000 and 4/300/300/300/27000 rows, no errors.
