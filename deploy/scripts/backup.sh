@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Compressed pg_dump of the SimGuard database into the backup volume
 # (/backups in the postgres container), keeping the newest 7.
-# Usage: deploy/scripts/backup.sh          (run daily from cron, see docs/deployment.md)
+# Usage: deploy/scripts/backup.sh [org slug]   (default: the first organisation)
+# Run daily from cron; deploy/scripts/backup-all.sh does every organisation.
 set -euo pipefail
+if [[ $# -ge 1 ]]; then export SIMGUARD_ORG="$1"; fi
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 KEEP="${SIMGUARD_BACKUP_KEEP:-7}"
 

@@ -6,7 +6,7 @@
 # the carrier mock data folders exist and are complete; the DNS name of DOMAIN
 # points at this machine; docker and memory.
 # It prints no secret values. Exit 0 = ready, 1 = something to fix.
-# Environment: SIMGUARD_ENV_FILE (default deploy/.env), SIMGUARD_SKIP_DNS_CHECK=1
+# Environment: SIMGUARD_ENV_FILE (default deploy/.env; an organisation: its deploy/orgs/<slug>.env), SIMGUARD_SKIP_DNS_CHECK=1
 # to skip the DNS check, SIMGUARD_SKIP_MODE_CHECK=1 to skip the file mode checks
 # (both for local tests; Windows files always look like mode 644).
 set -uo pipefail
@@ -126,7 +126,9 @@ else
 fi
 
 # DNS: the name must point at this machine, or Let's Encrypt cannot issue the certificate.
-domain="$(get DOMAIN)"
+# An organisation on a subdomain sets SIMGUARD_ORG_HOST (create-org.sh does); else DOMAIN.
+domain="$(get SIMGUARD_ORG_HOST)"
+[[ -n "$domain" ]] || domain="$(get DOMAIN)"
 if [[ "${SIMGUARD_SKIP_DNS_CHECK:-0}" == 1 || "$domain" == localhost || "$domain" == *.localhost ]]; then
   warn "DNS check skipped for $domain."
 elif [[ -n "$domain" ]]; then
@@ -165,4 +167,4 @@ if (( fails > 0 )); then
   echo "$fails problem(s), $warns warning(s). Fix the FAIL lines above and run this again." >&2
   exit 1
 fi
-echo "Ready ($warns warning(s)). Next: docker compose -f deploy/docker-compose.yml up -d --build"
+echo "Ready ($warns warning(s)). Next: deploy/scripts/edge.sh up (once per VM), then docker compose -f deploy/docker-compose.yml up -d --build"

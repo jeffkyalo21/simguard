@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # Restores the newest dump into a throwaway database, compares the row count of
 # every table with the live database, then drops the throwaway database.
-# Usage: deploy/scripts/test-restore.sh [--allow-growth]
+# Usage: deploy/scripts/test-restore.sh [org slug] [--allow-growth]
+#   org slug        which organisation (default: the first one)
 #   --allow-growth  a live table with MORE rows than the dump is accepted
 #                   (new data since the backup); fewer rows is always an error.
 set -euo pipefail
+allow_growth=""
+for arg in "$@"; do
+  case "$arg" in
+    --allow-growth) allow_growth="--allow-growth" ;;
+    -*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *) export SIMGUARD_ORG="$arg" ;;
+  esac
+done
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 here="$(dirname "${BASH_SOURCE[0]}")"
-allow_growth="${1:-}"
 
 latest="$(dc exec -T postgres sh -c "ls -1t /backups/${DB_NAME}_*.dump 2>/dev/null | head -n1 | sed 's#.*/##'" | tr -d '\r')"
 if [[ -z "$latest" ]]; then echo "No dump found. Run backup.sh first." >&2; exit 1; fi
