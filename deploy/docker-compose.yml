@@ -52,6 +52,9 @@ services:
       # TLS ends at Caddy; trust X-Forwarded-For from the private network only.
       Hosting__UseHttpsRedirection: "false"
       ForwardedHeaders__KnownNetworks__0: ${SIMGUARD_SUBNET:-172.29.77.0/24}
+      # The demo feed is the carrier mock on the private network, plain http. Set
+      # CARRIER_FEED_ALLOW_INSECURE_HTTP=false once real carriers (https) replace it.
+      CarrierFeed__AllowInsecureHttp: ${CARRIER_FEED_ALLOW_INSECURE_HTTP:-true}
       # Email (Brevo). Without an API key no email is sent.
       Brevo__ApiKey: ${BREVO_API_KEY:-}
       Brevo__SignInUrl: ${BREVO_SIGN_IN_URL:-https://${DOMAIN:-sim-guard.app}/login}
@@ -122,8 +125,8 @@ services:
     environment:
       CarrierMock__DataDir: /data/mock-data
       CarrierMock__SessionsFile: /data/mock-data/synthetic_cdr_sessions.csv
-      # Empty = the last date in the data (the mock's own default).
-      CarrierMock__StartDate: ${CARRIER_MOCK_DATE:-}
+      # "last" (default) = the last date in the data; or a date yyyy-MM-dd.
+      CarrierMock__StartDate: ${CARRIER_MOCK_DATE:-last}
     volumes:
       - ${SIMGUARD_MOCK_DATA_DIR:?set SIMGUARD_MOCK_DATA_DIR in deploy/.env}:/data/mock-data:ro
     healthcheck:
