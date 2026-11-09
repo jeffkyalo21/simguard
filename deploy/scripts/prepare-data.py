@@ -3,6 +3,11 @@
 
     python3 deploy/scripts/prepare-data.py [--out DIR] [--no-sessions] [--rotate-keys]
 
+The output folder is --out, else the SIMGUARD_DATA_PACK_OUT environment
+variable, else deploy/data-pack. The people are realistic Kenyan names built by
+demo_people.py (same names on every run); the same first.last@example.com
+email is used in the employees, allocations and mock-data/sim_mapping.csv.
+
 It reuses the rules of ml-service/scripts/make_import_files.py (same fake
 ICCIDs, phone numbers, departments, carriers and column names, taken from the
 generator output ml-service/data/synthetic_cdr_daily_agg.csv) and writes:
@@ -34,7 +39,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 GENERATOR = REPO / "ml-service" / "scripts" / "make_import_files.py"
-DEFAULT_OUT = REPO / "deploy" / "data-pack"
+DEFAULT_OUT = Path(os.environ.get("SIMGUARD_DATA_PACK_OUT") or REPO / "deploy" / "data-pack")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import demo_people  # noqa: E402  (sibling module: deterministic Kenyan demo names)
 
 # Import limits (backend/docs/imports.md). Parts stay a little under them.
 MAX_ROWS = 250_000
@@ -116,6 +123,9 @@ def main() -> None:
 
     rows, tiers = gen.read_source()
     mapping = gen.load_mapping(out / "mock-data" / "sim_mapping.csv", tiers)  # file absent: derived from sim_id
+    people = demo_people.people_for(tiers, tiers)
+    for sim_id, person in people.items():
+        mapping[sim_id]["employee_email"] = person["email"]
     sims = [mapping[s] for s in sorted(tiers)]
     rows.sort(key=lambda r: (int(r["sim_id"]), r["date"]))
 
@@ -130,7 +140,7 @@ def main() -> None:
         "departments": write_parts(out, 1, "departments", ["name"], ([n] for n in gen.DEPARTMENTS.values())),
         "employees": write_parts(
             out, 2, "employees", ["name", "email", "department", "job_role"],
-            ([f"Demo Employee {int(m['sim_id']):04d}", m["employee_email"], m["department"], gen.JOB_ROLES[m["tier"]]] for m in sims),
+            ([people[int(m["sim_id"])]["name"], m["employee_email"], m["department"], people[int(m["sim_id"])]["job_role"]] for m in sims),
         ),
         "sims": write_parts(out, 3, "sims", sims_header, sim_rows()),
         "allocations": write_parts(
