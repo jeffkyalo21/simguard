@@ -42,9 +42,8 @@ ask() { # question; yes only when the answer is exactly "yes"; no terminal means
 }
 
 echo "Stopping $project${host:+ ($host)}"
-# "stop" then "rm" without -v: the volumes survive this step.
-dcp stop >/dev/null 2>&1 || true
-dcp rm -f >/dev/null 2>&1 || true
+# "down" without -v: containers and the private network go, the volumes survive this step.
+dcp down --remove-orphans >/dev/null 2>&1 || true
 
 if [[ -n "$line" ]]; then
   tmp="$(mktemp)"
@@ -58,7 +57,8 @@ if [[ -n "$line" ]]; then
   fi
 fi
 
-volumes="$(docker volume ls -q --filter "label=com.docker.compose.project=$project")"
+# Only this project's own volumes (<project>_pgdata and so on), never a named shared one.
+volumes="$(docker volume ls -q --filter "label=com.docker.compose.project=$project" | grep -E "^${project}_" || true)"
 if [[ -n "$volumes" ]]; then
   echo "Volumes of $project (database, keys, backups):"
   sed 's/^/  /' <<<"$volumes"

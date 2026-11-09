@@ -8,6 +8,8 @@
 #   3. the first line of deploy/orgs/orgs.list (the first organisation)
 #   4. deploy/.env                (a single stack that was never registered)
 
+# Git Bash on Windows would rewrite /etc/... arguments given to docker exec; on Ubuntu this does nothing.
+export MSYS_NO_PATHCONV=1
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Git Bash on Windows (local proof only) needs native paths for docker; on Ubuntu this is a no-op.
 native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
