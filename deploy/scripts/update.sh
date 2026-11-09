@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Updates the running stack in place: new code, new images, same data.
 #   deploy/scripts/update.sh [--no-pull] [--no-build]
+#   SIMGUARD_ORG=<slug> deploy/scripts/update.sh ...   another organisation than the first
+#   deploy/scripts/update-all.sh                       every organisation (builds once)
 #
 #   1. git pull --ff-only          (skipped with --no-pull, or outside a git checkout)
 #   2. preflight.sh                (stops here if .env, folders or DNS are wrong)
-#   3. docker compose pull         (postgres and caddy images)
+#   3. docker compose pull         (the postgres image; the shared Caddy: deploy/scripts/edge.sh up)
 #   4. docker compose build        (backend, ML, carrier mock, web app; one at a time
 #                                   so a 4 GB VM does not run out of memory; skipped with --no-build)
 #   5. docker compose up -d        (only changed services restart; the backend applies
@@ -40,7 +42,16 @@ fi
 
 "$here/preflight.sh"
 
-dc pull postgres caddy dbgrants
+# A stack from before the shared Caddy still has its own caddy container. Updating
+# it with this compose file would remove that container and take the site down.
+if dc ps -a --format '{{.Service}}' 2>/dev/null | grep -qx caddy; then
+  echo "This stack still has its own caddy container (the layout before several organisations)." >&2
+  echo "Move it to the shared Caddy first: docs/deployment.md, section 'Moving the live stack'." >&2
+  exit 1
+fi
+ensure_edge_network
+
+dc pull postgres dbgrants
 if (( do_build )); then
   for service in backend ml carriermock frontend; do
     echo "== building $service"
@@ -51,7 +62,7 @@ fi
 dc up -d --remove-orphans
 
 # Wait for every long-running service to report healthy (up to 6 minutes).
-services=(postgres backend ml carriermock frontend caddy)
+services=(postgres backend ml carriermock frontend)
 for _ in $(seq 1 72); do
   waiting=()
   for s in "${services[@]}"; do
@@ -63,7 +74,7 @@ for _ in $(seq 1 72); do
 done
 if (( ${#waiting[@]} )); then
   echo "Not healthy after 6 minutes: ${waiting[*]}" >&2
-  echo "Look at: docker compose -f deploy/docker-compose.yml logs --tail 50 <service>" >&2
+  echo "Look at: docker compose -p ${COMPOSE_PROJECT_NAME:-simguard} -f deploy/docker-compose.yml logs --tail 50 <service>" >&2
   exit 1
 fi
 

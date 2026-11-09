@@ -5,6 +5,7 @@
 # The target is created when missing. If it already has tables, --replace is
 # required and the tables are dropped and recreated from the dump. To restore
 # over the live database, stop the backend first (docs/deployment.md).
+# Another organisation than the first: SIMGUARD_ORG=<slug> deploy/scripts/restore.sh ...
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 

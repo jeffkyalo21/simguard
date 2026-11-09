@@ -1,0 +1,11 @@
+# LOCAL TESTS ONLY. Never use this on a server.
+# Runs the backend in the Development environment so a test can create an Officer
+# with a chosen temporary password (POST /api/users accepts temporaryPassword only
+# in Development) instead of waiting for an invitation email. It also lifts the
+# sign-in rate limit for a script that signs in several times.
+# Use it with: SIMGUARD_COMPOSE_EXTRA=deploy/test/docker-compose.development.yml
+services:
+  backend:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      RateLimiting__Auth__PermitLimit: "1000"
