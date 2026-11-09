@@ -98,6 +98,7 @@ class Site:
     def __init__(self, host: str, port: int, ctx: ssl.SSLContext):
         self.host, self.port, self.ctx = host, port, ctx
         self.cookies: dict[str, str] = {}
+        self.last_totp_secret = ""
 
     def request(self, method, path, body=None, raw=None, ctype=None, cookies=None):
         conn = Conn(self.host, self.port, context=self.ctx, timeout=300)
@@ -136,6 +137,7 @@ class Site:
         if status != 200:
             return False
         match = re.search(r"secret=([A-Z2-7]+)", data["authenticatorUri"])
+        self.last_totp_secret = match.group(1)
         status, data, _ = self.request("POST", "/api/auth/mfa/enroll/confirm", {"code": totp(match.group(1))})
         if status != 200:
             return False
@@ -144,6 +146,22 @@ class Site:
                                         {"currentPassword": temporary, "newPassword": new_password})
             return status == 200
         return True
+
+    def sign_in(self, email: str, password: str, totp_secret: str) -> bool:
+        """Sign-in of an account that already has MFA: password, then the current code."""
+        status, data, _ = self.request("POST", "/api/auth/login", {"email": email, "password": password})
+        if status != 200 or (data or {}).get("next") != "mfa":
+            return False
+        status, _, _ = self.request("POST", "/api/auth/mfa/verify", {"code": totp(totp_secret)})
+        return status == 200
+
+    def certificate_fingerprint(self) -> str:
+        """SHA-256 of the certificate Caddy presents for this host."""
+        conn = Conn(self.host, self.port, context=self.ctx, timeout=30)
+        conn.connect()
+        der = conn.sock.getpeercert(binary_form=True)
+        conn.close()
+        return hashlib.sha256(der).hexdigest()
 
     def upload(self, kind: str, path: Path, mode: str):
         boundary = uuid.uuid4().hex

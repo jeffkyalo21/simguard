@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The shared Caddy (deploy/shared/docker-compose.yml): the only thing on the VM
 # that publishes ports 80 and 443.
+#   deploy/scripts/edge.sh network  only create the edge network (the migration needs it before Caddy moves)
 #   deploy/scripts/edge.sh up       create the edge network, render the sites, start Caddy
 #   deploy/scripts/edge.sh reload   render the sites and reload Caddy without a restart
 #   deploy/scripts/edge.sh ensure   up when Caddy is not running, else reload (what create-org.sh uses)
@@ -15,7 +16,8 @@ SIMGUARD_LIB_DEFER=1 source "$here/lib.sh"
 edge_env="${SIMGUARD_EDGE_ENV_FILE:-}"
 [[ -n "$edge_env" ]] || { [[ -f "$ORGS_DIR/edge.env" ]] && edge_env="$ORGS_DIR/edge.env" || true; }
 [[ -n "$edge_env" ]] || { [[ -f "$DEPLOY_DIR/.env" ]] && edge_env="$DEPLOY_DIR/.env" || true; }
-envval() { [[ -f "$1" ]] && grep -E "^$2=" "$1" | tail -n1 | cut -d= -f2- | tr -d '' || true; }
+envval() { [[ -f "$1" ]] && grep -E "^$2=" "$1" | tail -n1 | cut -d= -f2- | tr -d '
+' || true; }
 edge_project="${SIMGUARD_EDGE_PROJECT:-}"
 if [[ -z "$edge_project" && -n "$edge_env" ]]; then edge_project="$(envval "$edge_env" SIMGUARD_EDGE_PROJECT)"; fi
 edge_project="${edge_project:-simguard-edge}"
@@ -50,10 +52,11 @@ up() {
 }
 
 case "${1:-}" in
+  network) ensure_edge_network; echo "Network $EDGE_NETWORK is ready." ;;
   up) up ;;
   reload) reload ;;
   ensure) if running; then reload; else up; fi ;;
   down) edc down ;;
   status) edc ps ;;
-  *) echo "Usage: edge.sh up|reload|ensure|down|status" >&2; exit 2 ;;
+  *) echo "Usage: edge.sh network|up|reload|ensure|down|status" >&2; exit 2 ;;
 esac

@@ -63,9 +63,9 @@ if [[ -n "$volumes" ]]; then
   echo "Volumes of $project (database, keys, backups):"
   sed 's/^/  /' <<<"$volumes"
   if (( force )) || ask "Delete these volumes? All data of this organisation is lost."; then
-    # shellcheck disable=SC2086
-    docker volume rm $volumes >/dev/null
-    echo "Volumes deleted."
+    for v in $volumes; do
+      if docker volume rm "$v" >/dev/null 2>&1; then echo "  deleted $v"; else echo "  kept $v (in use, for example by the shared Caddy)"; fi
+    done
   else
     echo "Volumes kept."
   fi
