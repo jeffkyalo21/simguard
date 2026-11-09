@@ -33,6 +33,20 @@ async function readJson(response) {
 }
 
 /**
+ * Headers that hand the visitor's address to the API as X-Forwarded-For, so
+ * its per-IP rate limits count visitors one by one and not this server as a
+ * whole. The address is the last entry of X-Forwarded-For, which the proxy in
+ * front of this server (Caddy) set. Empty when the header is missing (local
+ * development without a proxy).
+ * @param {Request} request
+ * @returns {Record<string, string>}
+ */
+export function visitorAddressHeaders(request) {
+  const last = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim();
+  return last ? { "X-Forwarded-For": last } : {};
+}
+
+/**
  * Calls the backend. Never throws for HTTP or network failures: returns
  * `{ ok, status, data, retryAfter }` with status 0 when the backend could
  * not be reached. Tokens are sent as a Bearer header and never logged.
