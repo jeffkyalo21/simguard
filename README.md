@@ -13,12 +13,8 @@ Academic capstone project, Strathmore University. See [LICENSE.md](LICENSE.md).
 
 ## Architecture
 
-```
-browser --https--> shared caddy --> frontend (Next.js) --> backend (ASP.NET Core API) --> postgres
-                                                              |  ^
-                                                              |  +-- carriermock (demo carrier feed)
-                                                              +----> ml (FastAPI scoring service) --> postgres (read-only role)
-```
+<img width="940" height="627" alt="image" src="https://github.com/user-attachments/assets/34b19660-f41c-4552-8c99-050f47b34760" />
+
 
 Everything right of Caddy is one organisation's stack; several organisations can
 share one VM and one Caddy. Only Caddy is public. The browser never calls the API: the Next.js server does,
