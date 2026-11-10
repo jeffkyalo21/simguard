@@ -3,8 +3,12 @@
 Main milestones, taken from the merged pull requests (newest first). Dates are
 merge dates. No release tags exist yet; see the end of this file.
 
-## 2026-11-09 and 2026-11-08: Deployment and onboarding
+## 2026-11-09 and 2026-11-08: Deployment, several organisations and onboarding
 
+- #56 Several organisations on one VM: one shared Caddy stack and one Compose
+  project per organisation, scripts to create, list, adopt and remove an
+  organisation, organisation data packs, backups and updates per organisation,
+  and realistic Kenyan demo names in the data pack.
 - #55 Production deployment: Docker Compose stack with Caddy, PostgreSQL,
   backup, restore and update scripts, read-only ML database role, emergency
   Admin recovery, carrier mock for the demo, fresh VM procedure.
@@ -44,4 +48,5 @@ merge dates. No release tags exist yet; see the end of this file.
 ## Tags
 
 No tags have been created. Suggested: `v0.1.0-models` (#33 to #40),
-`v0.2.0-platform` (#41 to #54) and `v1.0.0-deploy` (#55).
+`v0.2.0-platform` (#41 to #54), `v0.3.0-deployment` (#55) and
+`v0.4.0-multi-org` (#56).
