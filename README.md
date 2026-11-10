@@ -14,13 +14,14 @@ Academic capstone project, Strathmore University. See [LICENSE.md](LICENSE.md).
 ## Architecture
 
 ```
-browser --https--> caddy --> frontend (Next.js) --> backend (ASP.NET Core API) --> postgres
-                                                        |  ^
-                                                        |  +-- carriermock (demo carrier feed)
-                                                        +----> ml (FastAPI scoring service) --> postgres (read-only role)
+browser --https--> shared caddy --> frontend (Next.js) --> backend (ASP.NET Core API) --> postgres
+                                                              |  ^
+                                                              |  +-- carriermock (demo carrier feed)
+                                                              +----> ml (FastAPI scoring service) --> postgres (read-only role)
 ```
 
-Only Caddy is public. The browser never calls the API: the Next.js server does,
+Everything right of Caddy is one organisation's stack; several organisations can
+share one VM and one Caddy. Only Caddy is public. The browser never calls the API: the Next.js server does,
 on its behalf, over a private network. The backend asks the ML service for a
 risk score per SIM-day with a shared secret; the ML service reads usage through
 a read-only database role.
@@ -32,7 +33,7 @@ a read-only database role.
 | `backend/` | ASP.NET Core 10 API (EF Core, PostgreSQL, Identity with TOTP MFA, JWT). Also the carrier mock and the xUnit tests. See [backend/README.md](backend/README.md) |
 | `frontend/` | Next.js 16 web app: dashboard, SIMs, allocations, usage, alerts, tier recommendations, imports, audit log, admin. See [frontend/README.md](frontend/README.md) |
 | `ml-service/` | Python scoring pipeline (features, Isolation Forest, cohort z-score, XGBoost with SHAP, Prophet forecasts) behind a FastAPI service, plus notebooks and the evaluation. See [ml-service/README.md](ml-service/README.md) |
-| `deploy/` | Docker Compose stack, Caddy, backup, restore and update scripts, `.env.example` |
+| `deploy/` | Docker Compose stack for one organisation, the shared Caddy, organisation, backup, restore and update scripts, `.env.example` |
 | `database/`, `initial-migration.sql` | Reference schema and an exported EF migration script |
 | `docs/` | Cross service docs: [deployment](docs/deployment.md), [carrier feed](docs/carrier-feed.md) |
 
@@ -138,7 +139,7 @@ To run the whole stack in containers instead, see Deploy below.
 
 | Where | Command |
 | ----- | ------- |
-| Backend unit and integration tests | `SIMGUARD_TEST_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=<pw>" dotnet test backend/SimGuard.Api.Tests` (tests that need a database are skipped without the variable; each run uses a random database and drops it) |
+| Backend unit and integration tests | `SIMGUARD_TEST_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=<pw>" dotnet test backend/SimGuard.Api.Tests` (tests that need a database return early, so they pass without checking anything, when the variable is unset; each run uses a random database and drops it) |
 | ML service | `cd ml-service && venv/Scripts/python -m pytest -q` |
 | Frontend | `cd frontend && npm test` and `npm run lint` |
 | Backend smoke scripts | `backend/docs/*-smoke.ps1`, run against a running Development API on a throwaway database. Each script's header lists its parameters and the environment variables it needs (for example `SIMGUARD_SMOKE_ADMIN_EMAIL` and `SIMGUARD_SMOKE_ADMIN_PASSWORD`). The contract for each area is in `backend/docs/` |
@@ -148,10 +149,17 @@ change data.
 
 ## Deploy
 
-One Ubuntu VM runs the whole system with
-`docker compose -f deploy/docker-compose.yml up -d --build`. The full procedure
-(fresh VM, DNS, secrets, first sign-in, email, backups, updates, recovery) is in
-[docs/deployment.md](docs/deployment.md).
+One Ubuntu VM runs the whole system: the shared Caddy once per VM, then one
+stack per organisation.
+
+```bash
+deploy/scripts/edge.sh up
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+The full procedure (fresh VM, DNS, secrets, first sign-in, email, backups,
+updates, recovery, and running several organisations with
+`deploy/scripts/create-org.sh`) is in [docs/deployment.md](docs/deployment.md).
 
 ## Roles
 
@@ -165,12 +173,21 @@ The endpoint by role matrix is in [backend/docs/auth.md](backend/docs/auth.md).
 
 ## Workflow
 
-- Work is tracked in GitHub issues. Starting an issue creates the branch
-  `feat/<number>-<title>` (`.github/issue-branch.yml`).
-- `main` is never committed to directly. Each branch is merged through a pull
-  request with a merge commit, so every PR stays visible in history.
-- Commits are small and use conventional messages (`feat:`, `fix:`, `docs:`,
-  `build:`, `chore:`). One commit per step of work.
+- Work is tracked in GitHub issues. The issue to branch automation
+  (`.github/issue-branch.yml`) names the branch `feat/<number>-<title>`.
+  Work without an issue uses a descriptive branch such as `feat/deploy-prep`,
+  `feat/multi-org-stacks` or `chore/issue-branch-automation`.
+- After the first three setup commits, nothing was committed straight to
+  `main`. Every branch is merged through a pull request with a merge commit
+  (`Merge pull request #<n> from ...`), never squashed, so each commit of a
+  branch stays in history. Some branches also merged `main` into themselves.
+- One commit per step of work, with a short conventional message (`feat:`,
+  `fix:`, `docs:`, `build:`, `test:`, `chore:`), files staged by explicit path.
+  Commits are authored by the developer and carry no co-author, sign-off or
+  tool trailers.
+- Labels group issues and pull requests by area: `frontend`, `backend`,
+  `machine-learning`, `data`, `deployment`, `docs`, `testing`, `auth` and
+  `carrier-feed`.
 - Milestones are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Known limitations
