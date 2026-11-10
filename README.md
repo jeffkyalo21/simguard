@@ -193,14 +193,3 @@ The endpoint by role matrix is in [backend/docs/auth.md](backend/docs/auth.md).
   https (`CARRIER_FEED_ALLOW_INSECURE_HTTP=false`).
 - The models are trained on synthetic call data records, not real traffic.
   Results show the pipeline works, not how it performs on a real fleet.
-- The XGBoost gate sends about 29 percent of rows to the escalated band for
-  analyst review; case based reasoning was evaluated and not adopted. See
-  [ml-service/README.md](ml-service/README.md).
-- Email needs a Brevo API key. Without it no invitation or recovery email is
-  sent and System health shows Email as needing attention.
-- Images are built on the VM (no registry), and the stack is one VM with no
-  high availability.
-- Not covered: refresh tokens, OIDC, SAML and multi tenancy.
-- Not proved end to end: the real client address through Caddy for the sign-in
-  rate limit (proved inside the private network only). See "Decisions" in
-  [docs/deployment.md](docs/deployment.md).
