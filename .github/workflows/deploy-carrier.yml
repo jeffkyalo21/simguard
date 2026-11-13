@@ -1,0 +1,48 @@
+name: deploy-carrier
+
+# Deploys the mock carrier feed (deploy/carrier) to the carrier server through
+# AWS Systems Manager Run Command. AWS access through GitHub OIDC and the role
+# in vars.CARRIER_DEPLOY_ROLE_ARN; no stored AWS keys, no SSH.
+# Never runs on pull requests. Never touches the SimGuard server.
+on:
+  push:
+    branches: [main]
+    paths:
+      - deploy/carrier/**
+      - backend/SimGuard.CarrierMock/**
+      - backend/Dockerfile.carriermock
+      - deploy/aws/remote/deploy-carrier.sh
+      - deploy/aws/ssm-run.sh
+      - .github/workflows/deploy-carrier.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-carrier
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: carrier
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.CARRIER_DEPLOY_ROLE_ARN }}
+          role-session-name: deploy-carrier-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy on the carrier server
+        env:
+          SSM_COMMENT: deploy-carrier run ${{ github.run_id }}
+          SSM_EXECUTION_TIMEOUT: "2400"
+          INSTANCE_ID: ${{ vars.CARRIER_INSTANCE_ID }}
+        run: bash deploy/aws/ssm-run.sh "$INSTANCE_ID" deploy/aws/remote/deploy-carrier.sh
