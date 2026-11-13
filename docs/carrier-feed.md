@@ -221,20 +221,25 @@ On the carrier server (Session Manager), then in SimGuard as a SecurityOfficer:
 Checked against `CarrierFeedWorker`, `CarrierFeedSync` and `ScoringScheduler`:
 
 - The mock releases a day at 01:00 Nairobi time.
-- SimGuard's feed sync is not tied to a clock time: it runs 60 seconds after
-  the API starts (`CarrierFeed:StartupDelaySeconds`) and then every 24 hours
-  (`CarrierFeed:IntervalMinutes` 1440). A day released at 01:00 is pulled at
-  the next sync, up to about 24 hours later depending on when the API started.
-- The daily scoring run at 02:00 Nairobi (`Scoring:DailyRunTimeNairobi`) does
-  not sync. A synced day does not wait for it: the sync itself queues scoring
-  (trigger `import`) for the SIMs and days it imported. So nothing is missed,
-  only delayed until the next sync.
-- Smallest fix (proposed, not made): a fixed daily sync time for the feed
-  worker, `CarrierFeed:DailyRunTimeNairobi` = `01:30`, computed with the same
-  `NairobiClock` as the scoring scheduler, instead of the start-time based
-  interval. Each released day would then be imported and scored about 30
-  minutes after release, before the 02:00 run. Until then, Sync now after a
-  release does the same by hand.
+- SimGuard syncs every enabled feed once a day at `CarrierFeed:DailySyncTime`
+  (default `01:30`) in `CarrierFeed:TimeZone` (default `Africa/Nairobi`), not
+  in the server's clock zone. So a day released at 01:00 is imported at 01:30,
+  before the 02:00 scoring run.
+- The sync queues scoring (trigger `import`) for the SIMs and days it
+  imported, right after the import. The daily scoring run at 02:00 Nairobi
+  (`Scoring:DailyRunTimeNairobi`) does not sync, but it scores every SIM-day
+  that is scorable and not scored yet, so it also covers a synced day whose
+  import-triggered run failed or was not queued. A SIM-day is never scored
+  twice (tested: `CarrierFeedScheduleDbTests`).
+- One sync per slot: a feed is synced for a slot only if it has not synced
+  since that slot. A Sync now after 01:30 counts as that night's sync; one
+  before 01:30 does not.
+- API down at 01:30: the first check after start (`StartupDelaySeconds`, 60
+  seconds) runs one catch-up sync for every feed that has not synced since the
+  last slot. Several missed nights still give one run, which continues from
+  the last synced day (at most `MaxDaysPerRun` days). A restart after the
+  slot's sync runs nothing again.
+- A slot run that fails is not retried until the next slot (or Sync now).
 - What Sync now does today:
   - **No new day** (the next date is after the pointer): the carrier answers
     `404` `date_not_available`; the run ends as succeeded with "Caught up: the
@@ -304,8 +309,9 @@ accepted only for loopback, or everywhere with `CarrierFeed:AllowInsecureHttp`.
 | Key | Default | Meaning |
 | --- | ------- | ------- |
 | `Enabled` | true | runs the daily background service |
-| `IntervalMinutes` | 1440 | time between scheduled runs of every enabled feed |
-| `StartupDelaySeconds` | 60 | wait after start before the first scheduled run |
+| `DailySyncTime` | 01:30 | local time (`HH:mm`) of the daily sync of every enabled feed; keep it before `Scoring:DailyRunTimeNairobi` (02:00) |
+| `TimeZone` | Africa/Nairobi | IANA zone of `DailySyncTime`; the server's clock zone is not used; a wrong value (or a wrong `DailySyncTime`) stops the API at start with a message |
+| `StartupDelaySeconds` | 60 | wait after start before the first check, which runs the catch-up sync if the last slot was missed |
 | `RequestTimeoutSeconds` | 30 | per request |
 | `MaxAttempts` | 4 | tries for 429, 5xx and timeouts |
 | `RetryBaseDelayMs` | 2000 | first backoff, doubled each time |
