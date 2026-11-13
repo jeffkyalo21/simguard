@@ -12,10 +12,15 @@ public sealed class CarrierFeedOptions
     // Runs the daily background service.
     public bool Enabled { get; set; } = true;
 
-    // Time between scheduled runs of every enabled feed.
-    public int IntervalMinutes { get; set; } = 1440;
+    // Local time (HH:mm) of the daily run of every enabled feed, in TimeZone.
+    // Before the 02:00 scoring run (Scoring:DailyRunTimeNairobi), so a day the
+    // carrier publishes overnight is imported first.
+    public string DailySyncTime { get; set; } = "01:30";
 
-    // Wait after the API starts before the first scheduled run.
+    // IANA time zone of DailySyncTime; the server's own clock zone is not used.
+    public string TimeZone { get; set; } = "Africa/Nairobi";
+
+    // Wait after the API starts before the first check (and its catch-up run).
     public int StartupDelaySeconds { get; set; } = 60;
 
     public int RequestTimeoutSeconds { get; set; } = 30;

@@ -29,9 +29,11 @@ a read-only database role.
 | `backend/` | ASP.NET Core 10 API (EF Core, PostgreSQL, Identity with TOTP MFA, JWT). Also the carrier mock and the xUnit tests. See [backend/README.md](backend/README.md) |
 | `frontend/` | Next.js 16 web app: dashboard, SIMs, allocations, usage, alerts, tier recommendations, imports, audit log, admin. See [frontend/README.md](frontend/README.md) |
 | `ml-service/` | Python scoring pipeline (features, Isolation Forest, cohort z-score, XGBoost with SHAP, Prophet forecasts) behind a FastAPI service, plus notebooks and the evaluation. See [ml-service/README.md](ml-service/README.md) |
+| `deploy/carrier/` | The demo carrier feed bundle for its own server (mock and Caddy), host scripts |
+| `deploy/aws/` | GitHub deploy roles (trust and permission policies), Run Command scripts, carrier server setup |
 | `deploy/` | Docker Compose stack for one organisation, the shared Caddy, organisation, backup, restore and update scripts, `.env.example` |
 | `database/`, `initial-migration.sql` | Reference schema and an exported EF migration script |
-| `docs/` | Cross service docs: [deployment](docs/deployment.md), [carrier feed](docs/carrier-feed.md) |
+| `docs/` | Cross service docs: [deployment](docs/deployment.md), [carrier feed](docs/carrier-feed.md), [carrier server](docs/carrier-server.md), [deploy checklist](docs/deploy-checklist.md) |
 
 ## Prerequisites
 
@@ -157,6 +159,10 @@ The full procedure (fresh VM, DNS, secrets, first sign-in, email, backups,
 updates, recovery, and running several organisations with
 `deploy/scripts/create-org.sh`) is in [docs/deployment.md](docs/deployment.md).
 
+Pushes to `main` deploy automatically through GitHub Actions and AWS Systems
+Manager (no SSH): `deploy-carrier` for the carrier server, `deploy-simguard`
+(after an approval) for the application. Setup: [docs/deploy-checklist.md](docs/deploy-checklist.md).
+
 ## Roles
 
 | Role | What it can do |
@@ -188,8 +194,10 @@ The endpoint by role matrix is in [backend/docs/auth.md](backend/docs/auth.md).
 
 ## Known limitations
 
-- Carrier feeds are mocked. The demo carrier mock replays synthetic usage over
-  plain http on the private network; real carriers need their own adapters and
-  https (`CARRIER_FEED_ALLOW_INSECURE_HTTP=false`).
+- Carrier feeds are mocked. The demo carrier mock replays synthetic usage,
+  one more day every night, from its own server over https
+  (`https://carrier.sim-guard.app`, [docs/carrier-server.md](docs/carrier-server.md))
+  or over plain http on the private network; real carriers need their own
+  adapters and https (`CARRIER_FEED_ALLOW_INSECURE_HTTP=false`).
 - The models are trained on synthetic call data records, not real traffic.
   Results show the pipeline works, not how it performs on a real fleet.

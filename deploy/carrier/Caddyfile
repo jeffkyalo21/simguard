@@ -1,0 +1,19 @@
+# Public entry point of the carrier server. Automatic HTTPS (Let's Encrypt):
+# port 80 must be open to the internet for the certificate; port 443 is open
+# only to the SimGuard server (security group, docs/carrier-server.md).
+{$CARRIER_DOMAIN:carrier.sim-guard.app} {
+	encode gzip
+
+	# The demo controls are for the host only (deploy/carrier/scripts call the
+	# mock on 127.0.0.1:8081). They also need MOCK_ADMIN_KEY.
+	@admin path /admin /admin/*
+	respond @admin 404
+
+	reverse_proxy mock:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}

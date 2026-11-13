@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using SimGuard.Api.Common;
 using SimGuard.Api.Data;
@@ -501,91 +502,22 @@ public sealed class CarrierFeedRunner(IServiceScopeFactory scopes, ILogger<Carri
     }
 }
 
-// Runs every enabled feed once per CarrierFeed:IntervalMinutes. On start it
-// marks runs left "running" by a previous process as failed.
-public sealed class CarrierFeedWorker(
-    IServiceScopeFactory scopes,
-    CarrierFeedRunner runner,
-    IOptionsMonitor<CarrierFeedOptions> options,
-    ILogger<CarrierFeedWorker> logger) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try
-        {
-            await RecoverAsync(stoppingToken);
-            await Task.Delay(TimeSpan.FromSeconds(Math.Max(options.CurrentValue.StartupDelaySeconds, 0)), stoppingToken);
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                if (options.CurrentValue.Enabled)
-                {
-                    await RunAllAsync(stoppingToken);
-                }
-
-                await Task.Delay(TimeSpan.FromMinutes(Math.Max(options.CurrentValue.IntervalMinutes, 1)), stoppingToken);
-            }
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-        }
-    }
-
-    private async Task RunAllAsync(CancellationToken stoppingToken)
-    {
-        List<int> ids;
-
-        try
-        {
-            using var scope = scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SimGuardDbContext>();
-            ids = await db.Carriers.AsNoTracking()
-                .Where(c => c.FeedEnabled && c.FeedKeySet && c.FeedBaseUrl != null)
-                .OrderBy(c => c.Id)
-                .Select(c => c.Id)
-                .ToListAsync(stoppingToken);
-        }
-        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-        {
-            logger.LogError(ex, "Could not list carrier feeds to run.");
-            return;
-        }
-
-        foreach (var id in ids)
-        {
-            await runner.RunAsync(id, AuditWriter.SystemActor, stoppingToken);
-        }
-    }
-
-    private async Task RecoverAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var scope = scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<SimGuardDbContext>();
-            await db.Carriers
-                .Where(c => c.LastSyncStatus == FeedStatuses.Running)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(c => c.LastSyncStatus, FeedStatuses.Failed)
-                    .SetProperty(c => c.LastSyncMessage, "The run was interrupted by an API restart."),
-                    cancellationToken);
-        }
-        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-        {
-            logger.LogError(ex, "Could not check for interrupted carrier feed runs.");
-        }
-    }
-}
-
 public static class CarrierFeedServiceExtensions
 {
     public static IServiceCollection AddCarrierFeed(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<CarrierFeedOptions>(configuration.GetSection(CarrierFeedOptions.Section));
+        // A wrong DailySyncTime or TimeZone stops the start with a message naming it.
+        services.AddOptions<CarrierFeedOptions>()
+            .Bind(configuration.GetSection(CarrierFeedOptions.Section))
+            .Validate(o => FeedSchedule.TryCreate(o.DailySyncTime, o.TimeZone, out _, out _),
+                "CarrierFeed:DailySyncTime must be HH:mm and CarrierFeed:TimeZone an IANA time zone such as Africa/Nairobi.")
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ICarrierSecretStore, DataProtectionCarrierSecretStore>();
         services.AddScoped<CarrierFeedClient>();
         services.AddScoped<CarrierFeedSync>();
         services.AddSingleton<CarrierFeedRunner>();
+        services.AddSingleton<IFeedSyncTarget, DbFeedSyncTarget>();
         services.AddHostedService<CarrierFeedWorker>();
 
         // No redirects (the key must go only to the saved address) and no

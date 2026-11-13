@@ -30,6 +30,7 @@ mlruns.db
 **/appsettings.*.local.json
 docs/SimGuard wireframes
 .claude/
+graphify-out/
 
 # Deployment
 deploy/.env

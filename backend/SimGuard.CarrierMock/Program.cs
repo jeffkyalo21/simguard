@@ -1,53 +1,56 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SimGuard.CarrierMock;
+using SimGuard.CarrierMock.Release;
 
 // A stand-in for real carrier usage feeds. Serves the demo data from files,
-// one API key and one slice of SIMs per carrier. Contract in
-// docs/carrier-feed.md. Demo tool: not for production.
+// one API key and one slice of SIMs per carrier, and releases one more day
+// every night. Contract in docs/carrier-feed.md. Demo tool: not for production.
 
 var builder = WebApplication.CreateBuilder(args);
-var config = builder.Configuration;
 
-var dataDir = config["CarrierMock:DataDir"]
-    ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "ml-service", "data", "import_samples"));
-var sessionsFile = config["CarrierMock:SessionsFile"]
-    ?? Path.GetFullPath(Path.Combine(dataDir, "..", "synthetic_cdr_sessions.csv"));
+builder.Services.TryAddSingleton(TimeProvider.System);
 
-var data = new MockData(dataDir, sessionsFile);
-
-// Each carrier has its own key: CarrierMock:Keys:<Carrier name>. A carrier
-// without a configured key gets a random one, printed once at start.
-var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-foreach (var name in data.CarrierNames)
+builder.Services.AddSingleton(sp =>
 {
-    var key = config[$"CarrierMock:Keys:{name}"];
+    var config = sp.GetRequiredService<IConfiguration>();
+    var dataDir = config["CarrierMock:DataDir"]
+        ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "ml-service", "data", "import_samples"));
+    var sessionsFile = config["CarrierMock:SessionsFile"]
+        ?? Path.GetFullPath(Path.Combine(dataDir, "..", "synthetic_cdr_sessions.csv"));
+    return new MockData(dataDir, sessionsFile);
+});
 
-    if (string.IsNullOrWhiteSpace(key))
-    {
-        key = "mock-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(12)).ToLowerInvariant();
-        Console.WriteLine($"Generated API key for {name}: {key}");
-    }
+builder.Services.AddSingleton(sp =>
+    ReleaseSettings.FromConfiguration(sp.GetRequiredService<IConfiguration>(), sp.GetRequiredService<MockData>().Dates));
 
-    keys[name] = key;
-}
+builder.Services.AddSingleton(sp => new ReleaseState(
+    sp.GetRequiredService<ReleaseSettings>(),
+    sp.GetRequiredService<MockData>().Dates,
+    sp.GetRequiredService<TimeProvider>(),
+    sp.GetRequiredService<ILoggerFactory>().CreateLogger("SimGuard.CarrierMock.Release")));
 
-// CarrierMock:StartDate is a date (yyyy-MM-dd), "last" for the last day in the
-// data, or empty for the first day in the data.
-var startDate = DateOnly.TryParseExact(config["CarrierMock:StartDate"], "yyyy-MM-dd",
-    CultureInfo.InvariantCulture, DateTimeStyles.None, out var configured)
-    ? configured
-    : string.Equals(config["CarrierMock:StartDate"]?.Trim(), "last", StringComparison.OrdinalIgnoreCase)
-        ? data.LastDate ?? DateOnly.FromDateTime(DateTime.UtcNow)
-        : data.FirstDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-
-var state = new MockState(startDate);
+builder.Services.AddSingleton<MockState>();
+builder.Services.AddHostedService<ReleaseScheduler>();
 
 var app = builder.Build();
 
-app.MapGet("/", () => Results.Json(new { name = "SimGuard carrier mock", sims = data.SimCount, carriers = data.CarrierNames }));
+// Resolve everything now so a bad setting or a missing data folder stops the start.
+var data = app.Services.GetRequiredService<MockData>();
+var settings = app.Services.GetRequiredService<ReleaseSettings>();
+var release = app.Services.GetRequiredService<ReleaseState>();
+var state = app.Services.GetRequiredService<MockState>();
+var keys = CarrierKeys(app.Configuration, data);
+
+app.MapGet("/", () => Results.Json(new
+{
+    name = "SimGuard carrier mock",
+    sims = data.SimCount,
+    carriers = data.CarrierNames,
+    status = release.AtEnd ? ReleaseStatuses.NoMoreDays : ReleaseStatuses.Releasing
+}));
 
 var v1 = app.MapGroup("/v1/usage").AddEndpointFilter(async (context, next) =>
 {
@@ -87,13 +90,13 @@ v1.MapGet("/summary", (HttpContext http, string? date, int? page, int? pageSize)
         return bad!;
     }
 
-    if (day > state.CurrentDate)
+    if (!release.IsAvailable(day))
     {
-        return Problem(StatusCodes.Status404NotFound, "date_not_available", $"No data for {day:yyyy-MM-dd} yet.");
+        return NotYet(day);
     }
 
     var carrier = (string)http.Items["carrier"]!;
-    var rows = state.Trigger(Faults.EmptyDay) ? [] : data.Summary(carrier, day);
+    var rows = state.Trigger(Faults.EmptyDay) ? [] : data.Summary(carrier, release.ToDataDate(day));
     var (p, size) = Paging(page, pageSize);
 
     return Results.Json(new
@@ -105,7 +108,7 @@ v1.MapGet("/summary", (HttpContext http, string? date, int? page, int? pageSize)
         items = rows.Skip((p - 1) * size).Take(size).Select(r => new
         {
             iccid = r.Iccid,
-            date = r.Date.ToString("yyyy-MM-dd"),
+            date = release.ToServedDate(r.Date).ToString("yyyy-MM-dd"),
             dataMb = r.TotalMb,
             voiceMinutes = r.VoiceMinutesUsed,
             sms = r.SmsCount,
@@ -141,14 +144,14 @@ v1.MapGet("/sessions", (HttpContext http, string? iccid, string? date, int? page
         return bad!;
     }
 
-    if (day > state.CurrentDate)
+    if (!release.IsAvailable(day))
     {
-        return Problem(StatusCodes.Status404NotFound, "date_not_available", $"No data for {day:yyyy-MM-dd} yet.");
+        return NotYet(day);
     }
 
     var carrier = (string)http.Items["carrier"]!;
     var owned = string.Equals(data.CarrierOf(iccid), carrier, StringComparison.OrdinalIgnoreCase);
-    var sessions = owned ? data.Sessions(iccid, day) : [];
+    var sessions = owned ? data.Sessions(iccid, release.ToDataDate(day), release.DateShiftDays) : [];
     var (p, size) = Paging(page, pageSize);
 
     return Results.Json(new
@@ -162,16 +165,42 @@ v1.MapGet("/sessions", (HttpContext http, string? iccid, string? date, int? page
     });
 });
 
-// Demo controls. They have no key: run the mock on localhost only.
+// Demo controls. Every route needs X-Admin-Key = MOCK_ADMIN_KEY; when that is
+// not set, any carrier's key in X-Api-Key is accepted instead. Checked in
+// middleware, before the request body is read.
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/admin"), branch => branch.Use(async (context, next) =>
+{
+    if (AdminAllowed(context.Request))
+    {
+        await next(context);
+        return;
+    }
+
+    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+    await context.Response.WriteAsJsonAsync(new { code = "invalid_admin_key", message = "The admin key is missing or wrong." });
+}));
+
 var admin = app.MapGroup("/admin");
 
-admin.MapGet("/state", () => Results.Json(state.Snapshot()));
+admin.MapGet("/status", () => Results.Json(release.Status()));
 
-admin.MapPost("/advance-day", () =>
+admin.MapPost("/release-next-day", () => Results.Json(Outcome(release.ReleaseNext("manual"))));
+
+admin.MapPost("/reset-pointer", (PointerBody? body) =>
 {
-    state.CurrentDate = state.CurrentDate.AddDays(1);
-    return Results.Json(state.Snapshot());
+    if (body?.Day is < 0)
+    {
+        return Problem(StatusCodes.Status400BadRequest, "bad_request", "day must be 0 or more.");
+    }
+
+    return Results.Json(Outcome(release.Reset(body?.Day)));
 });
+
+admin.MapGet("/state", () => Results.Json(new { release = release.Status(), faults = state.Snapshot() }));
+
+// Older names, kept for the smoke script: advance-day is release-next-day,
+// set-date moves the pointer to the last data day on or before the date.
+admin.MapPost("/advance-day", () => Results.Json(Outcome(release.ReleaseNext("manual"))));
 
 admin.MapPost("/set-date", (DateBody body) =>
 {
@@ -180,8 +209,7 @@ admin.MapPost("/set-date", (DateBody body) =>
         return Problem(StatusCodes.Status400BadRequest, "bad_request", "date must be yyyy-MM-dd.");
     }
 
-    state.CurrentDate = day;
-    return Results.Json(state.Snapshot());
+    return Results.Json(Outcome(release.SetThroughDate(day)));
 });
 
 admin.MapPost("/fault", (FaultBody body) =>
@@ -204,6 +232,11 @@ admin.MapPost("/reset", () =>
 
 app.Run();
 
+IResult NotYet(DateOnly day) => Problem(StatusCodes.Status404NotFound, "date_not_available",
+    release.AtEnd && data.LastDate is not null
+        ? $"No data for {day:yyyy-MM-dd}: no more days, the data ends at {release.ToServedDate(data.LastDate!.Value):yyyy-MM-dd}."
+        : $"No data for {day:yyyy-MM-dd} yet.");
+
 string? Authenticate(string supplied)
 {
     if (string.IsNullOrEmpty(supplied))
@@ -211,11 +244,9 @@ string? Authenticate(string supplied)
         return null;
     }
 
-    var bytes = Encoding.UTF8.GetBytes(supplied);
-
     foreach (var (carrier, key) in keys)
     {
-        if (CryptographicOperations.FixedTimeEquals(bytes, Encoding.UTF8.GetBytes(key)))
+        if (SameKey(supplied, key))
         {
             return carrier;
         }
@@ -223,6 +254,45 @@ string? Authenticate(string supplied)
 
     return null;
 }
+
+bool AdminAllowed(HttpRequest request) =>
+    settings.AdminKey is { } adminKey
+        ? SameKey(request.Headers["X-Admin-Key"].ToString(), adminKey)
+        : Authenticate(request.Headers["X-Api-Key"].ToString()) is not null;
+
+static bool SameKey(string supplied, string expected) =>
+    supplied.Length > 0 && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(supplied), Encoding.UTF8.GetBytes(expected));
+
+// Each carrier has its own key: CarrierMock:Keys:<Carrier name>. A carrier
+// without a configured key gets a random one, printed once at start (local runs only;
+// the carrier server's mock.env sets every key).
+static Dictionary<string, string> CarrierKeys(IConfiguration config, MockData data)
+{
+    var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var name in data.CarrierNames)
+    {
+        var key = config[$"CarrierMock:Keys:{name}"];
+
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            key = "mock-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(12)).ToLowerInvariant();
+            Console.WriteLine($"Generated API key for {name}: {key}");
+        }
+
+        keys[name] = key;
+    }
+
+    return keys;
+}
+
+static object Outcome(ReleaseOutcome o) => new
+{
+    status = o.Status,
+    releasedThroughDay = o.ReleasedThroughDay,
+    releasedThroughDate = o.ReleasedThroughDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+    daysLeft = o.DaysLeft
+};
 
 static IResult Problem(int status, string code, string message) =>
     Results.Json(new { code, message }, statusCode: status);
@@ -252,4 +322,8 @@ static double RoamingMb(UsageRow r) =>
 
 record DateBody(string? Date);
 
+record PointerBody(int? Day);
+
 record FaultBody(string Fault, bool? Enabled, int? Count, int? DelayMs);
+
+public partial class Program;

@@ -17,6 +17,8 @@ organisations on one VM".
 | `postgres` | PostgreSQL 16 (port 5432), data in the volume `pgdata` | `backend`, `ml`, `dbgrants` |
 | `dbgrants` | one-shot job: creates or refreshes the ML role after the backend has migrated | exits |
 
+The demo carrier feed also runs on its own small server, `https://carrier.sim-guard.app`: see [carrier-server.md](carrier-server.md). The `carriermock` service in this stack stays for now, because create-org, update, preflight and prove-orgs depend on it (listed there).
+
 Only the shared Caddy publishes ports. Everything else lives on the stack's
 private network `internal` (subnet `172.29.77.0/24`, change with
 `SIMGUARD_SUBNET`). The `frontend` also joins the shared network `simguard-edge`
@@ -187,6 +189,8 @@ on the VM, one carrier at a time:
 grep '^CarrierMock__Keys__Safaricom=' /srv/simguard/mock.env | cut -d= -f2     # type it in; do not paste it into chat
 ```
 
+Hosted demo feed instead (once the carrier server is set up, [deploy-checklist.md](deploy-checklist.md)): address `https://carrier.sim-guard.app`, and the key of that carrier read on the carrier server with `sudo grep '^CarrierMock__Keys__Safaricom=' /srv/carrier/mock.env | cut -d= -f2`. Its keys are different from the ones in `/srv/simguard/mock.env`, so every carrier key must be entered again.
+
 Use Test, then Sync now. The key is stored encrypted (Data Protection key ring
 in the volume `dpkeys`), so it survives restarts and updates. If you ever
 delete the volume `dpkeys`, saved carrier keys must be entered again.
@@ -250,13 +254,110 @@ carrier mock and web app one after the other (so a 4 GB VM does not run out of
 memory), runs `up -d` (only changed services restart; the backend applies new
 migrations; `dbgrants` re-applies the ML role) and waits until every service is
 healthy. It never runs `down`, never uses `-v` and never removes a volume.
-`--no-pull` skips the git step, `--no-build` skips the builds. There is no
-automatic rollback: restore from the backup if a release goes wrong
+`--no-pull` skips the git step, `--no-build` skips the builds. `update.sh` itself has no
+automatic rollback (the GitHub deploy below has one): restore from the backup if a release goes wrong
 (`restore.sh`, below). With several organisations: `SIMGUARD_ORG=<slug>
 deploy/scripts/update.sh` for one, `deploy/scripts/update-all.sh` for all
 (one pull, one build, then each stack in turn). A stack that still has its own
 caddy container is refused until it has been moved (see "Moving the live
 stack").
+
+## Automatic deploys from GitHub
+
+Two workflows deploy through AWS Systems Manager Run Command: GitHub signs in
+to AWS with OIDC (no stored keys) and sends a script to one instance; there is
+no SSH. Setup, once: [deploy-checklist.md](deploy-checklist.md).
+
+| | `deploy-carrier` | `deploy-simguard` |
+| - | ---------------- | ----------------- |
+| Runs on | push to `main` touching `deploy/carrier/**`, `backend/SimGuard.CarrierMock/**`, `backend/Dockerfile.carriermock` or its own scripts; or by hand | push to `main` touching `backend/**`, `frontend/**`, `ml-service/**`; or by hand (input `force` rebuilds even with no change) |
+| Environment | `carrier`, no approval | `production`, waits for a required reviewer |
+| Role (variable) | `CARRIER_DEPLOY_ROLE_ARN` | `SIMGUARD_DEPLOY_ROLE_ARN` |
+| Instance (variable) | `CARRIER_INSTANCE_ID` | `SIMGUARD_INSTANCE_ID` |
+| Script on the server | `deploy/aws/remote/deploy-carrier.sh` | `deploy/aws/remote/deploy-simguard.sh` |
+
+Both: never on pull requests (and the job checks it runs for `main`), one run
+at a time per workflow (a second push waits), the role can only run
+`AWS-RunShellScript` on its own instance. `deploy/aws/ssm-run.sh` sends the
+script and prints its output in the Actions log when it ends.
+
+### What deploy-carrier does
+
+On the carrier server: fetches `main` into `/opt/simguard-carrier`, runs
+`docker compose -p simguard-carrier -f deploy/carrier/docker-compose.yml up -d --build`,
+waits for the mock to be healthy, then checks the mock on loopback and
+`https://carrier.sim-guard.app/` through Caddy. If a check fails it checks out
+the previous commit, rebuilds and fails the run, saying whether the rollback is
+healthy. It never touches `/srv/carrier` (mock.env, the data, the pointer file)
+or the SimGuard server.
+
+### What deploy-simguard does
+
+It automates the manual update of the live VM for the application only. The
+live VM runs the older single-VM layout (its `deploy/` folder is pinned at
+commit `f296146`, with Caddy inside that compose file), and the workflow leaves
+that layout alone. In order:
+
+1. stops if `backend/`, `frontend/` or `ml-service/` have local edits on the VM
+2. fetches `main`; logs, and ignores, a difference in `deploy/docker-compose.yml`; ends with "Nothing to deploy" if the three folders already match `main`
+3. runs the VM's own `deploy/scripts/preflight.sh`
+4. backs up with the VM's own `deploy/scripts/backup.sh` and checks that a new, non-empty `/backups/<db>_<time>.dump` exists; stops otherwise
+5. remembers the running backend, ml and frontend images
+6. replaces only `backend/`, `frontend/` and `ml-service/` with `main` (`git restore`, no pull; `deploy/` is untouched)
+7. builds backend, ml and frontend one at a time; a failed build puts the old images and source back, restarts nothing and fails
+8. restarts backend (it applies new migrations at start), re-applies the ML grants, then ml and frontend, with `--no-deps`: postgres, caddy and carriermock are not touched
+9. checks backend `/health`, ML `/health` and `https://<DOMAIN>/`
+10. records the deployed commit in `/var/lib/simguard-deploy/app-commit` and the one before in `previous-commit`
+
+It never runs `down`, never uses `-v`, never removes a volume, never pulls the
+postgres or caddy image and never edits mock.env or `deploy/.env`.
+
+Because only three folders are restored, `git status` on the VM shows them as
+changed against the checked-out commit. That is expected; do not run
+`git pull` or `deploy/scripts/update.sh` on the live VM by hand any more, use
+the workflow (or follow "Rollback" below).
+
+### Rollback
+
+**Automatic.** If the services do not become healthy or a check fails, the
+workflow puts the previous images back, restores the previous source of the
+three folders, restarts them and fails the run with "The previous images ...
+are running and healthy again". **Database migrations are not rolled back.**
+A migration that the old backend cannot work with needs the restore below.
+
+**By hand, application only** (the new version runs but is wrong): the
+workflow always deploys `main`, so revert the change on `main` (a revert
+commit through a pull request) and approve the deploy. Or, at once, on the server through Session Manager, the images of
+the version before the last deploy are still tagged:
+
+```bash
+cd /opt/simguard
+for s in backend ml frontend; do
+  sudo docker tag "simguard-rollback/$s:previous" "$(sudo docker inspect -f '{{.Config.Image}}' "$(sudo docker compose -f deploy/docker-compose.yml ps -q "$s")")"
+done
+sudo docker compose -f deploy/docker-compose.yml up -d --no-deps --no-build backend ml frontend
+sudo -u "$(stat -c %U .)" git restore --source="$(sudo cat /var/lib/simguard-deploy/previous-commit)" --staged --worktree -- backend frontend ml-service
+```
+
+(After that, the next workflow run rebuilds `main` as usual.)
+
+**Database** (a migration went wrong, data damaged): restore the backup the
+run made; its name is in the run log (`backup verified: ...`). Follow
+"Backup and restore" below (`restore.sh`), then roll the application back as
+above so the code matches the restored schema.
+
+**Carrier server**: the workflow rolls back by itself. By hand:
+`cd /opt/simguard-carrier && sudo git checkout --detach <good commit> && sudo docker compose -p simguard-carrier -f deploy/carrier/docker-compose.yml up -d --build`.
+The pointer file and mock.env are never part of a rollback.
+
+### Checking the automation locally
+
+```bash
+bash deploy/aws/check.sh
+```
+
+Runs `bash -n` and shellcheck on every deploy and host script and actionlint on
+both workflows (local tools, or their Docker images). Expected: `all checks passed`.
 
 ## Database
 

@@ -10,25 +10,18 @@ public static class Faults
     public static readonly string[] All = [Slow, ServerError, EmptyDay, RateLimit];
 }
 
-// The moving parts of the demo: the date served up to and the fault
-// switches. Faults are off by default. A fault with a count switches itself
-// off after that many requests, so a client that retries recovers.
-public sealed class MockState(DateOnly initialDate)
+// The fault switches of the demo (the released days live in ReleaseState).
+// Faults are off by default. A fault with a count switches itself off after
+// that many requests, so a client that retries recovers.
+public sealed class MockState
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, int?> _faults = new();
-    private DateOnly _currentDate = initialDate;
     private int _slowDelayMs = 3000;
 
     public int SlowDelayMs
     {
         get { lock (_lock) { return _slowDelayMs; } }
-    }
-
-    public DateOnly CurrentDate
-    {
-        get { lock (_lock) { return _currentDate; } }
-        set { lock (_lock) { _currentDate = value; } }
     }
 
     public void SetFault(string fault, bool enabled, int? count, int? delayMs)
@@ -87,7 +80,6 @@ public sealed class MockState(DateOnly initialDate)
         {
             return new
             {
-                currentDate = _currentDate.ToString("yyyy-MM-dd"),
                 faults = _faults.ToDictionary(p => p.Key, p => p.Value),
                 slowDelayMs = _slowDelayMs
             };
