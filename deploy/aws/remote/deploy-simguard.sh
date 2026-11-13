@@ -168,5 +168,6 @@ start_services || rollback "the services did not become healthy"
 # 6. Health checks.
 checks || rollback "a health check failed"
 
+echo "$previous" > "$STATE_DIR/previous-commit"
 echo "$target" > "$STATE_DIR/app-commit"
 say "deploy finished: application ${target:0:12} is live (backup $after)"
