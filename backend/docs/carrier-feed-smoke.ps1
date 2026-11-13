@@ -446,15 +446,17 @@ try {
     $lastRun = @(Get-FeedRuns $nameA) | Select-Object -Last 1
     Check-True 'The outage is in the history as failed with the message' (($lastRun.status -eq 'failed') -and ($lastRun.message -like '*server error*') -and ($lastRun.errorCount -eq 1))
     Invoke-Mock '/admin/reset' | Out-Null
-    $recovered = Sync-Now $carrierA.id
-    Check-True 'After the outage the next run catches up' (($recovered.lastSyncStatus -eq 'succeeded') -and ("$($recovered.lastSyncDate)" -eq $days[7])) "$($recovered.lastSyncMessage)"
 
     # --- An empty day does not move the cursor ----------------------------------------
-    Invoke-Mock '/admin/set-date' @{ date = '2025-02-09' } | Out-Null
+    # days[7] is released but not synced yet; the carrier answers it with no rows once.
+    # (A date after the end of the data is a 404 "no more days", never an empty day.)
     Invoke-Mock '/admin/fault' @{ fault = 'empty_day'; count = 1 } | Out-Null
     $empty = Sync-Now $carrierA.id
-    Check-True 'An empty day succeeds without moving the cursor' (($empty.lastSyncStatus -eq 'succeeded') -and ("$($empty.lastSyncDate)" -eq $days[7]) -and ($empty.lastSyncMessage -like '*no rows*')) "$($empty.lastSyncMessage)"
+    Check-True 'An empty day succeeds without moving the cursor' (($empty.lastSyncStatus -eq 'succeeded') -and ("$($empty.lastSyncDate)" -eq $days[6]) -and ($empty.lastSyncMessage -like '*no rows*')) "$($empty.lastSyncMessage)"
     Invoke-Mock '/admin/reset' | Out-Null
+
+    $recovered = Sync-Now $carrierA.id
+    Check-True 'After the outage the next run catches up' (($recovered.lastSyncStatus -eq 'succeeded') -and ("$($recovered.lastSyncDate)" -eq $days[7])) "$($recovered.lastSyncMessage)"
 
     # --- Slow answer: timeout, retry, and one run at a time ------------------------------
     Invoke-Mock '/admin/set-date' @{ date = $days[7] } | Out-Null
