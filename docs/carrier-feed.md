@@ -117,24 +117,87 @@ dotnet run --project backend/SimGuard.CarrierMock --urls http://127.0.0.1:5391
 ```
 
 A carrier without a configured key gets a random one, printed once at start.
-Other settings: `CarrierMock__DataDir`, `CarrierMock__SessionsFile`,
-`CarrierMock__StartDate` (the first "current date"; a date, `last` for the last day in the data, or by default the first day in
-the data). The admin routes have no key, so run the mock on localhost only.
+Other settings: `CarrierMock__DataDir`, `CarrierMock__SessionsFile`, and the
+release settings below. `CarrierMock__StartDate` still works (`last` releases
+every day, a date releases the days up to it) but `MOCK_START_DAY` replaces it.
 
 In Settings, Carriers, Usage feed, use the address `http://127.0.0.1:5391`
-(plain http is accepted for localhost only) and the key of that carrier.
+(plain http is accepted for localhost only) and the key of that carrier. The
+hosted demo feed is `https://carrier.sim-guard.app` ([carrier-server.md](carrier-server.md)).
+
+### Nightly release
+
+The mock does not serve all of its data at once. A pointer,
+`released_through_day`, says how many days of the data are released: day 1 is
+the first date in `usage.csv`. A date after the pointer answers `404`
+`date_not_available`, exactly what SimGuard treats as "the carrier has no data
+for that day yet". Every night at `MOCK_RELEASE_TIME` in `MOCK_TIMEZONE` the
+pointer moves on by one day.
+
+| Setting (environment, mock.env) | Default | Meaning |
+| ------------------------------- | ------- | ------- |
+| `MOCK_START_DAY` | `80` (capped at the number of days) | days released at the very first start (80 of 90: 2025-01-01 to 2025-03-21) |
+| `MOCK_RELEASE_TIME` | `01:00` | local time of the nightly release, `HH:mm` |
+| `MOCK_TIMEZONE` | `Africa/Nairobi` | IANA zone of the release time |
+| `MOCK_DATE_SHIFT_DAYS` | `0` | moves every served date forward by this many days; a multiple of 7, see Date shift |
+| `MOCK_STATE_FILE` | `<data folder>/release-state.json` | where the pointer is kept; `/srv/carrier/state/release-state.json` on the carrier server |
+| `MOCK_SCHEDULER_ENABLED` | `true` | `false` stops the nightly release (manual releases still work) |
+| `MOCK_ADMIN_KEY` | none | key for the admin routes; without it any carrier key is accepted there |
+
+A setting with a wrong value stops the mock at start with a message naming it.
+
+**Persistence.** The pointer, the last nightly release and whether the end of
+the data was logged are written to the state file after every change (to a
+temporary file, then renamed). A restart or redeploy continues from it;
+`MOCK_START_DAY` is used only when there is no state file yet.
+
+**Missed nights.** If the mock was stopped over one or more release times, the
+next start releases one day (for the most recent night), logs a warning with
+the number of nights skipped, and continues with one day per night. It never
+releases more than one day per night and never catches up several days at
+once. The very first start releases nothing extra: it starts at
+`MOCK_START_DAY` and waits for the next release time.
+
+**End of the data.** When the last day is released the status becomes
+`no more days`. The pointer stays on the last day (no loop back to day 1), a
+later date answers `404` with the message "no more days, the data ends at ...",
+and the mock logs "No more days ..." once (remembered in the state file).
+`reset-pointer` starts it again.
+
+**Date shift.** The demo data covers 2025-01-01 to 2025-03-31.
+`MOCK_DATE_SHIFT_DAYS=N` serves day D as D + N: in the `date` query, the `date`
+field of the rows and the session start times; the data itself is unchanged.
+A multiple of 7 keeps the weekday of every row, which the weekend features of
+the model depend on. `GET /admin/status` shows `suggestedDateShiftDays`, the
+multiple of 7 that makes the newest released day yesterday.
+Effect on SimGuard, checked against the importer and the scorer (not run end
+to end): the shifted days import like any others, but SimGuard already holds
+the unshifted history (2025-01-01 to 2025-03-21), so the first shifted day
+starts a new run of consecutive days. Scoring needs 15 consecutive days per SIM
+(`MlLimits.ScoreLookbackDays`), so the first 14 shifted days are imported but
+not scored, unless the feed start date in Settings is set to the shifted first
+day so the sync backfills the whole shifted history (at most 31 days per run,
+so three runs for 80 days). The sync also stops at today in UTC, so a shift
+that pushes released days into the future hides them until that date. Leave
+the shift at 0 unless the demo needs current dates.
 
 ### Demo controls
 
-The mock serves days up to a "current date". Dates after it are `404`.
+Admin routes need the header `X-Admin-Key: <MOCK_ADMIN_KEY>` (or, when
+`MOCK_ADMIN_KEY` is not set, `X-Api-Key` with any carrier key); otherwise `401`
+`invalid_admin_key`. On the carrier server Caddy blocks `/admin` from outside,
+so use the host scripts in `deploy/carrier/scripts/` ([carrier-server.md](carrier-server.md#release-pointer-and-demo-controls)).
 
 | Call | Does |
 | ---- | ---- |
-| `POST /admin/advance-day` | moves the current date one day on |
-| `POST /admin/set-date` `{ "date": "2025-02-10" }` | sets it |
+| `GET /admin/status` | status (`releasing` or `no more days`), released days and dates, days left, next release (local and UTC), shift |
+| `POST /admin/release-next-day` | releases one more day now; the nightly schedule is unchanged |
+| `POST /admin/reset-pointer` `{ "day": 85 }` | sets the pointer (no body: back to `MOCK_START_DAY`) |
+| `POST /admin/advance-day` | same as `release-next-day` (older name) |
+| `POST /admin/set-date` `{ "date": "2025-02-10" }` | releases the days up to that data date |
 | `POST /admin/fault` `{ "fault": "rate_limit", "count": 2 }` | turns a fault on |
 | `POST /admin/reset` | turns every fault off |
-| `GET /admin/state` | current date and faults |
+| `GET /admin/state` | release status and faults |
 
 Faults are off by default: `slow` (`delayMs`, default 3000), `server_error`
 (500), `empty_day` (summary has no rows), `rate_limit` (429 with
@@ -142,9 +205,45 @@ Faults are off by default: `slow` (`delayMs`, default 3000), `server_error`
 requests, so a client that retries recovers; leave it out to keep the fault on
 until `reset`.
 
-A demo, one day at a time: start the mock (current date is the first data day),
-save the feed with start date `2025-01-01`, press Sync now, then call
-`advance-day` and Sync now again.
+### Demo script
+
+On the carrier server (Session Manager), then in SimGuard as a SecurityOfficer:
+
+1. `sudo deploy/carrier/scripts/status.sh`: note `releasedThroughDate` (2025-03-21 after the first start) and `nextReleaseAt`.
+2. SimGuard, Settings, Carriers, Usage feed: Sync now. Expected: "Caught up: the carrier has no data for 2025-03-22 yet." (nothing imported, nothing scored).
+3. `sudo deploy/carrier/scripts/release-next-day.sh`: `"status": "released"`, `releasedThroughDate` one day later.
+4. Sync now again: one day imported; scoring for that day is queued at once (trigger `import`), so new alerts can appear within minutes.
+5. Outage: stop the mock ([carrier-server.md](carrier-server.md#stopping-it-for-an-outage-demo)); Sync now shows the failure; start it again; Sync now recovers.
+6. After the demo, only to replay the same days: `sudo deploy/carrier/scripts/reset-pointer.sh` (SimGuard keeps the imported days; re-imported rows are upserted, never doubled).
+
+### Release time and SimGuard's schedule
+
+Checked against `CarrierFeedWorker`, `CarrierFeedSync` and `ScoringScheduler`:
+
+- The mock releases a day at 01:00 Nairobi time.
+- SimGuard's feed sync is not tied to a clock time: it runs 60 seconds after
+  the API starts (`CarrierFeed:StartupDelaySeconds`) and then every 24 hours
+  (`CarrierFeed:IntervalMinutes` 1440). A day released at 01:00 is pulled at
+  the next sync, up to about 24 hours later depending on when the API started.
+- The daily scoring run at 02:00 Nairobi (`Scoring:DailyRunTimeNairobi`) does
+  not sync. A synced day does not wait for it: the sync itself queues scoring
+  (trigger `import`) for the SIMs and days it imported. So nothing is missed,
+  only delayed until the next sync.
+- Smallest fix (proposed, not made): a fixed daily sync time for the feed
+  worker, `CarrierFeed:DailyRunTimeNairobi` = `01:30`, computed with the same
+  `NairobiClock` as the scoring scheduler, instead of the start-time based
+  interval. Each released day would then be imported and scored about 30
+  minutes after release, before the 02:00 run. Until then, Sync now after a
+  release does the same by hand.
+- What Sync now does today:
+  - **No new day** (the next date is after the pointer): the carrier answers
+    `404` `date_not_available`; the run ends as succeeded with "Caught up: the
+    carrier has no data for <date> yet."; no import history row, no scoring
+    queued, and the last synced date stays where it was.
+  - **The same day twice**: does not happen by itself, because a sync resumes
+    at the day after the last synced date. If the start date is moved back so
+    a day is pulled again, its rows are upserted (counted as unchanged when
+    equal, never duplicated) and scoring is queued for that day again.
 
 ## SimGuard side
 
