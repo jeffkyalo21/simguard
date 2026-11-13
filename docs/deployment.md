@@ -17,6 +17,8 @@ organisations on one VM".
 | `postgres` | PostgreSQL 16 (port 5432), data in the volume `pgdata` | `backend`, `ml`, `dbgrants` |
 | `dbgrants` | one-shot job: creates or refreshes the ML role after the backend has migrated | exits |
 
+The demo carrier feed also runs on its own small server, `https://carrier.sim-guard.app`: see [carrier-server.md](carrier-server.md). The `carriermock` service in this stack stays for now, because create-org, update, preflight and prove-orgs depend on it (listed there).
+
 Only the shared Caddy publishes ports. Everything else lives on the stack's
 private network `internal` (subnet `172.29.77.0/24`, change with
 `SIMGUARD_SUBNET`). The `frontend` also joins the shared network `simguard-edge`
@@ -186,6 +188,8 @@ on the VM, one carrier at a time:
 ```bash
 grep '^CarrierMock__Keys__Safaricom=' /srv/simguard/mock.env | cut -d= -f2     # type it in; do not paste it into chat
 ```
+
+Hosted demo feed instead (once the carrier server is set up, [deploy-checklist.md](deploy-checklist.md)): address `https://carrier.sim-guard.app`, and the key of that carrier read on the carrier server with `sudo grep '^CarrierMock__Keys__Safaricom=' /srv/carrier/mock.env | cut -d= -f2`. Its keys are different from the ones in `/srv/simguard/mock.env`, so every carrier key must be entered again.
 
 Use Test, then Sync now. The key is stored encrypted (Data Protection key ring
 in the volume `dpkeys`), so it survives restarts and updates. If you ever
