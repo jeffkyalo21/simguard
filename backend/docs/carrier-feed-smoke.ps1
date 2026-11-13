@@ -163,9 +163,14 @@ function Write-Results {
     return $failed
 }
 
+# Admin routes of the mock need X-Admin-Key (MOCK_ADMIN_KEY, set below).
 function Invoke-Mock {
-    param([string]$Path, $Body = $null)
-    Invoke-Api POST $Path $Body $null $mockUrl
+    param([string]$Path, $Body = $null, [string]$AdminKey = $mockAdminKey)
+    $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Post, "$mockUrl$Path")
+    if ($AdminKey) { $request.Headers.TryAddWithoutValidation('X-Admin-Key', $AdminKey) | Out-Null }
+    $json = if ($null -ne $Body) { $Body | ConvertTo-Json -Depth 6 -Compress } else { '{}' }
+    $request.Content = New-Object System.Net.Http.StringContent($json, [System.Text.Encoding]::UTF8, 'application/json')
+    Read-Response ($client.SendAsync($request).GetAwaiter().GetResult())
 }
 
 # Waits until the carrier's last sync time changes and the run is no longer
@@ -219,6 +224,7 @@ $nameB = "SmokeB$runId"
 $keyA = New-ApiKey
 $keyB = New-ApiKey
 $wrongKey = New-ApiKey
+$mockAdminKey = New-ApiKey
 $days = 1..8 | ForEach-Object { ([datetime]'2025-02-01').AddDays($_ - 1).ToString('yyyy-MM-dd') }
 $firstDay = $days[0]
 
@@ -264,6 +270,9 @@ try {
     $env:CarrierMock__DataDir = $work
     $env:CarrierMock__SessionsFile = (Join-Path $work 'none.csv')
     $env:CarrierMock__StartDate = $firstDay
+    # The nightly release stays off so a run across 01:00 Nairobi cannot move the pointer.
+    $env:MOCK_SCHEDULER_ENABLED = 'false'
+    $env:MOCK_ADMIN_KEY = $mockAdminKey
     Set-Item -Path "Env:CarrierMock__Keys__$nameA" -Value $keyA
     Set-Item -Path "Env:CarrierMock__Keys__$nameB" -Value $keyB
     $mockLog = Join-Path $work 'mock.log'
@@ -277,6 +286,8 @@ try {
     if (-not $ready) { throw 'The carrier mock did not start.' }
 
     # --- Mock contract --------------------------------------------------------
+    Check 'Mock: admin route without the admin key' 401 (Invoke-Mock '/admin/release-next-day' $null '')
+    Check 'Mock: admin route with a carrier key instead of the admin key' 401 (Invoke-Mock '/admin/release-next-day' $null $keyA)
     $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, "$mockUrl/v1/usage/summary?date=$firstDay")
     Check 'Mock: summary without a key' 401 (Read-Response ($client.SendAsync($req).GetAwaiter().GetResult()))
     $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, "$mockUrl/v1/usage/summary?date=$firstDay")
@@ -501,7 +512,7 @@ finally {
         Stop-Process -Id $mockProcess.Id -Force
         [void]$mockProcess.WaitForExit(10000)
     }
-    Get-ChildItem Env: | Where-Object { $_.Name -like 'CarrierMock__*' } | ForEach-Object { Remove-Item "Env:$($_.Name)" }
+    Get-ChildItem Env: | Where-Object { $_.Name -like 'CarrierMock__*' -or $_.Name -like 'MOCK_*' } | ForEach-Object { Remove-Item "Env:$($_.Name)" }
     for ($i = 0; $i -lt 10 -and (Test-Path $work); $i++) {
         try { Remove-Item -Recurse -Force $work -ErrorAction Stop } catch { Start-Sleep -Milliseconds 500 }
     }

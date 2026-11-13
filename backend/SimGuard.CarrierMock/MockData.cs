@@ -40,6 +40,9 @@ public sealed class MockData
     public IReadOnlyCollection<string> CarrierNames { get; }
     public DateOnly? FirstDate { get; }
     public DateOnly? LastDate { get; }
+
+    // Every date that has rows, oldest first. Day N of the release pointer is Dates[N - 1].
+    public IReadOnlyList<DateOnly> Dates { get; }
     public int SimCount => _carrierByIccid.Count;
     public bool HasSessions => _sessionsFile is not null && _simIdByIccid.Count > 0;
 
@@ -89,10 +92,12 @@ public sealed class MockData
             list.Add(row);
         }
 
-        if (_rowsByDate.Count > 0)
+        Dates = _rowsByDate.Keys.Order().ToList();
+
+        if (Dates.Count > 0)
         {
-            FirstDate = _rowsByDate.Keys.Min();
-            LastDate = _rowsByDate.Keys.Max();
+            FirstDate = Dates[0];
+            LastDate = Dates[^1];
         }
 
         CarrierNames = _carrierByIccid.Values.Distinct(StringComparer.OrdinalIgnoreCase).Order().ToList();
@@ -121,8 +126,9 @@ public sealed class MockData
                 .OrderBy(r => r.Iccid, StringComparer.Ordinal)
                 .ToList();
 
-    // Streams the sessions file and keeps the lines of one SIM on one day.
-    public List<object> Sessions(string iccid, DateOnly date)
+    // Streams the sessions file and keeps the lines of one SIM on one day
+    // (a data date). startedAt is moved by shiftDays, like the summary dates.
+    public List<object> Sessions(string iccid, DateOnly date, int shiftDays = 0)
     {
         var result = new List<object>();
 
@@ -160,7 +166,7 @@ public sealed class MockData
             {
                 sessionId = Cell(c, header, "session_id"),
                 iccid,
-                startedAt = c[iTime],
+                startedAt = Shift(c[iTime], shiftDays),
                 durationS = L(c, header, "session_duration"),
                 type = Cell(c, header, "event_type"),
                 downloadMb = D(c, header, "download_mb"),
@@ -174,6 +180,18 @@ public sealed class MockData
         }
 
         return result;
+    }
+
+    // "yyyy-MM-dd hh:mm:ss..." with the date part moved by days.
+    private static string Shift(string timestamp, int days)
+    {
+        if (days == 0 || timestamp.Length < 10
+            || !DateOnly.TryParseExact(timestamp.AsSpan(0, 10), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+        {
+            return timestamp;
+        }
+
+        return d.AddDays(days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + timestamp[10..];
     }
 
     private static string[] Split(string line) => line.TrimEnd('\r').Split(',');
