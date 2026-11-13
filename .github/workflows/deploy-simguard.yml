@@ -1,0 +1,58 @@
+name: deploy-simguard
+
+# Deploys the application (backend, frontend, ml-service) to the live SimGuard
+# server through AWS Systems Manager Run Command. Every run waits for approval
+# in the "production" environment (required reviewer). AWS access through
+# GitHub OIDC and the role in vars.SIMGUARD_DEPLOY_ROLE_ARN; no stored AWS keys,
+# no SSH. Never runs on pull requests.
+#
+# On the server (deploy/aws/remote/deploy-simguard.sh): backup and check, update
+# only backend/, frontend/, ml-service/, rebuild and restart only those three
+# services, health checks, and on a failure the previous images come back.
+# deploy/, mock.env, the volumes and the Caddy and compose layout are never touched.
+# Database migrations are not rolled back.
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - frontend/**
+      - ml-service/**
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild and restart even when the application already matches main
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-simguard
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.SIMGUARD_DEPLOY_ROLE_ARN }}
+          role-session-name: deploy-simguard-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy on the SimGuard server
+        env:
+          SSM_COMMENT: deploy-simguard run ${{ github.run_id }}
+          SSM_EXECUTION_TIMEOUT: "3600"
+          INSTANCE_ID: ${{ vars.SIMGUARD_INSTANCE_ID }}
+          FORCE: ${{ inputs.force && 'force' || '' }}
+        run: bash deploy/aws/ssm-run.sh "$INSTANCE_ID" deploy/aws/remote/deploy-simguard.sh ${FORCE:+"$FORCE"}
