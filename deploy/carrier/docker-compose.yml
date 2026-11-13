@@ -1,0 +1,74 @@
+# SimGuard carrier server: the mock carrier usage feed and Caddy, nothing else.
+# Runs on its own EC2 instance at carrier.sim-guard.app (docs/carrier-server.md).
+#
+#   docker compose -f deploy/carrier/docker-compose.yml up -d --build
+#
+# Host folders (created by deploy/aws/carrier/setup.sh, never in the repository):
+#   /srv/carrier/mock-data   the demo data (sims.csv, usage.csv, sim_mapping.csv), read only
+#   /srv/carrier/state       the release pointer file, the only folder the mock writes
+#   /srv/carrier/mock.env    carrier keys, MOCK_ADMIN_KEY and the MOCK_* settings (mode 600)
+# The deploy workflow never touches these. Never run "down -v" here: it deletes
+# the certificate volumes (the data and the pointer are host folders and survive).
+name: simguard-carrier
+
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
+services:
+  mock:
+    build: {context: ../../backend, dockerfile: Dockerfile.carriermock}
+    image: simguard-carrier-mock:latest
+    restart: unless-stopped
+    # Measured: about 80 MiB idle, 118 MiB peak while serving every released day.
+    mem_limit: 256m
+    logging: *logging
+    env_file:
+      - ${CARRIER_MOCK_ENV_FILE:-/srv/carrier/mock.env}
+    environment:
+      CarrierMock__DataDir: /data/mock-data
+      CarrierMock__SessionsFile: /data/mock-data/synthetic_cdr_sessions.csv
+      MOCK_STATE_FILE: /data/state/release-state.json
+      Logging__LogLevel__Default: Information
+      Logging__LogLevel__Microsoft.AspNetCore: Warning
+    volumes:
+      - ${CARRIER_DATA_DIR:-/srv/carrier/mock-data}:/data/mock-data:ro
+      - ${CARRIER_STATE_DIR:-/srv/carrier/state}:/data/state
+    # Loopback only: for the host scripts (deploy/carrier/scripts) and the deploy
+    # health check. The internet reaches the mock through Caddy only.
+    ports:
+      - "127.0.0.1:8081:8080"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET / HTTP/1.0\r\nHost: x\r\n\r\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *logging
+    depends_on:
+      mock: {condition: service_healthy}
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CARRIER_DOMAIN: ${CARRIER_DOMAIN:-carrier.sim-guard.app}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+volumes:
+  # The certificate and its account key live here.
+  caddy_data:
+  caddy_config:
