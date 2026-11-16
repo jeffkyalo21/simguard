@@ -1,4 +1,4 @@
-import { Activity, ChartLine, Gauge, Library, Users } from "lucide-react";
+import { Activity, ChartLine, Gauge, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass/glass-card";
 import { InView } from "@/components/landing/in-view";
 import { SectionHeading } from "@/components/landing/section-heading";
@@ -6,7 +6,7 @@ import { StepsProgress } from "@/components/landing/steps-progress";
 import { copy } from "@/lib/copy";
 
 const text = copy.landing.detection;
-const icons = { behaviour: Activity, peers: Users, triage: Gauge, cases: Library };
+const icons = { behaviour: Activity, peers: Users, triage: Gauge, plan: ChartLine };
 
 /**
  * The four detection steps with a line that fills as the page scrolls.
@@ -18,7 +18,7 @@ export function HowItWorks() {
       <div className="mx-auto flex max-w-3xl flex-col gap-10">
         <SectionHeading id="how-title" title={text.title} intro={text.intro} />
         <StepsProgress>
-          <div className="absolute top-5 bottom-5 left-5 w-0.5 rounded-full bg-chart-track" aria-hidden="true">
+          <div className="absolute top-5 bottom-[calc(var(--last-step,2.5rem)-1.25rem)] left-5 w-0.5 rounded-full bg-chart-track" aria-hidden="true">
             <div data-steps-line className="steps-line h-full w-full rounded-full bg-primary" />
           </div>
           <ol className="flex flex-col gap-6">
@@ -46,12 +46,6 @@ export function HowItWorks() {
             })}
           </ol>
         </StepsProgress>
-        <aside className="reveal ml-14 flex items-center gap-3 rounded-2xl border border-dashed border-input px-4 py-3 sm:ml-15">
-          <ChartLine className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm">
-            {text.note} <span className="text-xs text-muted-foreground">{text.noteModel}</span>
-          </p>
-        </aside>
       </div>
     </InView>
   );

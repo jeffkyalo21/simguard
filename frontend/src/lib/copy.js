@@ -398,7 +398,7 @@ export const copy = {
     },
     detection: {
       title: "How detection works",
-      intro: "Four checks run on every SIM, from its own usage to similar past cases.",
+      intro: "Four steps run on every SIM, from its own usage to the size of its plan.",
       steps: [
         {
           key: "behaviour",
@@ -419,14 +419,12 @@ export const copy = {
           model: "XGBoost",
         },
         {
-          key: "cases",
-          title: "Similar cases",
-          text: "Past cases that look alike are shown to help the reviewer decide.",
-          model: "Case based reasoning",
+          key: "plan",
+          title: "Plan sizing",
+          text: "Each SIM's plan is sized from a usage forecast.",
+          model: "Prophet",
         },
       ],
-      note: "Plan sizing uses a usage forecast.",
-      noteModel: "Prophet",
     },
     why: {
       title: "Why it fired",

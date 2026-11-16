@@ -33,6 +33,9 @@ export function StepsProgress({ children }) {
       const rect = root.getBoundingClientRect();
       top = rect.top + window.scrollY;
       height = Math.max(rect.height, 1);
+      // The line ends at the centre of the last numbered circle.
+      const last = steps[steps.length - 1];
+      if (last) root.style.setProperty("--last-step", `${last.offsetHeight}px`);
       update();
     }
 
