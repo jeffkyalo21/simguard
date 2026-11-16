@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"src/**/*.test.mjs\""
+    "test": "node --import ./src/lib/test-alias.mjs --test \"src/**/*.test.mjs\""
   },
   "dependencies": {
     "@zxing/browser": "^0.2.1",
