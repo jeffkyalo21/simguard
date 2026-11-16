@@ -3,6 +3,22 @@
 Main milestones, taken from the merged pull requests (newest first). Dates are
 merge dates. No release tags exist yet; see the end of this file.
 
+## Unreleased: SIM scanning and employee search on allocations
+
+- Scan a SIM card to fill its ICCID, in the SIM form and the allocation form.
+  Barcode first (`@zxing/browser`), then an optional printed number reading
+  (`tesseract.js`). Both run in the browser, nothing is uploaded or stored, and
+  both load only when the scan dialog opens. The ICCID must be 19 or 20 digits,
+  start with 89 and pass the Luhn check.
+- The allocation form finds the employee by name or email, shows their details,
+  and lets the Security Officer add a new employee on the spot. Department is no
+  longer required there.
+- New dependencies and licences: `@zxing/browser` 0.2.1 (MIT), `@zxing/library`
+  0.23.0 (Apache-2.0), `tesseract.js` 7.0.0 (Apache-2.0). tesseract.js fetches its
+  engine and English model from its default CDN on first use.
+- Added code loaded on demand only: about 600 KB raw (about 170 KB gzip) across
+  the scan chunks; the main bundles are unchanged. No backend or database change.
+
 ## Unreleased: Forgot password, landing page motion and dashboard alert counts
 
 - Self-service "Forgot password" for every account, the Admin included.

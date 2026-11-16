@@ -248,6 +248,14 @@ export function listEmployees({ departmentId, search, page, pageSize } = {}) {
 }
 
 /**
+ * POST /employees. 400 names the fields; a duplicate email is a 409.
+ * @param {{ name: string, email: string, departmentId: number, jobRole: string }} body
+ */
+export function createEmployee(body) {
+  return write(api.post("/employees", body));
+}
+
+/**
  * GET /allocations, by id. `status` is "active" or "ended" (the API's
  * active=true or false). Items carry departmentName.
  * @param {{ status?: string, page?: number, pageSize?: number }} [query]

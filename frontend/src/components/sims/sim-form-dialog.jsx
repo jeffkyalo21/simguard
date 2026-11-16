@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { useOpeningKey } from "@/hooks/use-opening-key";
 import { FormDialog } from "@/components/shared/form-dialog";
+import { ScanSimDialog } from "@/components/scan/scan-sim-dialog";
 import { FormField } from "@/components/shared/form-field";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ApiError, errorMessage } from "@/lib/api";
-import { createSim, setSimTier, updateSim } from "@/lib/data";
+import { createSim, listSims, setSimTier, updateSim } from "@/lib/data";
 import { useCarriers, useTiers } from "@/hooks/use-reference";
 import { formatPhone } from "@/lib/format";
 import { simFieldErrors } from "@/lib/validation";
@@ -59,10 +62,10 @@ function toMessages(codes) {
   );
 }
 
-function initialValues(sim) {
+function initialValues(sim, initialIccid = "") {
   return {
     phoneNumber: sim ? formatPhone(sim.phoneNumber) : "",
-    iccid: sim?.iccid ?? "",
+    iccid: sim?.iccid ?? initialIccid,
     carrierId: sim?.carrierId == null ? "" : String(sim.carrierId),
     // A new SIM takes its plan type from the tier, like imported SIMs.
     planType: sim ? sim.planType : "",
@@ -101,8 +104,12 @@ export function SelectField({ id, label, value, options, error, onChange, placeh
 }
 
 /** The fields. Keyed by the caller, so each opening starts fresh. */
-function SimForm({ sim, open, onOpenChange, onSaved }) {
-  const [values, setValues] = useState(() => initialValues(sim));
+function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
+  const [values, setValues] = useState(() => initialValues(sim, initialIccid));
+  const [scanOpen, setScanOpen] = useState(false);
+  // A SIM that already has the scanned ICCID, to link to.
+  const [registered, setRegistered] = useState(null);
+  const [scanned, setScanned] = useState(false);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const carriers = useCarriers();
@@ -111,6 +118,21 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
   const noCarriers = carrierOptions.length === 0;
 
   const set = (field) => (value) => setValues((current) => ({ ...current, [field]: value }));
+
+  async function handleScanned(iccid) {
+    setValues((current) => ({ ...current, iccid }));
+    setErrors((current) => ({ ...current, iccid: undefined }));
+    setScanned(true);
+    setRegistered(null);
+
+    try {
+      const found = await listSims({ q: iccid, pageSize: 5 });
+      const match = found.items.find((item) => item.iccid === iccid && item.id !== sim?.id);
+      setRegistered(match ?? null);
+    } catch {
+      // The save still reports a duplicate (409); the hint is a convenience.
+    }
+  }
 
   function focusFirstError(fieldErrors) {
     const first = FIELD_ORDER.find((field) => fieldErrors[field]);
@@ -157,6 +179,7 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
   }
 
   return (
+    <>
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
@@ -181,14 +204,42 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
       </FormField>
       <FormField id="sim-iccid" label={text.iccid} error={errors.iccid}>
         {(field) => (
-          <Input
-            {...field}
-            value={values.iccid}
-            onChange={(event) => set("iccid")(event.target.value)}
-            autoComplete="off"
-            placeholder={text.iccidPlaceholder}
-            className="h-10"
-          />
+          <>
+            <div className="flex gap-2">
+              <Input
+                {...field}
+                value={values.iccid}
+                onChange={(event) => {
+                  set("iccid")(event.target.value);
+                  setScanned(false);
+                  setRegistered(null);
+                }}
+                autoComplete="off"
+                inputMode="numeric"
+                placeholder={text.iccidPlaceholder}
+                className="h-10"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 shrink-0 px-3"
+                aria-label={copy.scan.buttonLabel}
+                onClick={() => setScanOpen(true)}
+              >
+                <ScanLine aria-hidden="true" />
+                {copy.scan.button}
+              </Button>
+            </div>
+            {scanned && !registered && <p role="status" className="text-sm text-muted-foreground">{text.scanned}</p>}
+            {registered && (
+              <p role="status" className="text-sm text-risk-flagged-foreground">
+                {text.alreadyRegistered}{" "}
+                <Link href={`/sims/${registered.id}`} className="rounded-sm font-medium underline underline-offset-4">
+                  {text.viewRegistered(formatPhone(registered.phoneNumber))}
+                </Link>
+              </p>
+            )}
+          </>
         )}
       </FormField>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -243,15 +294,17 @@ function SimForm({ sim, open, onOpenChange, onSaved }) {
         )}
       </FormField>
     </FormDialog>
+    <ScanSimDialog open={scanOpen} onOpenChange={setScanOpen} onResult={handleScanned} />
+    </>
   );
 }
 
 /**
  * Add SIM (no `sim`) or Edit SIM.
  * @param {{ open: boolean, onOpenChange: (open: boolean) => void,
- *   sim?: object | null, onSaved?: (sim: object) => void }} props
+ *   sim?: object | null, initialIccid?: string, onSaved?: (sim: object) => void }} props
  */
-export function SimFormDialog({ open, onOpenChange, sim = null, onSaved }) {
+export function SimFormDialog({ open, onOpenChange, sim = null, initialIccid = "", onSaved }) {
   // A new key on every opening resets the fields and errors, while closing
   // keeps the key so the exit transition still plays.
   const opening = useOpeningKey(open);
@@ -260,6 +313,7 @@ export function SimFormDialog({ open, onOpenChange, sim = null, onSaved }) {
     <SimForm
       key={`${sim?.id ?? "new"}-${opening}`}
       sim={sim}
+      initialIccid={initialIccid}
       open={open}
       onOpenChange={onOpenChange}
       onSaved={onSaved}
