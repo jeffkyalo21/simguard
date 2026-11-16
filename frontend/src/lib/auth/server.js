@@ -92,6 +92,7 @@ function statusForCode(code) {
   switch (code) {
     case ERROR_CODES.validation:
     case ERROR_CODES.mfaInvalid:
+    case ERROR_CODES.invalidLink:
       return 400;
     case ERROR_CODES.invalidCredentials:
     case ERROR_CODES.challengeExpired:

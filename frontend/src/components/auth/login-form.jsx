@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Info } from "lucide-react";
-import { toast } from "sonner";
 import { ErrorSummary } from "@/components/auth/error-summary";
 import { PasswordInput } from "@/components/auth/password-input";
 import { BusyButton } from "@/components/shared/busy-button";
@@ -120,13 +120,8 @@ export function LoginForm() {
       <BusyButton type="submit" busy={busy} size="lg" className="mt-2 h-10 w-full">
         {copy.actions.signIn}
       </BusyButton>
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={() => toast.info(copy.login.forgotHint)}
-        className="h-10 self-center text-muted-foreground"
-      >
-        {copy.login.forgotPassword}
+      <Button asChild variant="ghost" className="h-10 self-center text-muted-foreground">
+        <Link href="/forgot-password">{copy.login.forgotPassword}</Link>
       </Button>
     </form>
   );
