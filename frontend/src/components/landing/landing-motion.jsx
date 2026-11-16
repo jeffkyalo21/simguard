@@ -59,10 +59,7 @@ export function LandingMotion({ rootRef }) {
               // Every character keeps its space; only its opacity changes.
               const split = SplitText.create(text, { type: "chars", charsClass: "type-char", aria: "none" });
               const total = split.chars.length;
-              const typedAt = delay + total * step;
-              const typed = { count: 0 };
-              let shown = 0;
-
+              const typedAt = delay + (total - 1) * step;
               gsap.set(split.chars, { opacity: 0 });
               gsap.set(text, { opacity: 1 });
               const place = (char, after) =>
@@ -74,28 +71,17 @@ export function LandingMotion({ rootRef }) {
               place(split.chars[0], false);
 
               const blink = gsap.to(bar, { opacity: 0, duration: 0.5, ease: "steps(1)", repeat: -1, yoyo: true });
+              const typing = gsap.timeline().set(cursor, { opacity: 1 }, 0);
 
-              gsap
-                .timeline()
-                .set(cursor, { opacity: 1 }, 0)
-                .to(
-                  typed,
-                  {
-                    count: total,
-                    duration: total * step,
-                    ease: `steps(${total})`,
-                    onUpdate: () => {
-                      const count = Math.round(typed.count);
-                      if (count > shown) {
-                        gsap.set(split.chars.slice(shown, count), { opacity: 1 });
-                        shown = count;
-                        place(split.chars[count - 1], true);
-                      }
-                    },
-                  },
-                  delay
-                )
-                // The cursor fades out about 1.5 s after the last character.
+              // One step per letter, each at its own time: a letter appears
+              // and the cursor moves behind it, never several at once.
+              split.chars.forEach((char, index) => {
+                const at = delay + index * step;
+                typing.set(char, { opacity: 1 }, at).call(place, [char, true], at);
+              });
+
+              // The cursor fades out about 1.5 s after the last letter.
+              typing
                 .to(
                   cursor,
                   { opacity: 0, duration: 0.3, onComplete: () => (blink.kill(), split.revert()) },
