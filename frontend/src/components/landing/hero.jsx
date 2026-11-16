@@ -43,7 +43,11 @@ function Headline() {
 
 export function Hero() {
   return (
-    <section aria-labelledby="hero-title" className="relative isolate px-4 pt-20 pb-14 sm:px-6 sm:pt-28">
+    <section data-hero aria-labelledby="hero-title" className="relative isolate px-4 pt-20 pb-14 sm:px-6 sm:pt-28">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
+        <div data-glow className="hero-glow absolute top-[8%] left-[12%] size-[26rem] rounded-full" />
+        <div data-glow className="hero-glow absolute top-[22%] right-[8%] size-[22rem] rounded-full" />
+      </div>
       <div className="landing-dots absolute inset-0 -z-10" aria-hidden="true" />
       <div className="landing-scrim absolute inset-0 -z-10" aria-hidden="true" />
       <div className="mx-auto flex max-w-4xl flex-col items-center gap-7 text-center">

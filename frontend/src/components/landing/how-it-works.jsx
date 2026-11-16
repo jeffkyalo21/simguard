@@ -2,14 +2,14 @@ import { Activity, ChartLine, Gauge, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass/glass-card";
 import { InView } from "@/components/landing/in-view";
 import { SectionHeading } from "@/components/landing/section-heading";
-import { StepsProgress } from "@/components/landing/steps-progress";
 import { copy } from "@/lib/copy";
 
 const text = copy.landing.detection;
 const icons = { behaviour: Activity, peers: Users, triage: Gauge, plan: ChartLine };
 
 /**
- * The four detection steps with a line that fills as the page scrolls.
+ * The four detection steps with a line that fills as the page scrolls
+ * (LandingMotion draws it and lights each step up).
  * Model names stay in small muted text under each plain sentence.
  */
 export function HowItWorks() {
@@ -17,7 +17,7 @@ export function HowItWorks() {
     <InView as="section" id="how-it-works" aria-labelledby="how-title" threshold={0.1} className="px-4 pb-24 sm:px-6">
       <div className="mx-auto flex max-w-3xl flex-col gap-10">
         <SectionHeading id="how-title" title={text.title} intro={text.intro} />
-        <StepsProgress>
+        <div data-steps className="relative">
           <div className="absolute top-5 bottom-[calc(var(--last-step,2.5rem)-1.25rem)] left-5 w-0.5 rounded-full bg-chart-track" aria-hidden="true">
             <div data-steps-line className="steps-line h-full w-full rounded-full bg-primary" />
           </div>
@@ -45,7 +45,7 @@ export function HowItWorks() {
               );
             })}
           </ol>
-        </StepsProgress>
+        </div>
       </div>
     </InView>
   );

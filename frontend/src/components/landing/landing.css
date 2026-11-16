@@ -82,15 +82,67 @@
   animation-delay: var(--delay, 0s);
 }
 
+/* Two soft brand glows behind the hero; GSAP drifts them slowly. */
+.hero-glow {
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--brand) 22%, transparent), transparent);
+  filter: blur(8px);
+  will-change: transform;
+}
+
+/* ---- Hover: cards, buttons ------------------------------------------------ */
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  /* Cards lift (shared rule) and glow a little; a 0.4 s ease. */
+  .landing .glass-card {
+    transition-duration: 400ms;
+  }
+
+  .landing .glass-card-hover:hover {
+    box-shadow:
+      var(--glass-shadow-lift),
+      var(--glass-highlight),
+      0 0 28px -8px color-mix(in oklab, var(--brand) 45%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Buttons press in a little and a soft shine crosses them on hover. */
+  .landing [data-slot="button"]:not([data-variant="link"]) {
+    position: relative;
+    overflow: hidden;
+    transition:
+      transform 180ms var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out),
+      box-shadow 400ms var(--ease-out);
+  }
+
+  .landing [data-slot="button"]:not([data-variant="link"]):active {
+    transform: scale(0.97);
+  }
+
+  .landing [data-slot="button"]:not([data-variant="link"])::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.28) 50%, transparent 65%);
+    transform: translateX(-130%);
+    pointer-events: none;
+  }
+
+  @media (hover: hover) {
+    .landing [data-slot="button"]:not([data-variant="link"]):hover::after {
+      transform: translateX(130%);
+      transition: transform 700ms var(--ease-out);
+    }
+  }
+}
+
 /* ---- Reveal on scroll ---------------------------------------------------- */
 
-.reveal {
-  transition:
-    opacity var(--dur-slow) var(--ease-out),
-    transform var(--dur-slow) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out);
-  transition-delay: calc(var(--i, 0) * 90ms);
-}
+/* .reveal is animated by GSAP (landing-motion.jsx): it fades up and
+   staggers in when it enters the screen, then hands its transform back to
+   the hover lift. The start state is set there, and below while the page
+   waits for GSAP. */
 
 /* ---- Product preview ------------------------------------------------------ */
 
@@ -408,9 +460,13 @@
 /* ---- Hidden start states: only with scripting and full motion ----------- */
 
 @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
-  [data-inview]:not([data-inview="true"]) .reveal {
+  .landing[data-motion="pending"] .reveal {
     opacity: 0;
     transform: translateY(var(--reveal-shift));
+  }
+
+  .landing[data-motion="pending"] .steps-line {
+    transform: scaleY(0);
   }
 
   [data-inview]:not([data-inview="true"]) :is(.fill-x, .pop-in, .slide-x) {
@@ -432,7 +488,7 @@
     animation-delay: calc(300ms + var(--i, 0) * 160ms);
   }
 
-  .step:not([data-active="true"]) {
+  .landing:not([data-motion="off"]) .step:not([data-active="true"]) {
     opacity: 0.45;
     transform: translateY(6px);
   }
