@@ -82,8 +82,21 @@
   color: transparent;
 }
 
+/* While the headline is typed, each accent letter paints its own slice of the
+   gradient (--gx offset, --gw width), so it appears with the letter. */
+[data-split] .hero-accent {
+  background: none;
+}
+
+[data-split] .hero-accent .type-char {
+  background: linear-gradient(100deg, var(--brand-text) 10%, var(--brand) 90%) var(--gx, 0) 0 / var(--gw, 100%) 100% no-repeat;
+  background-clip: text;
+  color: transparent;
+}
+
 @media (prefers-contrast: more), (forced-colors: active) {
-  .hero-accent {
+  .hero-accent,
+  [data-split] .hero-accent .type-char {
     background: none;
     color: var(--brand-text);
   }

@@ -60,6 +60,21 @@ export function LandingMotion({ rootRef }) {
               const split = SplitText.create(text, { type: "chars", charsClass: "type-char", aria: "none" });
               const total = split.chars.length;
               const typedAt = delay + (total - 1) * step;
+              // The accent gradient is painted by its parent, which would show
+              // the words before they are typed. While typing, each accent
+              // letter paints its own slice of the same gradient instead.
+              const accent = split.chars.filter((char) => char.closest(".hero-accent"));
+              if (accent.length) {
+                const rects = accent.map((char) => char.getBoundingClientRect());
+                const left = Math.min(...rects.map((rect) => rect.left));
+                const width = Math.max(...rects.map((rect) => rect.right)) - left;
+                accent.forEach((char, index) => {
+                  char.style.setProperty("--gx", `${left - rects[index].left}px`);
+                  char.style.setProperty("--gw", `${width}px`);
+                });
+                text.dataset.split = "";
+              }
+
               gsap.set(split.chars, { opacity: 0 });
               gsap.set(text, { opacity: 1 });
               const place = (char, after) =>
@@ -84,7 +99,7 @@ export function LandingMotion({ rootRef }) {
               typing
                 .to(
                   cursor,
-                  { opacity: 0, duration: 0.3, onComplete: () => (blink.kill(), split.revert()) },
+                  { opacity: 0, duration: 0.3, onComplete: () => (blink.kill(), split.revert(), delete text.dataset.split) },
                   typedAt + 1.5
                 )
                 .to(
