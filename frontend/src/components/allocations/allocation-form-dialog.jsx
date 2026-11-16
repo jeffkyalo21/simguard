@@ -1,22 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ScanLine } from "lucide-react";
 import { toast } from "sonner";
+import { AddEmployeeDialog } from "@/components/employees/add-employee-dialog";
+import { EmployeePicker } from "@/components/employees/employee-picker";
+import { ScanSimDialog } from "@/components/scan/scan-sim-dialog";
 import { FormDialog } from "@/components/shared/form-dialog";
 import { FormField } from "@/components/shared/form-field";
-import { SelectField } from "@/components/sims/sim-form-dialog";
+import { SelectField, SimFormDialog } from "@/components/sims/sim-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useOpeningKey } from "@/hooks/use-opening-key";
-import { useDepartments } from "@/hooks/use-reference";
+import { usePermission } from "@/hooks/use-permission";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError, errorMessage } from "@/lib/api";
 import { createAllocation, listEmployees, listSims } from "@/lib/data";
 import { formatPhone } from "@/lib/format";
+import { classifyScannedSim, simFieldValue, withExtraSim } from "@/lib/scan-lookup";
 import { copy } from "@/lib/copy";
 
 const text = copy.allocations.form;
-const FIELD_ORDER = ["simId", "departmentId", "employeeId", "assignedBy"];
+const FIELD_ORDER = ["simId", "employeeId", "assignedBy"];
 const SEARCH_DELAY_MS = 250;
 
 // The backend answers 400 with sentences per field; each field shows its
@@ -30,8 +35,7 @@ const serverMessages = {
 function validate(values) {
   const errors = {};
   if (!values.simId) errors.simId = text.errors.simRequired;
-  if (!values.departmentId) errors.departmentId = text.errors.departmentRequired;
-  else if (!values.employeeId) errors.employeeId = text.errors.employeeRequired;
+  if (!values.employeeId) errors.employeeId = text.errors.employeeRequired;
   if (!values.assignedBy) errors.assignedBy = text.errors.assignerRequired;
   return errors;
 }
@@ -43,12 +47,22 @@ function focusFirstError(errors) {
 
 /** The fields. Keyed by the caller, so each opening starts fresh. */
 function AllocationForm({ open, onOpenChange }) {
-  const [values, setValues] = useState({ simId: "", departmentId: "", employeeId: "", assignedBy: "" });
+  const [values, setValues] = useState({ simId: "", employeeId: "", assignedBy: "" });
+  // The picked employee, shown in the summary under the field.
+  const [employee, setEmployee] = useState(null);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   // The person who hands the SIM over is any employee: search by name.
   const [assignerSearch, setAssignerSearch] = useState("");
   const [assignerQuery, setAssignerQuery] = useState("");
+  // Scanning: the dialogs, the SIM found by a scan, and what to tell the person.
+  const [scanOpen, setScanOpen] = useState(false);
+  const [registerIccid, setRegisterIccid] = useState(null);
+  const [extraSim, setExtraSim] = useState(null);
+  const [scanNote, setScanNote] = useState(null);
+  const [adding, setAdding] = useState(null);
+  const addEmployee = usePermission("employees.edit");
+  const editSims = usePermission("sims.edit");
 
   useEffect(() => {
     const timer = setTimeout(() => setAssignerQuery(assignerSearch.trim()), SEARCH_DELAY_MS);
@@ -57,19 +71,15 @@ function AllocationForm({ open, onOpenChange }) {
 
   // Only available SIMs can be allocated (the API answers 409 otherwise).
   const sims = useResource(() => listSims({ status: "available", pageSize: 100 }), ["available"]);
-  const employees = useResource(
-    () => (values.departmentId ? listEmployees({ departmentId: values.departmentId, pageSize: 100 }) : Promise.resolve(null)),
-    [values.departmentId]
-  );
 
   const assigners = useResource(
     () => (assignerQuery.length >= 2 ? listEmployees({ search: assignerQuery, pageSize: 20 }) : Promise.resolve(null)),
     [assignerQuery]
   );
   const assignerOptions = (assigners.data?.items ?? [])
-    .map((employee) => ({
-      value: String(employee.id),
-      label: employee.departmentName ? `${employee.name}, ${employee.departmentName}` : employee.name,
+    .map((person) => ({
+      value: String(person.id),
+      label: person.departmentName ? `${person.name}, ${person.departmentName}` : person.name,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
   const assignerPlaceholder = assignerQuery.length < 2
@@ -78,24 +88,49 @@ function AllocationForm({ open, onOpenChange }) {
       ? text.assignerPlaceholder
       : !assigners.data ? text.loading : assignerOptions.length ? text.assignerPlaceholder : text.noAssigners;
 
-  const departmentOptions = useDepartments().map(({ id, name }) => ({ value: String(id), label: name }));
-  const simOptions = (sims.data?.items ?? []).map((sim) => ({ value: String(sim.id), label: formatPhone(sim.phoneNumber) }));
-  // The API lists employees by id; the form shows them by name.
-  const employeeOptions = (employees.data?.items ?? [])
-    .map((employee) => ({ value: String(employee.id), label: employee.name }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const listed = (sims.data?.items ?? []).map((sim) => ({ value: String(sim.id), label: formatPhone(sim.phoneNumber) }));
+  const simOptions = extraSim ? withExtraSim(listed, extraSim, formatPhone(extraSim.phoneNumber)) : listed;
 
   const simPlaceholder = sims.error
     ? text.simPlaceholder
     : !sims.data ? text.loading : simOptions.length ? text.simPlaceholder : text.noSims;
-  const employeePlaceholder = !values.departmentId
-    ? text.employeeFirst
-    : employees.error
-      ? text.employeePlaceholder
-      : !employees.data ? text.loading : employeeOptions.length ? text.employeePlaceholder : text.noEmployees;
 
-  const set = (field) => (value) =>
-    setValues((current) => ({ ...current, [field]: value, ...(field === "departmentId" && { employeeId: "" }) }));
+  const set = (field) => (value) => setValues((current) => ({ ...current, [field]: value }));
+
+  function chooseEmployee(person) {
+    setEmployee(person);
+    setValues((current) => ({ ...current, employeeId: person ? String(person.id) : "" }));
+    setErrors((current) => ({ ...current, employeeId: undefined }));
+  }
+
+  function chooseSim(sim) {
+    setExtraSim(sim);
+    set("simId")(simFieldValue(sim));
+    setErrors((current) => ({ ...current, simId: undefined }));
+  }
+
+  // A scanned ICCID selects the registered, available SIM that has it.
+  async function handleScanned(iccid) {
+    setScanNote(null);
+    try {
+      const found = await listSims({ q: iccid, pageSize: 5 });
+      const { kind, sim } = classifyScannedSim(iccid, found.items);
+      const number = sim ? formatPhone(sim.phoneNumber) : "";
+
+      if (kind === "available") {
+        chooseSim(sim);
+        setScanNote({ kind, text: text.scanPicked(number) });
+      } else if (kind === "allocated") {
+        setScanNote({ kind, text: text.scanAllocated(number, sim.currentAllocation?.employeeName) });
+      } else if (kind === "inactive") {
+        setScanNote({ kind, text: text.scanInactive(number) });
+      } else {
+        setScanNote({ kind, text: text.scanUnregistered, iccid });
+      }
+    } catch {
+      setScanNote({ kind: "error", text: text.scanLookupFailed });
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -134,95 +169,140 @@ function AllocationForm({ open, onOpenChange }) {
     }
   }
 
-  const loadFailed = sims.error || employees.error || assigners.error;
+  const loadFailed = sims.error || assigners.error;
 
   return (
-    <FormDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={text.title}
-      submitLabel={text.submit}
-      busy={busy}
-      onSubmit={handleSubmit}
-    >
-      {loadFailed && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className="text-risk-flagged-foreground">{text.loadError}</span>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 px-3"
-            onClick={() => {
-              if (sims.error) sims.retry();
-              if (employees.error) employees.retry();
-              if (assigners.error) assigners.retry();
-            }}
-          >
-            {copy.actions.tryAgain}
-          </Button>
-        </div>
-      )}
-      <SelectField
-        id="allocation-simId"
-        label={text.sim}
-        value={values.simId}
-        options={simOptions}
-        error={errors.simId}
-        onChange={set("simId")}
-        placeholder={simPlaceholder}
-        disabled={!simOptions.length}
-      />
-      <SelectField
-        id="allocation-departmentId"
-        label={text.department}
-        value={values.departmentId}
-        options={departmentOptions}
-        error={errors.departmentId}
-        onChange={set("departmentId")}
-        placeholder={text.departmentPlaceholder}
-      />
-      <SelectField
-        id="allocation-employeeId"
-        label={text.employee}
-        value={values.employeeId}
-        options={employeeOptions}
-        error={errors.employeeId}
-        onChange={set("employeeId")}
-        placeholder={employeePlaceholder}
-        disabled={!employeeOptions.length}
-      />
-      <FormField id="allocation-assignerSearch" label={text.assignerSearch} hint={text.assignerHint}>
-        {(field) => (
-          <Input
-            {...field}
-            type="search"
-            value={assignerSearch}
-            onChange={(event) => {
-              setAssignerSearch(event.target.value);
-              set("assignedBy")("");
-            }}
-            placeholder={text.assignerSearchPlaceholder}
-            autoComplete="off"
-            className="h-10"
-          />
+    <>
+      <FormDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title={text.title}
+        submitLabel={text.submit}
+        busy={busy}
+        onSubmit={handleSubmit}
+      >
+        {loadFailed && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="text-risk-flagged-foreground">{text.loadError}</span>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 px-3"
+              onClick={() => {
+                if (sims.error) sims.retry();
+                if (assigners.error) assigners.retry();
+              }}
+            >
+              {copy.actions.tryAgain}
+            </Button>
+          </div>
         )}
-      </FormField>
-      <SelectField
-        id="allocation-assignedBy"
-        label={text.assigner}
-        value={values.assignedBy}
-        options={assignerOptions}
-        error={errors.assignedBy}
-        onChange={set("assignedBy")}
-        placeholder={assignerPlaceholder}
-        disabled={!assignerOptions.length}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <SelectField
+                id="allocation-simId"
+                label={text.sim}
+                value={values.simId}
+                options={simOptions}
+                error={errors.simId}
+                onChange={set("simId")}
+                placeholder={simPlaceholder}
+                disabled={!simOptions.length}
+              />
+            </div>
+            {/* The label above the select is 14px high with an 8px gap. */}
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-[1.375rem] h-10 shrink-0 px-3"
+              aria-label={text.scanSimLabel}
+              onClick={() => setScanOpen(true)}
+            >
+              <ScanLine aria-hidden="true" />
+              {text.scanSim}
+            </Button>
+          </div>
+          {scanNote && (
+            <p role="status" className={scanNote.kind === "available" ? "text-sm text-muted-foreground" : "text-sm text-risk-flagged-foreground"}>
+              {scanNote.text}
+              {scanNote.kind === "unregistered" && editSims.allowed && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    className="rounded-sm font-medium underline underline-offset-4"
+                    onClick={() => setRegisterIccid(scanNote.iccid)}
+                  >
+                    {text.registerSim}
+                  </button>
+                </>
+              )}
+            </p>
+          )}
+        </div>
+        <EmployeePicker
+          id="allocation-employeeId"
+          label={text.employee}
+          value={employee}
+          error={errors.employeeId}
+          onChange={chooseEmployee}
+          onAdd={addEmployee.allowed ? (query) => setAdding(query) : undefined}
+        />
+        <FormField id="allocation-assignerSearch" label={text.assignerSearch} hint={text.assignerHint}>
+          {(field) => (
+            <Input
+              {...field}
+              type="search"
+              value={assignerSearch}
+              onChange={(event) => {
+                setAssignerSearch(event.target.value);
+                set("assignedBy")("");
+              }}
+              placeholder={text.assignerSearchPlaceholder}
+              autoComplete="off"
+              className="h-10"
+            />
+          )}
+        </FormField>
+        <SelectField
+          id="allocation-assignedBy"
+          label={text.assigner}
+          value={values.assignedBy}
+          options={assignerOptions}
+          error={errors.assignedBy}
+          onChange={set("assignedBy")}
+          placeholder={assignerPlaceholder}
+          disabled={!assignerOptions.length}
+        />
+      </FormDialog>
+
+      {/* Siblings of the form, so their submit events never reach it. */}
+      <ScanSimDialog open={scanOpen} onOpenChange={setScanOpen} onResult={handleScanned} />
+      <SimFormDialog
+        open={registerIccid !== null}
+        onOpenChange={(next) => !next && setRegisterIccid(null)}
+        initialIccid={registerIccid ?? ""}
+        onSaved={(sim) => {
+          chooseSim(sim);
+          setScanNote({ kind: "available", text: text.scanPicked(formatPhone(sim.phoneNumber)) });
+        }}
       />
-    </FormDialog>
+      <AddEmployeeDialog
+        open={adding !== null}
+        onOpenChange={(next) => !next && setAdding(null)}
+        initialName={adding && !adding.includes("@") ? adding : ""}
+        initialEmail={adding?.includes("@") ? adding : ""}
+        onCreated={chooseEmployee}
+      />
+    </>
   );
 }
 
 /**
- * New allocation: an available SIM, an employee and a start date.
+ * New allocation: an available SIM (picked or scanned), an employee (found by
+ * search, or added on the spot) and who handed it over. The allocation starts
+ * now.
  * @param {{ open: boolean, onOpenChange: (open: boolean) => void }} props
  */
 export function AllocationFormDialog({ open, onOpenChange }) {
