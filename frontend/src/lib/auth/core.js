@@ -35,6 +35,7 @@ export const ERROR_CODES = Object.freeze({
   rateLimited: "rate_limited",
   validation: "validation",
   noRole: "no_role",
+  invalidLink: "invalid_link",
   unauthorized: "unauthorized",
   forbidden: "forbidden",
   notFound: "not_found",
@@ -168,7 +169,7 @@ const NO_ROLE_DETAIL = "The account has no role";
  * `{ code, fields?, retryAfter? }`. `fields` keeps the ProblemDetails field
  * names (400 only) so a screen can mark the right input.
  * @param {{ status: number, problem?: any, retryAfter?: string | null,
- *   context?: "login" | "mfa" | "enroll" | "session" }} input
+ *   context?: "login" | "mfa" | "enroll" | "reset" | "session" }} input
  */
 export function mapBackendError({ status, problem, retryAfter, context = "session" }) {
   const detail = typeof problem?.detail === "string" ? problem.detail : "";
@@ -178,6 +179,8 @@ export function mapBackendError({ status, problem, retryAfter, context = "sessio
   if (status === 400) {
     const fields = problem && typeof problem.errors === "object" && problem.errors ? problem.errors : {};
     if (context === "enroll" && fields.code) return { code: ERROR_CODES.mfaInvalid };
+    // A wrong, used, replaced or expired reset link: one answer, no field.
+    if (context === "reset" && !fields.newPassword) return { code: ERROR_CODES.invalidLink };
     return { code: ERROR_CODES.validation, fields };
   }
 

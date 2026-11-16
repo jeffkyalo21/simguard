@@ -21,14 +21,20 @@ public static class AuthEventTypes
     public const string UserUnlocked = "user_unlocked";
     public const string RecoveryCodesRegenerated = "recovery_codes_regenerated";
     public const string AccountDeleted = "account_deleted";
+    public const string PasswordResetRequested = "password_reset_requested";
+    public const string PasswordResetCompleted = "password_reset_completed";
+    public const string PasswordResetFailed = "password_reset_failed";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>
     {
         LoginSucceeded, LoginFailed, Lockout, MfaFailed, MfaEnrolled, MfaReset,
         RecoveryCodeUsed, PasswordChanged, PasswordReset, UserCreated, RoleChanged,
-        UserDisabled, UserEnabled, UserUnlocked, RecoveryCodesRegenerated, AccountDeleted
+        UserDisabled, UserEnabled, UserUnlocked, RecoveryCodesRegenerated, AccountDeleted,
+        PasswordResetRequested, PasswordResetCompleted, PasswordResetFailed
     };
 }
+
+public readonly record struct ClientInfo(string? IpAddress, string? UserAgent);
 
 // Writes rows to auth_events. Never pass a password, token or MFA code here.
 public sealed class AuthEventLogger(SimGuardDbContext db, IHttpContextAccessor httpContextAccessor)
@@ -37,7 +43,7 @@ public sealed class AuthEventLogger(SimGuardDbContext db, IHttpContextAccessor h
     private const int IpMaxLength = 64;
     private const int UserAgentMaxLength = 512;
 
-    public async Task LogAsync(
+    public Task LogAsync(
         string eventType,
         bool success,
         int? userId,
@@ -46,14 +52,34 @@ public sealed class AuthEventLogger(SimGuardDbContext db, IHttpContextAccessor h
     {
         var httpContext = httpContextAccessor.HttpContext;
 
+        return LogAsync(
+            eventType,
+            success,
+            userId,
+            email,
+            new ClientInfo(
+                httpContext?.Connection.RemoteIpAddress?.ToString(),
+                httpContext?.Request.Headers.UserAgent.ToString()),
+            cancellationToken);
+    }
+
+    // For work that runs after the request has ended (the HTTP context is gone).
+    public async Task LogAsync(
+        string eventType,
+        bool success,
+        int? userId,
+        string? email,
+        ClientInfo client,
+        CancellationToken cancellationToken)
+    {
         db.AuthEvents.Add(new AuthEvent
         {
             UserId = userId,
             EmailAttempted = Truncate(email?.Trim(), EmailMaxLength),
             EventType = eventType,
             Success = success,
-            IpAddress = Truncate(httpContext?.Connection.RemoteIpAddress?.ToString(), IpMaxLength),
-            UserAgent = Truncate(httpContext?.Request.Headers.UserAgent.ToString(), UserAgentMaxLength),
+            IpAddress = Truncate(client.IpAddress, IpMaxLength),
+            UserAgent = Truncate(client.UserAgent, UserAgentMaxLength),
             CreatedAt = Timestamps.UtcNow()
         });
 

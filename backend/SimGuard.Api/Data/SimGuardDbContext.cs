@@ -27,6 +27,7 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
     public DbSet<AuthEvent> AuthEvents => Set<AuthEvent>();
     public DbSet<ImportRun> ImportRuns => Set<ImportRun>();
     public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
+    public DbSet<PasswordResetRequest> PasswordResetRequests => Set<PasswordResetRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -794,6 +795,27 @@ public partial class SimGuardDbContext : IdentityDbContext<AppUser, IdentityRole
                 .HasDatabaseName("idx_access_requests_pending_email")
                 .IsUnique()
                 .HasFilter("status = 'pending'");
+        });
+
+        modelBuilder.Entity<PasswordResetRequest>(entity =>
+        {
+            entity.ToTable("password_reset_requests");
+
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").UseSerialColumn();
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.TokenHash).HasColumnName("token_hash").HasColumnType("bytea").IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at").HasColumnType("timestamp with time zone");
+            entity.Property(e => e.UsedAt).HasColumnName("used_at").HasColumnType("timestamp with time zone");
+
+            entity.HasIndex(e => e.TokenHash).HasDatabaseName("idx_password_reset_requests_token_hash").IsUnique();
+            entity.HasIndex(e => e.UserId).HasDatabaseName("idx_password_reset_requests_user");
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         ConfigureScoring(modelBuilder);

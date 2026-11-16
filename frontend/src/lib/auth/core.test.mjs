@@ -99,6 +99,17 @@ test("pending cookie round trip", () => {
   assert.equal(decodePending(undefined), null);
 });
 
+test("mapBackendError tells a bad reset link from a weak password", () => {
+  assert.deepEqual(mapBackendError({ status: 400, problem: { detail: "x" }, context: "reset" }), {
+    code: ERROR_CODES.invalidLink,
+  });
+  const weak = { errors: { newPassword: ["too short"] } };
+  assert.deepEqual(mapBackendError({ status: 400, problem: weak, context: "reset" }), {
+    code: ERROR_CODES.validation,
+    fields: weak.errors,
+  });
+});
+
 test("mapBackendError gives stable codes", () => {
   assert.deepEqual(mapBackendError({ status: 401, context: "login" }), { code: ERROR_CODES.invalidCredentials });
   assert.deepEqual(mapBackendError({ status: 401, context: "mfa" }), { code: ERROR_CODES.mfaInvalid });

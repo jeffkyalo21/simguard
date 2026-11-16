@@ -3,7 +3,21 @@
 Main milestones, taken from the merged pull requests (newest first). Dates are
 merge dates. No release tags exist yet; see the end of this file.
 
-## Unreleased: Landing page motion and dashboard alert counts
+## Unreleased: Forgot password, landing page motion and dashboard alert counts
+
+- Self-service "Forgot password" for every account, the Admin included.
+  `POST /api/auth/forgot-password` answers the same for every email and sends
+  the mail in the background; `POST /api/auth/reset-password` sets the password
+  from an emailed link. The link token is 32 random bytes, only its SHA-256 hash
+  is stored (new table `password_reset_requests`, migration
+  `AddPasswordResetRequests`), it lasts 30 minutes, works once and is replaced by
+  a newer request. A reset ends existing sessions, keeps MFA required and does not
+  clear a lockout. Rate limited per IP and per email. New auth events
+  `password_reset_requested`, `password_reset_completed`, `password_reset_failed`
+  and Admin audit rows `auth.password_reset_*`. New pages `/forgot-password` and
+  `/reset-password`; the login link is real. Brevo and `BREVO_SIGN_IN_URL` must be
+  set per organisation stack for the email to go out. The server side emergency
+  recovery stays as the fallback.
 
 - Landing page motion uses GSAP 3.15.1 (with ScrollTrigger), added from npm and
   loaded only by the landing page through a dynamic import. Licence checked once:

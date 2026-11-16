@@ -1045,6 +1045,48 @@ namespace SimGuard.Api.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SimGuard.Api.Models.PasswordResetRequest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("idx_password_reset_requests_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("idx_password_reset_requests_user");
+
+                    b.ToTable("password_reset_requests", (string)null);
+                });
+
             modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>
                 {
                     b.Property<long>("Id")
@@ -1784,6 +1826,17 @@ namespace SimGuard.Api.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("UploadedBy");
+                });
+
+            modelBuilder.Entity("SimGuard.Api.Models.PasswordResetRequest", b =>
+                {
+                    b.HasOne("SimGuard.Api.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("SimGuard.Api.Models.RiskScore", b =>

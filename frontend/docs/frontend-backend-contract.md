@@ -81,6 +81,16 @@ sentence. Buttons for actions the role cannot do are disabled with a reason.
 | (new) `changeUserRole`, `disableUser`, `enableUser`, `unlockUser`, `resetUserMfa` | `PUT /users/{id}/role`, `POST /users/{id}/disable`, `/enable`, `/unlock`, `/mfa/reset` | Row actions. 409 on role change and disable means your own account or the last active Admin. |
 | (new) `resendSignInEmail` | `POST /users/{id}/signin-email` | New generated password by email, also the way to recover a forgotten password. 409 for a disabled account. |
 
+### Forgot and reset password (route handlers, no data layer function)
+
+The pages call the Next.js route handlers, which call the API; no token or API
+address reaches the browser.
+
+| Page | Route handler | Backend | Handling |
+| ---- | ------------- | ------- | -------- |
+| `/forgot-password` | `POST /api/auth/forgot-password` | `POST /auth/forgot-password` | Always shows "If that account exists, we sent a link. It works for 30 minutes." on 200. 400 (not an email) and 429 show the usual error line. |
+| `/reset-password` | `POST /api/auth/reset-password` | `POST /auth/reset-password` | Reads `token` and `email` from the link's fragment (`#token=...&email=...`) and removes it from the address bar. 200 goes to `/login?reason=passwordReset`. 400 without `errors.newPassword` becomes the code `invalid_link` (page shows "This link is invalid or has expired" with a link to request a new one); 400 with `errors.newPassword` marks the password field. The token is never logged and never put in a URL the server sees. The page sends `Referrer-Policy: no-referrer`. |
+
 The mock data layer (`src/lib/mock`) is deleted.
 
 ## Summary

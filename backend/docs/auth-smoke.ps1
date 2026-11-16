@@ -8,7 +8,9 @@
       seed Admin login, MFA enrolment, forced password change, MFA verify,
       recovery code, Security Officer and Auditor creation, 401 and 403 on
       write endpoints, last-Admin protection, disable and enable, MFA reset,
-      lockout, auth events and CORS.
+      lockout, auth events and CORS, and the anonymous answers of forgot
+      password and reset password (same answer for known and unknown emails,
+      generic 400 for a wrong token; Brevo__ApiKey blank, so no email is sent).
 
     Passwords, tokens and MFA secrets are never printed. The seeded Admin's
     new password, TOTP secret and recovery codes are written to
@@ -16,8 +18,9 @@
     account stays usable after the run.
 
     The sign-in endpoints are rate limited. Start the API with a higher limit
-    for the main run (RateLimiting__Auth__PermitLimit=1000), then run again
-    with -RateLimitOnly against an API that uses the default limit.
+    for the main run (RateLimiting__Auth__PermitLimit=1000 and
+    RateLimiting__PasswordReset__PermitLimit=1000), then run again with
+    -RateLimitOnly against an API that uses the default limits.
 
 .EXAMPLE
     $env:SIMGUARD_SMOKE_ADMIN_EMAIL = 'admin@simguard.local'
@@ -186,6 +189,13 @@ if ($RateLimitOnly) {
     }
     Write-Host "12 rapid logins: $($statuses -join ', ')"
     Check-True 'Rate limiter returns 429 on the sign-in endpoints' ($statuses -contains 429) "statuses: $($statuses -join ',')"
+
+    $resetStatuses = @()
+    for ($i = 1; $i -le 12; $i++) {
+        $resetStatuses += (Invoke-Api POST '/api/auth/forgot-password' @{ email = "nobody-$i@simguard.local" }).Status
+    }
+    Write-Host "12 rapid forgot-password requests: $($resetStatuses -join ', ')"
+    Check-True 'Rate limiter returns 429 on forgot-password' ($resetStatuses -contains 429) "statuses: $($resetStatuses -join ',')"
     Write-Results
     return
 }
@@ -207,6 +217,22 @@ Check 'GET /api/auth/me without token' 401 (Invoke-Api GET '/api/auth/me')
 Check 'POST /api/auth/login wrong password' 401 (Invoke-Api POST '/api/auth/login' @{ email = $adminEmail; password = 'definitely-not-it-123' })
 Check 'POST /api/auth/login unknown email' 401 (Invoke-Api POST '/api/auth/login' @{ email = "nobody-$runId@simguard.local"; password = 'definitely-not-it-123' })
 Check 'POST /api/auth/login empty body' 400 (Invoke-Api POST '/api/auth/login' @{})
+
+# Forgot and reset password (anonymous). Brevo__ApiKey is blank here, so no
+# email goes out and the link cannot be read; these checks cover the answers.
+$forgotKnown = Invoke-Api POST '/api/auth/forgot-password' @{ email = $adminEmail }
+$forgotUnknown = Invoke-Api POST '/api/auth/forgot-password' @{ email = "nobody-$runId@simguard.local" }
+Check 'POST /api/auth/forgot-password known email' 200 $forgotKnown
+Check 'POST /api/auth/forgot-password unknown email' 200 $forgotUnknown
+Check-True 'forgot-password answers the same for known and unknown emails' ($forgotKnown.Data.message -eq $forgotUnknown.Data.message)
+Check 'POST /api/auth/forgot-password invalid email' 400 (Invoke-Api POST '/api/auth/forgot-password' @{ email = 'not-an-email' })
+$badReset = Invoke-Api POST '/api/auth/reset-password' @{ email = $adminEmail; token = 'not-a-real-token'; newPassword = 'a long new password 2026' }
+Check 'POST /api/auth/reset-password wrong token' 400 $badReset
+Check-True 'reset-password wrong token gives the generic message' ($badReset.Data.detail -eq 'This link is invalid or has expired.')
+$badResetUnknown = Invoke-Api POST '/api/auth/reset-password' @{ email = "nobody-$runId@simguard.local"; token = 'not-a-real-token'; newPassword = 'a long new password 2026' }
+Check 'POST /api/auth/reset-password unknown email' 400 $badResetUnknown
+Check-True 'reset-password unknown email gives the same message' ($badResetUnknown.Data.detail -eq $badReset.Data.detail)
+Check 'POST /api/auth/reset-password empty body' 400 (Invoke-Api POST '/api/auth/reset-password' @{})
 
 # --- Seed Admin: first sign-in ----------------------------------------------
 $login = Invoke-Api POST '/api/auth/login' @{ email = $adminEmail; password = $adminPassword }

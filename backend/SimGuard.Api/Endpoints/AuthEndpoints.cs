@@ -88,6 +88,23 @@ public static class AuthEndpoints
             .ProducesProblem(StatusCodes.Status401Unauthorized)
             .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
+        group.MapPost("/forgot-password", ForgotPassword)
+            .WithName("ForgotPassword")
+            .AllowAnonymous()
+            .RequireRateLimiting(SecurityServiceExtensions.PasswordResetRateLimitPolicy)
+            .Produces<MessageResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+
+        group.MapPost("/reset-password", ResetPassword)
+            .WithName("ResetPassword")
+            .AllowAnonymous()
+            .RequireRateLimiting(SecurityServiceExtensions.PasswordResetRateLimitPolicy)
+            .Produces<MessageResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
+
         group.MapGet("/events", GetAuthEvents)
             .WithName("GetAuthEvents")
             .RequireAuthorization(AuthPolicies.AuditRead)
@@ -430,6 +447,80 @@ public static class AuthEndpoints
         var access = tokens.CreateAccessToken(user, role);
         return TypedResults.Ok(new AccessTokenResponse(access.Token, "Bearer", access.ExpiresAt, false));
     }
+
+    internal const string ForgotPasswordMessage = "If that account exists, we sent a link. It works for 30 minutes.";
+    internal const string InvalidResetLink = "This link is invalid or has expired.";
+
+    // The answer is the same for every well formed email: an account that
+    // exists, one that does not, a disabled one. The work runs in the
+    // background so the response time says nothing either.
+    private static IResult ForgotPassword(
+        ForgotPasswordRequest request,
+        HttpContext http,
+        PasswordResetDispatcher dispatcher)
+    {
+        var errors = new ValidationErrors();
+        var email = errors.RequiredEmail("email", request.Email, 256);
+
+        if (errors.HasErrors)
+        {
+            return errors.ToProblem();
+        }
+
+        dispatcher.Enqueue(email, ClientOf(http));
+        return TypedResults.Ok(new MessageResponse(ForgotPasswordMessage));
+    }
+
+    private static async Task<IResult> ResetPassword(
+        ResetPasswordWithLinkRequest request,
+        HttpContext http,
+        PasswordResetService reset,
+        CancellationToken cancellationToken)
+    {
+        // A missing email or token is the same generic answer as a wrong one.
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Token))
+        {
+            return InvalidResetLinkProblem();
+        }
+
+        if (string.IsNullOrEmpty(request.NewPassword))
+        {
+            var errors = new ValidationErrors();
+            errors.Add("newPassword", "newPassword is required.");
+            return errors.ToProblem();
+        }
+
+        var result = await reset.ResetAsync(
+            request.Email, request.Token, request.NewPassword, ClientOf(http), cancellationToken);
+
+        switch (result.Status)
+        {
+            case PasswordResetStatus.Done:
+                return TypedResults.Ok(new MessageResponse("Your password was changed. Sign in with the new password."));
+
+            case PasswordResetStatus.PasswordRejected:
+                var errors = new ValidationErrors();
+
+                foreach (var error in result.PasswordErrors)
+                {
+                    errors.Add("newPassword", error);
+                }
+
+                return errors.ToProblem();
+
+            default:
+                return InvalidResetLinkProblem();
+        }
+    }
+
+    private static IResult InvalidResetLinkProblem() =>
+        TypedResults.Problem(
+            title: "Invalid link",
+            detail: InvalidResetLink,
+            statusCode: StatusCodes.Status400BadRequest);
+
+    private static ClientInfo ClientOf(HttpContext http) =>
+        new(http.Connection.RemoteIpAddress?.ToString(), http.Request.Headers.UserAgent.ToString());
 
     private static async Task<IResult> GetAuthEvents(
         string? type,
