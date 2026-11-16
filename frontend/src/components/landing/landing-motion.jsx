@@ -8,11 +8,12 @@ const LOAD_LIMIT_MS = 4000;
 
 /**
  * Landing page motion driven by GSAP, loaded on demand (landing only):
+ * - the headline typewriter, then the subtext and buttons fading in,
  * - the slow drifting glow behind the hero,
  * - section and card reveals that fade up and stagger in on scroll,
  * - the pipeline line that draws itself while each step lights up.
  *
- * The hero text sequence, hover lifts, button press and shine are plain CSS
+ * Hover lifts, button press and shine are plain CSS
  * (landing.css). Everything runs in one gsap.context and is reverted on
  * unmount. With reduced motion nothing moves and every reveal is already
  * in its final state. Until GSAP is ready the page root carries
@@ -41,6 +42,45 @@ export function LandingMotion({ rootRef }) {
           const mm = gsap.matchMedia();
 
           mm.add("(prefers-reduced-motion: no-preference)", () => {
+            // Headline: typed in once, character by character, then the
+            // subtext and buttons fade in after it.
+            const chars = gsap.utils.toArray("[data-char]", root);
+            const cursor = root.querySelector("[data-cursor]");
+            const bar = root.querySelector("[data-cursor-bar]");
+            const fades = gsap.utils.toArray(".hero-fade", root);
+
+            gsap.set(fades, { opacity: 0, y: 10 });
+
+            if (chars.length && cursor && bar) {
+              const delay = 0.3;
+              const step = 0.04;
+              const typedAt = delay + (chars.length - 1) * step;
+              const place = (char, after) =>
+                gsap.set(cursor, {
+                  x: char.offsetLeft + (after ? char.offsetWidth : 0),
+                  y: char.offsetTop + char.offsetHeight * 0.1,
+                  height: char.offsetHeight * 0.8,
+                });
+
+              gsap.set(chars, { opacity: 0 });
+              const blink = gsap.to(bar, { opacity: 0, duration: 0.5, ease: "steps(1)", repeat: -1, yoyo: true });
+              const typing = gsap.timeline();
+              typing.call(() => place(chars[0], false), null, 0).set(cursor, { opacity: 1 }, 0);
+              chars.forEach((char, index) => {
+                const at = delay + index * step;
+                typing.set(char, { opacity: 1 }, at).call(() => place(char, true), null, at);
+              });
+              // The cursor fades out about 1.5 s after the last character.
+              typing.to(cursor, { opacity: 0, duration: 0.3, onComplete: () => blink.kill() }, typedAt + 1.5);
+              typing.to(
+                fades,
+                { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.1, clearProps: "opacity,transform" },
+                typedAt + 0.2
+              );
+            } else {
+              gsap.to(fades, { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, clearProps: "opacity,transform" });
+            }
+
             // Hero glow: two soft blobs drift slowly while the hero is on screen.
             const hero = root.querySelector("[data-hero]");
             const drifts = gsap.utils.toArray("[data-glow]", root).map((glow, index) =>

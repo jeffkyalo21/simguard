@@ -11,9 +11,12 @@ const display = Bricolage_Grotesque({ subsets: ["latin"], weight: "variable", di
 const text = copy.landing;
 
 /**
- * Headline words animate in one by one with CSS only, so the text is in
- * the server HTML and visible without JavaScript. The accent words carry
- * the brand gradient.
+ * The headline is typed in by GSAP (landing-motion.jsx). Every character is
+ * its own span, so the full text takes its space from the first frame and
+ * nothing reflows while it types. The heading carries the whole text in
+ * aria-label and the animated spans are hidden from assistive technology.
+ * Without JavaScript or with reduced motion the text simply shows. The
+ * accent words keep the brand gradient.
  */
 function Headline() {
   const words = [
@@ -24,18 +27,25 @@ function Headline() {
   return (
     <h1
       id="hero-title"
-      className={`${display.className} text-[clamp(3rem,9vw,6.5rem)] leading-[0.95] font-bold tracking-[-0.035em] text-balance`}
+      aria-label={`${text.heroLead} ${text.heroAccent}`}
+      className={`${display.className} relative text-[clamp(3rem,9vw,6.5rem)] leading-[0.95] font-bold tracking-[-0.035em] text-balance`}
     >
-      <span className="sr-only">{`${text.heroLead} ${text.heroAccent}`}</span>
       <span aria-hidden="true">
         {words.map(({ word, accent }, index) => (
-          <span key={word}>
+          <span key={`${word}-${index}`}>
             {index > 0 && " "}
-            <span className={accent ? "hero-word hero-accent" : "hero-word"} style={{ "--i": index }}>
-              {word}
+            <span className={accent ? "type-word hero-accent" : "type-word"}>
+              {[...word].map((character, position) => (
+                <span key={position} data-char className="type-char">
+                  {character}
+                </span>
+              ))}
             </span>
           </span>
         ))}
+        <span data-cursor className="type-cursor">
+          <span data-cursor-bar className="type-bar" />
+        </span>
       </span>
     </h1>
   );

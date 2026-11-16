@@ -50,10 +50,28 @@
   opacity: 0.85;
 }
 
-.hero-word {
+/* The headline is typed in by GSAP: one span per character, the full text
+   takes its space from the first frame. Words never split across lines. */
+.type-word {
   display: inline-block;
-  animation: word-in 600ms var(--ease-out) both;
-  animation-delay: calc(120ms + var(--i) * 110ms);
+  white-space: nowrap;
+}
+
+/* A thin cursor, placed by GSAP; out of the flow, so it never moves text. */
+.type-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0.06em;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.type-bar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--foreground);
 }
 
 /* Accent words: a brand gradient (large text, at least 3:1 on the backdrop). */
@@ -74,6 +92,11 @@
 .hero-fade {
   animation: fade-up 600ms var(--ease-out) both;
   animation-delay: calc(450ms + var(--i, 0) * 100ms);
+}
+
+/* With GSAP the subtext and buttons fade in after the headline has typed. */
+.landing:is([data-motion="pending"], [data-motion="on"]) .hero-fade {
+  animation: none;
 }
 
 /* Floating chips: parallax on the wrapper, a slow bob on the inner card. */
@@ -434,6 +457,10 @@
 /* ---- Hidden start states: only with scripting and full motion ----------- */
 
 @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .landing[data-motion="pending"] :is(.type-char, .hero-fade) {
+    opacity: 0;
+  }
+
   .landing[data-motion="pending"] .reveal {
     opacity: 0;
     transform: translateY(var(--reveal-shift));
@@ -475,17 +502,6 @@
 .landing[data-paused] *,
 .landing[data-paused] *::before {
   animation-play-state: paused !important;
-}
-
-@keyframes word-in {
-  from {
-    opacity: 0;
-    transform: translateY(0.35em);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @keyframes fade-up {
@@ -568,7 +584,7 @@
 
 /* Reduced motion: static page, no loops (globals.css also stops them). */
 @media (prefers-reduced-motion: reduce) {
-  .landing :is(.hero-word, .hero-fade, .chip-float, .fill-x, .pop-in, .slide-x, .faq-answer),
+  .landing :is(.hero-fade, .chip-float, .fill-x, .pop-in, .slide-x, .faq-answer),
   .landing :is(.cta-border, .cta-glow)::before {
     animation: none !important;
   }
