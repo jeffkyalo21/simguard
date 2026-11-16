@@ -34,7 +34,9 @@ export function LandingMotion({ rootRef }) {
     }, LOAD_LIMIT_MS);
 
     loadGsap()
-      .then(({ gsap, ScrollTrigger }) => {
+      .then(async ({ gsap, ScrollTrigger, SplitText }) => {
+        // Split the text after the display font is in, so lines break as they will stay.
+        await Promise.race([document.fonts.ready, new Promise((resolve) => window.setTimeout(resolve, 1000))]);
         if (cancelled) return;
         window.clearTimeout(giveUp);
 
@@ -42,41 +44,68 @@ export function LandingMotion({ rootRef }) {
           const mm = gsap.matchMedia();
 
           mm.add("(prefers-reduced-motion: no-preference)", () => {
-            // Headline: typed in once, character by character, then the
-            // subtext and buttons fade in after it.
-            const chars = gsap.utils.toArray("[data-char]", root);
+            // Headline: SplitText splits it into characters and one timeline
+            // types them in once; the subtext and buttons fade in after it.
+            const text = root.querySelector("[data-type]");
             const cursor = root.querySelector("[data-cursor]");
             const bar = root.querySelector("[data-cursor-bar]");
             const fades = gsap.utils.toArray(".hero-fade", root);
 
             gsap.set(fades, { opacity: 0, y: 10 });
 
-            if (chars.length && cursor && bar) {
+            if (text && cursor && bar) {
               const delay = 0.3;
               const step = 0.04;
-              const typedAt = delay + (chars.length - 1) * step;
+              // Every character keeps its space; only its opacity changes.
+              const split = SplitText.create(text, { type: "chars", charsClass: "type-char", aria: "none" });
+              const total = split.chars.length;
+              const typedAt = delay + total * step;
+              const typed = { count: 0 };
+              let shown = 0;
+
+              gsap.set(split.chars, { opacity: 0 });
+              gsap.set(text, { opacity: 1 });
               const place = (char, after) =>
                 gsap.set(cursor, {
                   x: char.offsetLeft + (after ? char.offsetWidth : 0),
                   y: char.offsetTop + char.offsetHeight * 0.1,
                   height: char.offsetHeight * 0.8,
                 });
+              place(split.chars[0], false);
 
-              gsap.set(chars, { opacity: 0 });
               const blink = gsap.to(bar, { opacity: 0, duration: 0.5, ease: "steps(1)", repeat: -1, yoyo: true });
-              const typing = gsap.timeline();
-              typing.call(() => place(chars[0], false), null, 0).set(cursor, { opacity: 1 }, 0);
-              chars.forEach((char, index) => {
-                const at = delay + index * step;
-                typing.set(char, { opacity: 1 }, at).call(() => place(char, true), null, at);
-              });
-              // The cursor fades out about 1.5 s after the last character.
-              typing.to(cursor, { opacity: 0, duration: 0.3, onComplete: () => blink.kill() }, typedAt + 1.5);
-              typing.to(
-                fades,
-                { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.1, clearProps: "opacity,transform" },
-                typedAt + 0.2
-              );
+
+              gsap
+                .timeline()
+                .set(cursor, { opacity: 1 }, 0)
+                .to(
+                  typed,
+                  {
+                    count: total,
+                    duration: total * step,
+                    ease: `steps(${total})`,
+                    onUpdate: () => {
+                      const count = Math.round(typed.count);
+                      if (count > shown) {
+                        gsap.set(split.chars.slice(shown, count), { opacity: 1 });
+                        shown = count;
+                        place(split.chars[count - 1], true);
+                      }
+                    },
+                  },
+                  delay
+                )
+                // The cursor fades out about 1.5 s after the last character.
+                .to(
+                  cursor,
+                  { opacity: 0, duration: 0.3, onComplete: () => (blink.kill(), split.revert()) },
+                  typedAt + 1.5
+                )
+                .to(
+                  fades,
+                  { opacity: 1, y: 0, duration: 0.6, ease: "power2.out", stagger: 0.1, clearProps: "opacity,transform" },
+                  typedAt + 0.2
+                );
             } else {
               gsap.to(fades, { opacity: 1, y: 0, duration: 0.6, stagger: 0.1, clearProps: "opacity,transform" });
             }

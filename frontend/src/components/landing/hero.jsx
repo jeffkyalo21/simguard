@@ -11,41 +11,24 @@ const display = Bricolage_Grotesque({ subsets: ["latin"], weight: "variable", di
 const text = copy.landing;
 
 /**
- * The headline is typed in by GSAP (landing-motion.jsx). Every character is
- * its own span, so the full text takes its space from the first frame and
- * nothing reflows while it types. The heading carries the whole text in
- * aria-label and the animated spans are hidden from assistive technology.
- * Without JavaScript or with reduced motion the text simply shows. The
- * accent words keep the brand gradient.
+ * The headline is typed in by GSAP (SplitText plus one timeline, see
+ * landing-motion.jsx). The server renders it as plain text, so it is
+ * readable without JavaScript and with reduced motion. The heading carries
+ * the whole text in aria-label and the typed text is hidden from assistive
+ * technology. The accent words keep the brand gradient.
  */
 function Headline() {
-  const words = [
-    ...text.heroLead.split(" ").map((word) => ({ word, accent: false })),
-    ...text.heroAccent.split(" ").map((word) => ({ word, accent: true })),
-  ];
-
   return (
     <h1
       id="hero-title"
       aria-label={`${text.heroLead} ${text.heroAccent}`}
       className={`${display.className} relative text-[clamp(3rem,9vw,6.5rem)] leading-[0.95] font-bold tracking-[-0.035em] text-balance`}
     >
-      <span aria-hidden="true">
-        {words.map(({ word, accent }, index) => (
-          <span key={`${word}-${index}`}>
-            {index > 0 && " "}
-            <span className={accent ? "type-word hero-accent" : "type-word"}>
-              {[...word].map((character, position) => (
-                <span key={position} data-char className="type-char">
-                  {character}
-                </span>
-              ))}
-            </span>
-          </span>
-        ))}
-        <span data-cursor className="type-cursor">
-          <span data-cursor-bar className="type-bar" />
-        </span>
+      <span aria-hidden="true" data-type className="type-text">
+        {text.heroLead} <span className="hero-accent">{text.heroAccent}</span>
+      </span>
+      <span aria-hidden="true" data-cursor className="type-cursor">
+        <span data-cursor-bar className="type-bar" />
       </span>
     </h1>
   );

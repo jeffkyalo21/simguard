@@ -50,11 +50,12 @@
   opacity: 0.85;
 }
 
-/* The headline is typed in by GSAP: one span per character, the full text
-   takes its space from the first frame. Words never split across lines. */
-.type-word {
-  display: inline-block;
-  white-space: nowrap;
+/* The headline is typed in by GSAP SplitText: the full text keeps its space
+   from the first frame (characters are only hidden, never removed). */
+/* SplitText makes characters inline-block, which grows the line box; keep
+   them inline so splitting and reverting never change the heading's size. */
+.type-char {
+  display: inline !important;
 }
 
 /* A thin cursor, placed by GSAP; out of the flow, so it never moves text. */
@@ -76,7 +77,6 @@
 
 /* Accent words: a brand gradient (large text, at least 3:1 on the backdrop). */
 .hero-accent {
-  padding-bottom: 0.08em;
   background: linear-gradient(100deg, var(--brand-text) 10%, var(--brand) 90%);
   background-clip: text;
   color: transparent;
@@ -457,7 +457,7 @@
 /* ---- Hidden start states: only with scripting and full motion ----------- */
 
 @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
-  .landing[data-motion="pending"] :is(.type-char, .hero-fade) {
+  .landing[data-motion="pending"] :is(.type-text, .hero-fade) {
     opacity: 0;
   }
 
