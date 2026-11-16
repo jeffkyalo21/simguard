@@ -43,6 +43,7 @@ public sealed class PasswordResetService(
     IOptions<BrevoOptions> brevo,
     PasswordResetEmailLimiter emailLimiter,
     AuthEventLogger events,
+    AuditWriter audit,
     IHostEnvironment environment,
     ILogger<PasswordResetService> logger)
 {
@@ -102,6 +103,7 @@ public sealed class PasswordResetService(
         }
 
         await events.LogAsync(AuthEventTypes.PasswordResetRequested, true, user.Id, email, client, cancellationToken);
+        await AuditAsync(AuditActions.AuthPasswordResetRequested, user.Id, cancellationToken);
         await SendLinkAsync(user, token, cancellationToken);
     }
 
@@ -178,6 +180,7 @@ public sealed class PasswordResetService(
             // The link stays usable so the person can choose another password.
             await transaction.RollbackAsync(cancellationToken);
             await events.LogAsync(AuthEventTypes.PasswordResetFailed, false, user.Id, email, client, cancellationToken);
+            await AuditAsync(AuditActions.AuthPasswordResetFailed, user.Id, cancellationToken);
             logger.LogInformation("A password reset was refused: password_rules.");
             return new PasswordResetResult(
                 PasswordResetStatus.PasswordRejected,
@@ -193,6 +196,7 @@ public sealed class PasswordResetService(
 
         await transaction.CommitAsync(cancellationToken);
         await events.LogAsync(AuthEventTypes.PasswordResetCompleted, true, user.Id, email, client, cancellationToken);
+        await AuditAsync(AuditActions.AuthPasswordResetCompleted, user.Id, cancellationToken);
         return PasswordResetResult.Done;
     }
 
@@ -206,8 +210,22 @@ public sealed class PasswordResetService(
         int? userId, string email, string reason, ClientInfo client, CancellationToken cancellationToken)
     {
         await events.LogAsync(AuthEventTypes.PasswordResetFailed, false, userId, email, client, cancellationToken);
+
+        if (userId is not null)
+        {
+            await AuditAsync(AuditActions.AuthPasswordResetFailed, userId.Value, cancellationToken);
+        }
+
         logger.LogInformation("A password reset was refused: {Reason}.", reason);
         return PasswordResetResult.InvalidLink;
+    }
+
+    // The audit view (Admin) shows these for real accounts only: no reason,
+    // no email, no token. Unknown emails are in auth_events, not here.
+    private async Task AuditAsync(string action, int userId, CancellationToken cancellationToken)
+    {
+        audit.AddSystem(action, null, null, new { userId });
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private async Task SendLinkAsync(AppUser user, string token, CancellationToken cancellationToken)

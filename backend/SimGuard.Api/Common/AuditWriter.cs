@@ -40,6 +40,9 @@ public static class AuditActions
     public const string UserSelfDeleted = "user.self_deleted";
     public const string UserSignInEmailSent = "user.signin_email_sent";
     public const string AdminRecovered = "admin.recovered";
+    public const string AuthPasswordResetRequested = "auth.password_reset_requested";
+    public const string AuthPasswordResetCompleted = "auth.password_reset_completed";
+    public const string AuthPasswordResetFailed = "auth.password_reset_failed";
     public const string AlertStatusChanged = "alert.status_changed";
     public const string ImportCommitted = "import.committed";
     public const string AccessRequestReviewed = "user.access_request_reviewed";
