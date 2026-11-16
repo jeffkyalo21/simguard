@@ -1,4 +1,6 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using SimGuard.Api.Models;
 using SimGuard.Api.Common;
 using SimGuard.Api.Common.Authorization;
 using SimGuard.Api.Data;
@@ -23,6 +25,24 @@ public static class DashboardEndpoints
             .ProducesValidationProblem();
 
         return routes;
+    }
+
+    // An alert is in the window when the day it was first detected or the
+    // day it was last detected falls inside it: one open alert exists per
+    // SIM and later bad days only move LastDetectedOn, so a SIM that is
+    // still misbehaving must count for the current window. Alerts stored
+    // before scoring existed have neither date and fall back to their
+    // stored time.
+    public static Expression<Func<Alert, bool>> InWindow(DateTime from, DateTime to)
+    {
+        var fromDate = DateOnly.FromDateTime(from);
+        var toDate = DateOnly.FromDateTime(to);
+
+        return a =>
+            a.DetectedOn != null || a.LastDetectedOn != null
+                ? (a.DetectedOn >= fromDate && a.DetectedOn <= toDate)
+                    || (a.LastDetectedOn >= fromDate && a.LastDetectedOn <= toDate)
+                : a.CreatedAt >= from && a.CreatedAt <= to;
     }
 
     private static async Task<IResult> GetSummary(
@@ -59,9 +79,6 @@ public static class DashboardEndpoints
             from = to.AddDays(-window);
         }
 
-        var fromDate = DateOnly.FromDateTime(from);
-        var toDate = DateOnly.FromDateTime(to);
-
         var activeSims = await db.Sims
             .CountAsync(s => s.Status != SimStatuses.Inactive, cancellationToken);
 
@@ -71,13 +88,7 @@ public static class DashboardEndpoints
         var toReview = await db.Alerts
             .CountAsync(a => a.Status == AlertStatuses.Escalated, cancellationToken);
 
-        // Alerts in the window by the day they were detected; alerts stored
-        // before scoring existed have no detectedOn and fall back to their
-        // stored time.
-        var inWindow = db.Alerts.Where(a =>
-            a.DetectedOn != null
-                ? a.DetectedOn >= fromDate && a.DetectedOn <= toDate
-                : a.CreatedAt >= from && a.CreatedAt <= to);
+        var inWindow = db.Alerts.Where(InWindow(from, to));
 
         var resolved = await inWindow
             .CountAsync(a => a.Status == AlertStatuses.Cleared, cancellationToken);
