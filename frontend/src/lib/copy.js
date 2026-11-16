@@ -1079,6 +1079,9 @@ export const copy = {
       phonePlaceholder: "0712 345 678",
       iccid: "ICCID",
       iccidPlaceholder: "8925 4010 0000 0012",
+      scanned: "Scanned. Check the number, then fill in the rest.",
+      alreadyRegistered: "This SIM is already registered.",
+      viewRegistered: (number) => `View ${number}`,
       operator: "Operator",
       noCarriers: "No carriers yet",
       addCarrier: "Add a carrier",
@@ -1104,6 +1107,31 @@ export const copy = {
       saved: (number) => `${number} saved.`,
       tierChanged: (tier) => `Tier changed to ${tier}.`,
     },
+  },
+
+  // The SIM scanner (barcode, then the printed number). Runs in the browser;
+  // the picture is never uploaded or saved.
+  scan: {
+    title: "Scan SIM",
+    button: "Scan",
+    buttonLabel: "Scan the SIM barcode with the camera",
+    intro: "Hold the barcode on the SIM card in front of the camera.",
+    privacy: "The picture stays on this device. Nothing is uploaded or saved.",
+    video: "Camera view",
+    starting: "Starting the camera",
+    scanning: "Looking for a barcode",
+    upload: "Upload a photo instead",
+    reading: "Reading the number. This can take a few seconds.",
+    readPrinted: "Read the printed number",
+    invalid: "That does not look like a SIM number, try again or type it.",
+    noBarcode: "No barcode found in that photo. Try a sharper photo, or type the number.",
+    noNumber: "No SIM number found in the picture. Try a sharper photo, or type the number.",
+    cameraBlocked: "The camera is blocked. Allow camera access in the browser settings, or upload a photo.",
+    cameraMissing: "No camera found. Upload a photo instead.",
+    cameraInsecure: "The camera works only on a secure (https) page. Upload a photo instead.",
+    cameraFailed: "The camera could not start. Upload a photo instead.",
+    notAnImage: "Choose an image file.",
+    close: "Close",
   },
 
   simProfile: {
