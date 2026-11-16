@@ -21,7 +21,10 @@
 #   SIMGUARD_IMAGE_PREFIX         image name prefix, shared by all organisations (default simguard)
 #   SIMGUARD_EDGE_NETWORK         name of the shared network (default simguard-edge); must match edge.env
 #   SIMGUARD_PROJECT_PREFIX       compose project prefix: <prefix>-<slug> (default simguard)
-#   BREVO_API_KEY, BREVO_SENDER_EMAIL   email settings (default: none, no email is sent)
+#   BREVO_API_KEY, BREVO_SENDER_EMAIL   email settings (default: none, no email is sent;
+#                                 without a key "Forgot password" sends nothing either).
+#                                 BREVO_SIGN_IN_URL is set per organisation below and is also
+#                                 the base of the password reset link.
 #   SIMGUARD_ORG_VERBOSE=1        show progress and the docker output
 set -Eeuo pipefail
 here="$(dirname "${BASH_SOURCE[0]}")"

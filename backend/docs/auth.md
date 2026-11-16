@@ -173,6 +173,80 @@ token stops working; use the new one.
 Errors: 400 (`currentPassword` incorrect, which counts as a failed attempt,
 or `newPassword` fails the policy or equals the current one), 401, 429.
 
+### POST /api/auth/forgot-password
+
+Anonymous. Rate limited per client IP (policy `password-reset`, 10 requests per
+15 minutes) and per email address (3 emails per hour, see below). For every
+Admin, Security Officer and Auditor account.
+
+```json
+{ "email": "name@company.com" }
+```
+
+200, always the same body, whether the account exists, is disabled, or has
+never signed in:
+
+```json
+{ "message": "If that account exists, we sent a link. It works for 30 minutes." }
+```
+
+400 only for an email that is missing or not an email address, and 429 over the
+IP limit. The work runs after the response is sent (in the background), so the
+response time does not show whether the account exists. The email is sent only
+for an existing, enabled account. Over the per email limit the request is
+dropped silently and the answer stays the same, so nobody can flood an inbox
+and nobody can learn anything from the limit.
+
+### POST /api/auth/reset-password
+
+Anonymous. Same rate limit policy as above.
+
+```json
+{ "email": "name@company.com", "token": "<from the link>", "newPassword": "a new long passphrase" }
+```
+
+200 `{ "message": "Your password was changed. Sign in with the new password." }`.
+Errors: 400 `This link is invalid or has expired.` (ProblemDetails, no `errors`
+member) for an unknown, used, expired or replaced token, a wrong email, or a
+missing email or token: one answer for all of them. 400 with `errors.newPassword`
+when the password fails the policy (the link stays usable). 429.
+
+Token rules:
+
+- 32 random bytes from the system generator, base64url (43 characters).
+- Only the SHA-256 hash is stored, in `password_reset_requests` (user id, token
+  hash, created at, expires at, used at). The token exists only in the email.
+- Valid 30 minutes after it was created, and once. A newer request for the same
+  account replaces every older unused one (their `used_at` is set).
+- Hashes are compared in constant time. The token is never logged, and neither
+  are the new password or the email body.
+- Identity performs the change with its own token created inside the call
+  (never shown to anyone), so the password rules apply as everywhere else.
+
+What a reset does and does not do:
+
+- The security stamp changes, so every existing access token, MFA challenge and
+  enrolment link of that user stops working at once. There are no refresh tokens.
+- MFA stays as it was. A reset never disables or bypasses it: the next sign-in
+  asks for the password, then the code (or the enrolment, if MFA was never set
+  up).
+- A lockout is not cleared. A locked account stays locked until the lockout ends
+  or an Admin unlocks it; the reset only changes the password.
+- `mustChangePassword` is set to false, because the person has just chosen the
+  password. Admin issued passwords (`signin-email`) are unchanged.
+
+The link is built from the configured address, never from the request `Host`
+header: the origin of `Brevo:SignInUrl` (`Brevo__SignInUrl`, set per organisation
+by `deploy/scripts/create-org.sh`) plus `/reset-password#token=...&email=...`.
+The token is in the fragment, so browsers do not send it to any server. The email
+says who asked (the account's email), shows the link, says it is valid for 30
+minutes, says to ignore the email if the person did not ask, and contains no
+password. Without `Brevo:ApiKey` the endpoint still answers 200, logs one warning
+without the token and sends nothing; in Development only, the link is also logged.
+
+The server side emergency recovery (see "Emergency Admin recovery") stays as the
+fallback when email does not work.
+
 ### PUT /api/auth/me
 
 Policy `AnyRole` (every role). Changes the signed-in user's own name. Email
@@ -254,7 +328,12 @@ max 100). Newest first.
 Event types: `login_succeeded`, `login_failed`, `lockout`, `mfa_failed`,
 `mfa_enrolled`, `mfa_reset`, `recovery_code_used`, `password_changed`,
 `password_reset`, `user_created`, `role_changed`, `user_disabled`,
-`user_enabled`, `user_unlocked`. `userId` is null when the email did not match an account.
+`user_enabled`, `user_unlocked`, `password_reset_requested`,
+`password_reset_completed`, `password_reset_failed`.
+The three password reset events are about the emailed link flow; the reason a
+reset failed (unknown, used, expired, replaced, weak password) goes to the server
+log only, never into the response or the table. `password_reset` is the Admin
+issued one. `userId` is null when the email did not match an account.
 Passwords, tokens and codes are never stored.
 
 ### GET /api/admin/system-status
@@ -425,6 +504,7 @@ The roles split operator from organisation:
 | `/api/users/*` (list, get, create, role, disable, enable, MFA reset, password reset) | yes | no | no | `AdminOnly` |
 | `GET /api/audit-logs` | `system` rows only | no | all rows | `AuditRead` |
 | `GET /api/auth/events` | yes | no | yes | `AuditRead` |
+| `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` | anonymous | anonymous | anonymous | `AllowAnonymous`, rate limit policy `password-reset` |
 | `POST /api/dev/seed-demo` (Development only) | yes | no | no | `DevTools` |
 
 "no" is 403 for a signed-in caller; without a token every endpoint except
@@ -451,6 +531,8 @@ not declare its own policy, so a new endpoint is protected by default.
 | Password | at least 12 characters, at least 4 distinct characters, no composition rules |
 | Lockout | 5 failed attempts (password, MFA code or current password on change), then 15 minutes |
 | Rate limit | 10 requests per minute per client IP on login, MFA and change-password (configurable) |
+| Rate limit, password reset | 10 requests per 15 minutes per client IP on forgot-password and reset-password; 3 reset emails per hour per address (configurable) |
+| Password reset link | 32 random bytes, SHA-256 hash stored, 30 minutes, single use, replaced by a newer request |
 | Access token | HS256, 60 minutes, clock skew 30 seconds |
 | MFA token | 5 minutes |
 | CORS | origins from `Cors:AllowedOrigins` only, credentials allowed, no wildcard |
@@ -469,6 +551,9 @@ not declare its own policy, so a new endpoint is protected by default.
 | `Cors:AllowedOrigins` | no | `["http://localhost:3000"]` | array; `*` is rejected at startup |
 | `RateLimiting:Auth:PermitLimit` | no | `10` | |
 | `RateLimiting:Auth:WindowSeconds` | no | `60` | |
+| `RateLimiting:PasswordReset:PermitLimit`, `WindowSeconds` | no | `10`, `900` | per client IP, forgot-password and reset-password |
+| `RateLimiting:PasswordResetEmail:PermitLimit`, `WindowSeconds` | no | `3`, `3600` | reset emails per address |
+| `Brevo:ApiKey`, `Brevo:SignInUrl` | for reset emails | none, `http://localhost:3000/login` | the origin of `SignInUrl` is the base of the reset link; set both per organisation stack |
 | `SimGuard:Seed:AdminEmail` | first run only | | |
 | `SimGuard:Seed:AdminPassword` | first run only | | at least 12 characters |
 | `SimGuard:Seed:AdminName` | no | `Administrator` | |
@@ -571,7 +656,10 @@ account: email, roles, disabled, locked; `outcome` `created` or `repaired`).
 No password, hash or secret goes into the log or the entry. With the variable
 missing, `false`, or without email or password (the log then says nothing was
 changed), nothing happens. Remove the variables and restart after signing in;
-keep at least two Admin accounts so this is rarely needed.
+keep at least two Admin accounts so this is rarely needed. This stays the
+fallback for when email does not work; the emailed reset link (see
+`POST /api/auth/forgot-password`) is the normal way to recover a forgotten
+password, also for the Admin.
 `backend/docs/recovery-smoke.ps1` covers it.
 
 ## Smoke test
@@ -609,7 +697,7 @@ accounts and audit rows behind.
   refresh token in an HttpOnly cookie).
 - OIDC / external identity providers, SAML.
 - Multi-tenancy (one organisation only).
-- Self-registration and email-based password reset.
+- Self-registration.
 - SMS or email MFA (TOTP only).
 - Recording the acting user on SIM and allocation changes in `audit_logs`
   (issue #13).

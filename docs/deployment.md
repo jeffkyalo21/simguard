@@ -213,6 +213,14 @@ Admin is not affected (its password comes from `.env`).
 3. `docker compose -f deploy/docker-compose.yml up -d --no-deps backend`.
 4. System health, Email: `Working` means a key is set. It does not prove delivery.
    Prove it: invite yourself with a second address and check that the email arrives.
+   The same settings send the **forgot password** email. The reset link is built
+   from the origin of `BREVO_SIGN_IN_URL` (never from the request host), so set it
+   per organisation stack: `deploy/scripts/create-org.sh` writes
+   `BREVO_SIGN_IN_URL=https://<organisation host>/login` into each organisation's
+   `.env`. Set `BREVO_API_KEY` there too (or in `defaults.env`). Without a key,
+   "Forgot password" still answers the same but no email is sent, so keep the
+   emergency Admin recovery below as the fallback. Check it: ask for a reset for
+   your own address from `/forgot-password` and open the link.
 5. If nothing arrives: `docker compose -f deploy/docker-compose.yml logs backend | grep -i brevo`.
    `Brevo:ApiKey is not set` means the key did not reach the backend (restart it
    as in step 3). `Brevo refused an email with status 401` means a wrong key;

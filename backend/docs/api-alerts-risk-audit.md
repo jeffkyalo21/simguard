@@ -400,6 +400,7 @@ written (`Admin`, `SecurityOfficer` or `Auditor`).
 | `allocation.created`, `allocation.returned` | `/api/allocations` | the SIM |
 | `alert.status_changed` | `PATCH /api/alerts/{id}/status` | the alert's SIM |
 | `user.created`, `user.role_changed`, `user.disabled`, `user.enabled`, `user.mfa_reset`, `user.password_reset`, `user.unlocked`, `user.signin_email_sent`, `admin.recovered` (written at startup by the emergency recovery, actor `system`) | `/api/users` | null |
+| `auth.password_reset_requested`, `auth.password_reset_completed`, `auth.password_reset_failed` (category `system`, actor `system`) | `POST /api/auth/forgot-password`, `POST /api/auth/reset-password` | null; `newValues` is `{ userId }` only. Written for real accounts only; unknown emails appear in `auth_events` (`password_reset_requested`, `password_reset_failed`) and never in this table. No email, reason or token |
 | `import.committed` | `POST /api/imports/{type}?mode=commit` ([imports.md](imports.md)) | null |
 | `dev.demo_seeded` | `POST /api/dev/seed-demo` | null |
 
