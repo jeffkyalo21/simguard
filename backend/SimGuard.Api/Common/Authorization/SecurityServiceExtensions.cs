@@ -11,6 +11,7 @@ namespace SimGuard.Api.Common.Authorization;
 public static class SecurityServiceExtensions
 {
     public const string AuthRateLimitPolicy = "auth";
+    public const string PasswordResetRateLimitPolicy = "password-reset";
     public const string AccessRequestRateLimitPolicy = "access-requests";
     public const string CorsPolicy = "Frontend";
     public const string DefaultAllowedOrigin = "http://localhost:3000";
@@ -27,6 +28,9 @@ public static class SecurityServiceExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<AuthEventLogger>();
         services.AddScoped<AuditWriter>();
+        services.AddScoped<PasswordResetService>();
+        services.AddSingleton<PasswordResetEmailLimiter>();
+        services.AddSingleton<PasswordResetDispatcher>();
 
         AddIdentity(services);
         AddJwtBearer(services, jwtSettings);
@@ -183,6 +187,21 @@ public static class SecurityServiceExtensions
                     {
                         PermitLimit = permitLimit,
                         Window = window,
+                        QueueLimit = 0
+                    }));
+
+            // Forgot and reset password: per IP, in a longer window than sign-in.
+            // The per email limit is in PasswordResetEmailLimiter.
+            var resetLimit = configuration.GetValue("RateLimiting:PasswordReset:PermitLimit", 10);
+            var resetWindow = TimeSpan.FromSeconds(configuration.GetValue("RateLimiting:PasswordReset:WindowSeconds", 900));
+
+            options.AddPolicy(PasswordResetRateLimitPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = resetLimit,
+                        Window = resetWindow,
                         QueueLimit = 0
                     }));
 

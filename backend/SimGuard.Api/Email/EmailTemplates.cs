@@ -27,6 +27,20 @@ public static class EmailTemplates
         ["We could not approve your request for a SimGuard account.",
          "If you think this is a mistake, reply to the person who invited you or contact your administrator."]);
 
+    public static EmailMessage PasswordReset(string name, string email, string link)
+    {
+        const string valid = "The link is valid for 30 minutes and works once.";
+        const string ignore = "If you did not ask for this, you can ignore this email. Your password will not change.";
+        var ask = $"We got a request to reset the password for {email}. To choose a new password, open this link:";
+
+        var text = $"Hello {name},\n\n{ask}\n\n{link}\n\n{valid}\n\n{ignore}\n\nSimGuard";
+        var html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p>"
+            + $"<p>{WebUtility.HtmlEncode(ask)}</p>"
+            + $"<p><a href=\"{WebUtility.HtmlEncode(link)}\">{WebUtility.HtmlEncode(link)}</a></p>"
+            + $"<p>{valid}</p><p>{ignore}</p><p>SimGuard</p>";
+        return new EmailMessage("Reset your SimGuard password", text, html);
+    }
+
     private static EmailMessage Build(string subject, string name, string[] lines)
     {
         var text = $"Hello {name},\n\n{string.Join("\n\n", lines)}\n\nSimGuard";

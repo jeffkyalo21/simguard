@@ -156,3 +156,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.Run();
+
+// Lets the integration tests start the app with WebApplicationFactory.
+public partial class Program;

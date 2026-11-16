@@ -34,6 +34,13 @@ public record MfaEnrollConfirmResponse(
     DateTime ExpiresAt,
     bool MustChangePassword);
 
+public record ForgotPasswordRequest(string? Email);
+
+public record ResetPasswordWithLinkRequest(string? Email, string? Token, string? NewPassword);
+
+// The same body for every forgot-password answer, and for a finished reset.
+public record MessageResponse(string Message);
+
 public record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
 
 public record MeResponse(
