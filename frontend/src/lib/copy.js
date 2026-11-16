@@ -360,8 +360,7 @@ export const copy = {
       usageValue: "28 GB",
     },
     simCard: {
-      clear: "Clear",
-      flagged: "Flagged",
+      unusual: "Unusual activity",
     },
     previewLabel: "Product preview",
     // Landing only: headings up to 8 words, descriptions up to 20.

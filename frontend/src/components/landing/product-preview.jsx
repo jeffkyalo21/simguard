@@ -202,7 +202,6 @@ export function ProductPreview() {
         <Chips />
         <SimCard
           number={REVIEW[0].number}
-          risk={REVIEW[0].risk}
           className="absolute -top-[65px] -right-1.5 origin-top-right scale-[0.7] md:-top-[112px] md:-right-3 md:scale-100 lg:-right-4 xl:-right-10"
         />
       </div>
