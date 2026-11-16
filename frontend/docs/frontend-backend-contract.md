@@ -93,6 +93,13 @@ address reaches the browser.
 
 The mock data layer (`src/lib/mock`) is deleted.
 
+### Added with SIM scanning (no backend change)
+
+`createEmployee(body)` calls `POST /employees` for the allocation form's
+"Add new employee" dialog (400 field errors, 409 duplicate email). A scanned
+ICCID uses `listSims({ q })` and keeps only the exact `iccid` match. See
+`scanning-and-forms.md`.
+
 ## Summary
 
 - 29 exports. 6 reads matched or needed only a call change (`getSim`,
