@@ -367,8 +367,8 @@ before.
 | `activeSims` | SIMs whose status is not `inactive` (now) |
 | `flagged` | alerts with status `flagged` (now, any age) |
 | `toReview` | alerts with status `escalated` (now, any age) |
-| `resolved` | alerts detected within the window that are now `cleared` |
-| `alertsByType` | alerts detected within the window, by type (`detectedOn` in `from`..`to`; alerts without `detectedOn` count by `createdAt`) |
+| `resolved` | alerts in the window that are now `cleared` |
+| `alertsByType` | alerts in the window, by type. An alert is in the window when `detectedOn` or `lastDetectedOn` is in `from`..`to`, so a SIM that is still misbehaving counts for the current window; alerts with neither date count by `createdAt` |
 | `needsReview` | the 5 most recent `flagged` or `escalated` alerts, as alert list items (with SIM and reasons) |
 | `tierChanges` | open tier recommendations, counted by `recommendation` (now) |
 | `dataWaste` | paid against used data over the window: paid is each SIM's tier bundle times `days`/30, unused is paid minus used per SIM (never below 0); `departments` are the 4 with most unused data, by current allocation (`name` null for unallocated SIMs). Null without usage |

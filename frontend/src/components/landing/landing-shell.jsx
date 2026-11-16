@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { LandingMotion } from "@/components/landing/landing-motion";
 import { prefersReducedMotion } from "@/components/landing/motion";
 
 /**
@@ -65,7 +66,8 @@ export function LandingShell({ children }) {
   }, []);
 
   return (
-    <div ref={rootRef} className="landing relative flex min-h-dvh flex-col">
+    <div ref={rootRef} data-motion="pending" className="landing relative flex min-h-dvh flex-col">
+      <LandingMotion rootRef={rootRef} />
       <div ref={sentinelRef} className="pointer-events-none absolute top-0 h-6 w-px" aria-hidden="true" />
       <div
         ref={barRef}

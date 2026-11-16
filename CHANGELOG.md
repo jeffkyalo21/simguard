@@ -3,6 +3,20 @@
 Main milestones, taken from the merged pull requests (newest first). Dates are
 merge dates. No release tags exist yet; see the end of this file.
 
+## Unreleased: Landing page motion and dashboard alert counts
+
+- Landing page motion uses GSAP 3.15.1 (with ScrollTrigger), added from npm and
+  loaded only by the landing page through a dynamic import. Licence checked once:
+  the package declares the "Standard 'no charge' license"
+  (https://gsap.com/standard-license), which allows free use, including
+  commercial use, with GSAP and its plugins at no charge. Its one restriction is
+  not to use it to build a visual animation tool that competes with Webflow.
+- The dashboard counts an alert in a 7, 30 or 90 day window when its first or its
+  last detected day is inside the window, so a SIM that is still misbehaving
+  shows for the current period.
+- How detection works has four numbered steps; plan sizing (Prophet) replaces the
+  similar cases card and the dashed note.
+
 ## 2026-11-09 and 2026-11-08: Deployment, several organisations and onboarding
 
 - #56 Several organisations on one VM: one shared Caddy stack and one Compose
