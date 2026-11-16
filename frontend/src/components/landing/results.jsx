@@ -1,4 +1,3 @@
-import { FlaskConical } from "lucide-react";
 import { GlassCard } from "@/components/glass/glass-card";
 import { CountUp } from "@/components/landing/count-up";
 import { InView } from "@/components/landing/in-view";
@@ -18,7 +17,7 @@ const values = {
   types: <CountUp value={RESULTS.types} />,
 };
 
-/** Test results as count-up tiles, with the synthetic data note in view. */
+/** Test results as count-up tiles. */
 export function Results() {
   return (
     <InView as="section" id="results" aria-labelledby="results-title" threshold={0.1} className="px-4 pb-24 sm:px-6">
@@ -33,10 +32,6 @@ export function Results() {
             </GlassCard>
           ))}
         </ul>
-        <p className="reveal flex items-center justify-center gap-2 text-sm font-medium" style={{ "--i": 4 }}>
-          <FlaskConical className="size-4 text-muted-foreground" aria-hidden="true" />
-          {text.note}
-        </p>
       </div>
     </InView>
   );

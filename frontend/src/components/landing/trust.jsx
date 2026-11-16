@@ -1,18 +1,18 @@
-import { KeyRound, MapPin, ScrollText, UserCheck } from "lucide-react";
+import { KeyRound, ScrollText, UserCheck } from "lucide-react";
 import { InView } from "@/components/landing/in-view";
 import { SectionHeading } from "@/components/landing/section-heading";
 import { copy } from "@/lib/copy";
 
 const text = copy.landing.trust;
-const icons = { review: UserCheck, audit: ScrollText, roles: KeyRound, kenya: MapPin };
+const icons = { review: UserCheck, audit: ScrollText, roles: KeyRound };
 
-/** Four small trust points with icons. */
+/** Three small trust points with icons. */
 export function Trust() {
   return (
     <InView as="section" aria-labelledby="trust-title" threshold={0.1} className="px-4 pb-24 sm:px-6">
       <div className="mx-auto flex max-w-5xl flex-col gap-10">
         <SectionHeading id="trust-title" title={text.title} intro={text.intro} />
-        <ul className="grid gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="grid gap-x-6 gap-y-6 md:grid-cols-3">
           {text.items.map(({ key, title, text: body }, index) => {
             const Icon = icons[key];
 

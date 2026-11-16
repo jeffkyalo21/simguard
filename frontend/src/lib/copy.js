@@ -440,7 +440,6 @@ export const copy = {
     results: {
       title: "Results from testing",
       intro: "How well the detection models performed in our tests.",
-      note: "Measured on synthetic test data.",
       rangeJoin: "to",
       tiles: [
         { key: "precision", label: "Auto flag precision", text: "Of the SIMs flagged automatically, about this share were real misuse." },
@@ -486,7 +485,6 @@ export const copy = {
         { key: "review", title: "Human review before action", text: "No SIM is suspended on a score alone." },
         { key: "audit", title: "Audit log of every change", text: "Who changed what, and when." },
         { key: "roles", title: "Roles and access control", text: "People see only what their role allows." },
-        { key: "kenya", title: "Kenyan formats", text: "+254 numbers, KES amounts and Nairobi time." },
       ],
     },
     faq: {
