@@ -35,6 +35,11 @@ a read-only database role.
 | `database/`, `initial-migration.sql` | Reference schema and an exported EF migration script |
 | `docs/` | Cross service docs: [deployment](docs/deployment.md), [carrier feed](docs/carrier-feed.md), [carrier server](docs/carrier-server.md), [deploy checklist](docs/deploy-checklist.md) |
 
+## Guides
+
+- [User guide](docs/user-guide.md): for the people who use the website. Roles, signing in with the authenticator code, the dashboard, imports and the carrier usage feed, SIMs and allocations, alerts, tier recommendations, the audit log, admin tasks and troubleshooting.
+- [Developer guide](docs/developer-guide.md): for someone who builds, runs, tests, changes and deploys SimGuard. Architecture, setup, the data pipeline, tests, deployment, secrets and the Git workflow.
+
 ## Prerequisites
 
 | Tool | Version | Needed for |
