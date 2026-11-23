@@ -6,11 +6,20 @@
 // both sides. The guide frame is drawn on the viewfinder, so its rectangle has
 // to be mapped back to the real camera frame before a frame is cropped.
 
-/** The guide frame as fractions of the viewfinder (0 to 1). */
-export const GUIDE = { left: 0.05, top: 0.08, width: 0.9, height: 0.72 };
+/** The gap between the guide frame and each edge of the viewfinder, in CSS pixels. */
+export const GUIDE_MARGIN_PX = 12;
 
-/** How far the printed number may be read below the guide, as a fraction of the viewfinder height. */
-export const OCR_MARGIN_BELOW = 0.12;
+/**
+ * The guide frame as fractions of the viewfinder (0 to 1): the same gap on all
+ * four sides. On a very small viewfinder the gap shrinks so the frame stays open.
+ * @param {{ width: number, height: number }} view the viewfinder size in CSS pixels
+ */
+export function guideFractions(view) {
+  const margin = Math.min(GUIDE_MARGIN_PX, Math.min(view.width, view.height) / 4);
+  const left = margin / view.width;
+  const top = margin / view.height;
+  return { left, top, width: 1 - 2 * left, height: 1 - 2 * top };
+}
 
 /**
  * Maps a rectangle given as fractions of the viewfinder to whole pixels of
@@ -40,15 +49,15 @@ export function viewRectToFrame(rect, view, video) {
 
 /** The guide frame in camera frame pixels: the only area the barcode is looked for in. */
 export function guideFrameRect(view, video) {
-  return viewRectToFrame(GUIDE, view, video);
+  return viewRectToFrame(guideFractions(view), view, video);
 }
 
 /**
- * The guide frame plus a small margin below it, in camera frame pixels, for
- * reading the printed number (the digits sit under the barcode). The margin
- * stays inside the viewfinder, so nothing outside what the person sees is read.
+ * The guide frame plus the gap below it, in camera frame pixels, for reading
+ * the printed number (the digits sit under the barcode). It ends at the bottom
+ * edge of the viewfinder, so nothing outside what the person sees is read.
  */
 export function printedNumberRect(view, video) {
-  const bottom = Math.min(GUIDE.top + GUIDE.height + OCR_MARGIN_BELOW, 1);
-  return viewRectToFrame({ ...GUIDE, height: bottom - GUIDE.top }, view, video);
+  const guide = guideFractions(view);
+  return viewRectToFrame({ ...guide, height: 1 - guide.top }, view, video);
 }

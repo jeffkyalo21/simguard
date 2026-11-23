@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { useReturnFocus } from "@/hooks/use-return-focus";
 import { cameraProblem, decodeBarcodeFromFile, startCameraScan } from "@/components/scan/barcode";
 import { prepareFeedback, scanFeedback } from "@/components/scan/feedback";
-import { GUIDE } from "@/components/scan/crop-region";
+import { GUIDE_MARGIN_PX } from "@/components/scan/crop-region";
 import { readPrintedText } from "@/components/scan/ocr";
 import { iccidFromScan } from "@/lib/iccid";
 import { copy } from "@/lib/copy";
@@ -170,15 +170,15 @@ function ScanPanel({ onResult }) {
   const status = problem ?? (camera === "starting" ? text.starting : text.scanning);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 flex-col gap-4">
       <p className="text-sm text-muted-foreground">{text.intro}</p>
-      <div className="relative aspect-[3/1] max-h-44 min-h-36 w-full overflow-hidden rounded-xl border border-glass-border bg-muted">
+      <div className="relative h-36 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-glass-border bg-muted">
         <video ref={videoRef} aria-label={text.video} className="size-full object-cover" muted playsInline autoPlay onClick={handleTapFocus} />
         {/* The guide frame: the barcode is looked for only inside it. */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute rounded-md border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
-          style={{ left: `${GUIDE.left * 100}%`, top: `${GUIDE.top * 100}%`, width: `${GUIDE.width * 100}%`, height: `${GUIDE.height * 100}%` }}
+          style={{ inset: GUIDE_MARGIN_PX }}
         >
           <div className="absolute inset-x-2 top-1/2 h-px bg-white/80" />
         </div>
@@ -230,7 +230,7 @@ export function ScanSimDialog({ open, onOpenChange, onResult }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" aria-describedby={undefined} onCloseAutoFocus={returnFocus}>
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md" aria-describedby={undefined} onCloseAutoFocus={returnFocus}>
         <DialogHeader>
           <DialogTitle className="text-lg font-semibold">{text.title}</DialogTitle>
         </DialogHeader>

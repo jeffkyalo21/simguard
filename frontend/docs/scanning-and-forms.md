@@ -27,10 +27,12 @@ as a barcode.
   `next build` (the folder is generated and git ignored), and
   `next.config.mjs` sets its `Content-Type` and cache headers. The Docker build
   runs the same script.
-- **Viewfinder and guide frame:** the preview is a wide, short strip (about
-  3:1, at least 144 px and at most 176 px tall, full width of the dialog) with a
-  guide frame and a thin centre line inside it, under the text "Line up the
-  barcode inside the frame". The video fills the strip (`object-fit: cover`).
+- **Viewfinder and guide frame:** the preview is a wide, short strip, 144 px
+  tall and the full inner width of the dialog (it never sets a width of its
+  own, so it cannot push the dialog wider; the dialog's one grid column is
+  `minmax(0, 1fr)`). It holds a guide frame with a thin centre line, 12 px from
+  every edge, under the text "Line up the barcode inside the frame". The video
+  fills the strip (`object-fit: cover`).
 - **Only the guide frame is read:** each frame is cropped to the guide frame
   before it goes to the detector, at the camera's real resolution (no
   downscaling). `src/components/scan/crop-region.js` maps the guide rectangle
@@ -59,8 +61,8 @@ as a barcode.
 - **Confirmation:** the scanned number only fills the field. Nothing saves by
   itself.
 - **Printed number (OCR):** only when the person presses "Read the printed
-  number", never by itself. From the camera it reads the guide frame plus a
-  small margin below it (the digits sit under the barcode), never the whole
+  number", never by itself. From the camera it reads the guide frame plus the
+  12 px gap below it (the digits sit under the barcode), never the whole
   picture and never anything outside what the viewfinder shows. An uploaded
   photo is still read whole. The barcode reader pauses while it reads and carries
   on if no number is found. tesseract.js runs on the device, restricted to
