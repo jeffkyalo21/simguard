@@ -4,12 +4,17 @@
 // package is imported only when the scan dialog opens, and its WASM file is
 // served from /wasm (copied by scripts/copy-wasm.mjs), never from a CDN.
 
+import { guideFrameRect, printedNumberRect } from "@/components/scan/crop-region";
+
 /** The 1D codes SIM cards use. */
 export const BARCODE_FORMATS = ["code_128", "code_39", "code_93", "itf", "ean_13", "ean_8", "codabar"];
 
 // A frame is looked at about every 100 ms. A frame still being decoded makes
 // the next tick skip, so decoding never queues up behind itself.
 const FRAME_INTERVAL_MS = 100;
+// Nothing found inside the guide frame for this long: look at the whole
+// picture once, so a barcode held off centre is still read.
+const FALLBACK_AFTER_MS = 5000;
 // After a tap to focus, go back to continuous focus.
 const FOCUS_HOLD_MS = 2000;
 
@@ -54,9 +59,12 @@ function capabilitiesOf(track) {
 
 /**
  * Starts the rear camera at the best size it gives (ideal 1920x1080, no
- * downscaling) and calls `onText` with the text of every barcode seen.
+ * downscaling) and calls `onText` with the text of every barcode seen inside
+ * the guide frame (the whole picture when nothing is found there for a while).
  * Resolves, once the picture is running, with controls:
  *   stop()            stops the loop and every camera track
+ *   printedNumberArea()  a canvas of the guide frame plus a small margin below
+ *                     it (never the whole picture), or null before the first frame
  *   pause(), resume() stop and restart looking at frames (the camera keeps running)
  *   torch             null, or { set(on) } when the camera has a torch
  *   focusAt(x, y)     null, or a function taking a point in 0..1 of the picture
@@ -99,6 +107,26 @@ export async function startCameraScan(video, onText) {
   let busy = false;
   let timer = 0;
   let focusTimer = 0;
+  let quietSince = performance.now();
+
+  // One canvas for the cropped frames, resized only when the crop size changes.
+  let cropCanvas = null;
+  let cropContext = null;
+  function crop(rect) {
+    if (!cropCanvas) {
+      cropCanvas = document.createElement("canvas");
+      cropContext = cropCanvas.getContext("2d", { willReadFrequently: true });
+    }
+    if (cropCanvas.width !== rect.width) cropCanvas.width = rect.width;
+    if (cropCanvas.height !== rect.height) cropCanvas.height = rect.height;
+    cropContext.drawImage(video, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
+    return cropCanvas;
+  }
+
+  const sizes = () => ({
+    view: { width: video.clientWidth, height: video.clientHeight },
+    frame: { width: video.videoWidth, height: video.videoHeight },
+  });
 
   const tick = async () => {
     if (stopped) return;
@@ -108,7 +136,12 @@ export async function startCameraScan(video, onText) {
     busy = true;
     const started = performance.now();
     try {
-      const found = await detector.detect(video);
+      const { view, frame } = sizes();
+      const fallback = started - quietSince >= FALLBACK_AFTER_MS || !view.width || !view.height;
+      const source = fallback ? video : crop(guideFrameRect(view, frame));
+      const found = await detector.detect(source);
+      if (fallback) quietSince = started;
+      else if (found.length) quietSince = started;
       if (!stopped && !paused) {
         for (const code of found) if (code.rawValue) onText(code.rawValue);
         // Dev only, and never the value: how long the frame with a code took.
@@ -139,6 +172,16 @@ export async function startCameraScan(video, onText) {
     },
     resume() {
       paused = false;
+    },
+    printedNumberArea() {
+      const { view, frame } = sizes();
+      if (!frame.width || !view.width || !view.height) return null;
+      const rect = printedNumberRect(view, frame);
+      const canvas = document.createElement("canvas");
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      canvas.getContext("2d").drawImage(video, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
+      return canvas;
     },
     torch: track && capabilities.torch ? { set: (on) => track.applyConstraints({ advanced: [{ torch: on }] }) } : null,
     focusAt: canTapFocus

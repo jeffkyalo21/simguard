@@ -27,6 +27,19 @@ as a barcode.
   `next build` (the folder is generated and git ignored), and
   `next.config.mjs` sets its `Content-Type` and cache headers. The Docker build
   runs the same script.
+- **Viewfinder and guide frame:** the preview is a wide, short strip (about
+  3:1, at least 144 px and at most 176 px tall, full width of the dialog) with a
+  guide frame and a thin centre line inside it, under the text "Line up the
+  barcode inside the frame". The video fills the strip (`object-fit: cover`).
+- **Only the guide frame is read:** each frame is cropped to the guide frame
+  before it goes to the detector, at the camera's real resolution (no
+  downscaling). `src/components/scan/crop-region.js` maps the guide rectangle
+  from viewfinder coordinates to camera frame coordinates, allowing for
+  `object-fit: cover` cutting off the sides or the top and bottom. One canvas is
+  reused for the crops. If nothing is found inside the frame for about 5
+  seconds, the whole picture is checked once, then again every 5 seconds while
+  nothing is found, so a barcode held off centre is still read. Only a matched
+  ICCID is kept.
 - **Speed:** a camera frame is checked about every 100 ms at the size the
   camera gives (ideal 1920x1080, no downscaling). A frame still being decoded
   makes the next tick skip, so work never queues up, and nothing is shown as
@@ -46,7 +59,10 @@ as a barcode.
 - **Confirmation:** the scanned number only fills the field. Nothing saves by
   itself.
 - **Printed number (OCR):** only when the person presses "Read the printed
-  number", never by itself. The barcode reader pauses while it reads and carries
+  number", never by itself. From the camera it reads the guide frame plus a
+  small margin below it (the digits sit under the barcode), never the whole
+  picture and never anything outside what the viewfinder shows. An uploaded
+  photo is still read whole. The barcode reader pauses while it reads and carries
   on if no number is found. tesseract.js runs on the device, restricted to
   digits, and only results that pass the check are accepted. The recognised text
   is checked and dropped at once: it is not logged or stored, and only the

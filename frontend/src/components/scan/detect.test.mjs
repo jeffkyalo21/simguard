@@ -9,6 +9,7 @@ import { inflateSync } from "node:zlib";
 import { BarcodeDetector, setZXingModuleOverrides } from "barcode-detector/ponyfill";
 import { setZXingModuleOverrides as setWriterOverrides, writeBarcode } from "zxing-wasm/writer";
 import { BARCODE_FORMATS } from "./barcode.js";
+import { guideFrameRect } from "./crop-region.js";
 import { iccidFromScan } from "../../lib/iccid.js";
 
 const ICCID = "89254021154220246430";
@@ -114,4 +115,35 @@ test("the same barcode inside a full 1920x1080 frame is read, and the time per f
 
   assert.equal(found.length, 1);
   assert.deepEqual(iccidFromScan(found[0].rawValue), { ok: true, iccid: ICCID });
+});
+
+test("a barcode in the middle of a 1920x1080 frame is read from the guide frame crop alone", async () => {
+  const written = await writeBarcode(ICCID, { format: "Code128", scale: 3, withQuietZones: true });
+  const small = pngToImageData(Buffer.from(await written.image.arrayBuffer()));
+  const frame = new ImageData(new Uint8ClampedArray(1920 * 1080 * 4).fill(235), 1920, 1080);
+  const left = Math.round((1920 - small.width) / 2);
+  const top = Math.round((1080 - small.height) / 2);
+  for (let y = 0; y < small.height; y += 1) {
+    frame.data.set(small.data.subarray(y * small.width * 4, (y + 1) * small.width * 4), ((top + y) * 1920 + left) * 4);
+  }
+
+  // A 400x144 viewfinder over this frame, as on a phone.
+  const rect = guideFrameRect({ width: 400, height: 144 }, { width: 1920, height: 1080 });
+  const cropped = new ImageData(new Uint8ClampedArray(rect.width * rect.height * 4), rect.width, rect.height);
+  for (let y = 0; y < rect.height; y += 1) {
+    const from = ((rect.y + y) * 1920 + rect.x) * 4;
+    cropped.data.set(frame.data.subarray(from, from + rect.width * 4), y * rect.width * 4);
+  }
+
+  const detector = new BarcodeDetector({ formats: BARCODE_FORMATS });
+  await detector.detect(cropped);
+  const started = performance.now();
+  const found = await detector.detect(cropped);
+  console.log(`guide crop ${rect.width}x${rect.height} of the 1920x1080 frame: detect took ${(performance.now() - started).toFixed(1)} ms`);
+
+  assert.equal(found.length, 1);
+  assert.deepEqual(iccidFromScan(found[0].rawValue), { ok: true, iccid: ICCID });
+
+  // Sanity check on the test itself: the barcode's rows lie inside the crop.
+  assert.ok(top >= rect.y && top + small.height <= rect.y + rect.height);
 });

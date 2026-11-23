@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { useReturnFocus } from "@/hooks/use-return-focus";
 import { cameraProblem, decodeBarcodeFromFile, startCameraScan } from "@/components/scan/barcode";
 import { prepareFeedback, scanFeedback } from "@/components/scan/feedback";
-import { frameFromVideo, readPrintedText } from "@/components/scan/ocr";
+import { GUIDE } from "@/components/scan/crop-region";
+import { readPrintedText } from "@/components/scan/ocr";
 import { iccidFromScan } from "@/lib/iccid";
 import { copy } from "@/lib/copy";
 
@@ -118,7 +119,8 @@ function ScanPanel({ onResult }) {
   }
 
   async function handleReadPrinted() {
-    const source = photoRef.current ?? frameFromVideo(videoRef.current);
+    // A photo is read whole; the camera only inside the guide frame and a margin below it.
+    const source = photoRef.current ?? controlsRef.current?.printedNumberArea();
     if (!source) return setMessage(text.noNumber);
 
     setBusy(true);
@@ -170,8 +172,16 @@ function ScanPanel({ onResult }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">{text.intro}</p>
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-glass-border bg-muted">
+      <div className="relative aspect-[3/1] max-h-44 min-h-36 w-full overflow-hidden rounded-xl border border-glass-border bg-muted">
         <video ref={videoRef} aria-label={text.video} className="size-full object-cover" muted playsInline autoPlay onClick={handleTapFocus} />
+        {/* The guide frame: the barcode is looked for only inside it. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-md border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]"
+          style={{ left: `${GUIDE.left * 100}%`, top: `${GUIDE.top * 100}%`, width: `${GUIDE.width * 100}%`, height: `${GUIDE.height * 100}%` }}
+        >
+          <div className="absolute inset-x-2 top-1/2 h-px bg-white/80" />
+        </div>
       </div>
       <div className="flex min-h-10 flex-col gap-1 text-sm" aria-live="polite">
         <p className={problem ? "text-risk-flagged-foreground" : "text-muted-foreground"}>{status}</p>

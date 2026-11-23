@@ -1157,7 +1157,7 @@ export const copy = {
     title: "Scan SIM",
     button: "Scan",
     buttonLabel: "Scan the SIM barcode with the camera",
-    intro: "Hold the barcode on the SIM card in front of the camera.",
+    intro: "Line up the barcode inside the frame",
     privacy: "The picture stays on this device. Nothing is uploaded or saved.",
     video: "Camera view",
     starting: "Starting the camera",
