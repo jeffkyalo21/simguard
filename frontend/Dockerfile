@@ -3,6 +3,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+COPY scripts/copy-wasm.mjs scripts/copy-wasm.mjs
 RUN npm ci
 
 FROM node:22-alpine AS build

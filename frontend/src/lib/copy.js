@@ -1172,6 +1172,8 @@ export const copy = {
     cameraInsecure: "The camera works only on a secure (https) page. Upload a photo instead.",
     cameraFailed: "The camera could not start. Upload a photo instead.",
     notAnImage: "Choose an image file.",
+    torchOn: "Light on",
+    torchOff: "Light off",
     close: "Close",
   },
 
