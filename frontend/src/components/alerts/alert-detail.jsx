@@ -17,6 +17,7 @@ import { FormDialog } from "@/components/shared/form-dialog";
 import { NotFoundContent } from "@/components/shared/not-found-content";
 import { PageBreadcrumb } from "@/components/shared/page-breadcrumb";
 import { RiskBadge } from "@/components/shared/risk-badge";
+import { alertOutcome } from "@/lib/alert-outcome";
 import { activityText, activityTime } from "@/components/sims/activity-text";
 import { Button } from "@/components/ui/button";
 import { usePermission } from "@/hooks/use-permission";
@@ -126,7 +127,7 @@ function Investigation({ alert }) {
     { key: "date", header: copy.columns.date, cell: (item) => formatDateTime(item.createdAt) },
     { key: "type", header: copy.columns.type, cell: (item) => copy.alertTypes[item.type] ?? item.type },
     { key: "risk", header: copy.columns.risk, cell: (item) => <RiskBar score={item.riskScore} /> },
-    { key: "status", header: copy.columns.status, cell: (item) => <RiskBadge level={item.status} /> },
+    { key: "status", header: copy.columns.status, cell: (item) => <RiskBadge level={alertOutcome(item)} /> },
   ];
   const activityColumns = [
     { key: "time", header: copy.columns.time, cell: activityTime },
@@ -138,7 +139,7 @@ function Investigation({ alert }) {
       <PageBreadcrumb items={[{ label: copy.pages.alerts.title, href: "/alerts" }, { label: copy.alertTypes[alert.type] ?? alert.type }]} />
       <PageHeader
         title={copy.alertTypes[alert.type] ?? alert.type}
-        badge={<div className="flex flex-wrap items-center gap-2"><RiskBadge level={alert.status} /><span className="text-sm text-muted-foreground">{text.riskLevel}: {copy.alerts.riskLevel[alert.riskLevel] ?? alert.riskLevel}</span><RiskBar score={alert.riskScore} /></div>}
+        badge={<div className="flex flex-wrap items-center gap-2"><RiskBadge level={alertOutcome(alert)} /><span className="text-sm text-muted-foreground">{text.riskLevel}: {copy.alerts.riskLevel[alert.riskLevel] ?? alert.riskLevel}</span><RiskBar score={alert.riskScore} /></div>}
         actions={
           <>
             <AlertAction reason={reasonFor(canClose)} busy={busy} onClick={() => setDialog({ open: true, resolution: "confirmedMisuse" })}>{text.confirmedMisuse}</AlertAction>

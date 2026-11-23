@@ -120,11 +120,12 @@ export async function listSimActivity(id, { page, pageSize } = {}) {
 /* ---------------------------------------------------------------- Alerts */
 
 /**
- * GET /alerts. Items carry detectedOn and lastDetectedOn (the scored days)
+ * GET /alerts. `resolution` (confirmedMisuse or falsePositive) narrows cleared
+ * alerts, and items carry it. Items carry detectedOn and lastDetectedOn (the scored days)
  * besides createdAt (when the alert was stored).
  */
-export function listAlerts({ status, type, simId, minScore, sort, order, page, pageSize } = {}) {
-  return api.get("/alerts", { query: { status, type, simId, minScore, sort, order, page, pageSize } });
+export function listAlerts({ status, resolution, type, simId, minScore, sort, order, page, pageSize } = {}) {
+  return api.get("/alerts", { query: { status, resolution, type, simId, minScore, sort, order, page, pageSize } });
 }
 
 /**
@@ -173,6 +174,7 @@ export async function getDashboard(days = 30) {
       flagged: summary.flagged,
       toReview: summary.toReview,
       resolved: summary.resolved,
+      resolvedConfirmed: summary.resolvedConfirmed ?? 0,
     },
     dataWaste: waste
       ? {

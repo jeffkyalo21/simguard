@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useResource } from "@/hooks/use-resource";
 import { ROLES } from "@/lib/auth/core";
+import { auditActionLabel } from "@/lib/alert-outcome";
 import { listAuditLogs } from "@/lib/data";
 import { dayToUtc, formatDateTime, formatKes, formatPhone } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -57,15 +58,6 @@ function writeQuery(pathname, changes, { replace = false } = {}) {
   const url = query ? `${pathname}?${query}` : pathname;
   if (replace) window.history.replaceState(null, "", url);
   else window.history.pushState(null, "", url);
-}
-
-/** Readable label for a row; alert status changes say what happened. */
-export function auditActionLabel(row) {
-  if (row.action === "alert.status_changed") {
-    if (row.newValues?.status === "cleared") return text.actions.alertCleared;
-    if (row.oldValues?.status === "cleared") return text.actions.alertReopened;
-  }
-  return text.actions[row.action] ?? row.action;
 }
 
 function formatValue(key, value) {
