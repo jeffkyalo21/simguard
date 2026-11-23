@@ -1116,7 +1116,7 @@ export const copy = {
       iccid: "ICCID",
       iccidPlaceholder: "8925 4010 0000 0012",
       scanned: "Scanned. Check the number, then fill in the rest.",
-      alreadyRegistered: "This SIM is already registered.",
+      alreadyInSystem: (carrier, status) => `This SIM is already in the system. Carrier: ${carrier}. Status: ${status}.`,
       viewRegistered: (number) => `View ${number}`,
       operator: "Operator",
       noCarriers: "No carriers yet",

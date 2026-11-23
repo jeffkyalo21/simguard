@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ScanLine } from "lucide-react";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ import { ApiError, errorMessage } from "@/lib/api";
 import { createSim, listSims, setSimTier, updateSim } from "@/lib/data";
 import { useCarriers, useTiers } from "@/hooks/use-reference";
 import { formatPhone } from "@/lib/format";
+import { findRegisteredSim } from "@/lib/scan-lookup";
 import { simFieldErrors } from "@/lib/validation";
 import { copy } from "@/lib/copy";
 
@@ -119,19 +120,40 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
 
   const set = (field) => (value) => setValues((current) => ({ ...current, [field]: value }));
 
-  async function handleScanned(iccid) {
+  // Asks the API whether a SIM already has this ICCID. The same ICCID is
+  // asked once (a scan and the typing effect both land here), and an answer
+  // that arrives after a newer question is dropped.
+  const askedRef = useRef("");
+  const questionRef = useRef(0);
+  async function lookup(iccid) {
+    const wanted = iccid.trim();
+    if (wanted === askedRef.current) return;
+    askedRef.current = wanted;
+    const question = ++questionRef.current;
+    if (!wanted) return setRegistered(null);
+
+    try {
+      const found = await listSims({ q: wanted, pageSize: 5 });
+      if (question === questionRef.current) setRegistered(findRegisteredSim(wanted, found.items, sim?.id));
+    } catch {
+      // The save still reports a duplicate (409); the hint is a convenience.
+      if (question === questionRef.current) setRegistered(null);
+    }
+  }
+
+  // A typed number is looked up once the typing pauses.
+  useEffect(() => {
+    const timer = setTimeout(() => lookup(values.iccid), 350);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [values.iccid]);
+
+  function handleScanned(iccid) {
     setValues((current) => ({ ...current, iccid }));
     setErrors((current) => ({ ...current, iccid: undefined }));
     setScanned(true);
     setRegistered(null);
-
-    try {
-      const found = await listSims({ q: iccid, pageSize: 5 });
-      const match = found.items.find((item) => item.iccid === iccid && item.id !== sim?.id);
-      setRegistered(match ?? null);
-    } catch {
-      // The save still reports a duplicate (409); the hint is a convenience.
-    }
+    lookup(iccid);
   }
 
   function focusFirstError(fieldErrors) {
@@ -186,6 +208,7 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
       title={sim ? text.editTitle : text.addTitle}
       submitLabel={sim ? copy.actions.save : copy.actions.add}
       busy={busy}
+      submitDisabled={registered !== null}
       onSubmit={handleSubmit}
     >
       <FormField id="sim-phoneNumber" label={text.phone} error={errors.phoneNumber}>
@@ -213,6 +236,8 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
                   set("iccid")(event.target.value);
                   setScanned(false);
                   setRegistered(null);
+                  // Typing starts a new question, even for a number asked before.
+                  askedRef.current = "";
                 }}
                 autoComplete="off"
                 inputMode="numeric"
@@ -233,7 +258,7 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
             {scanned && !registered && <p role="status" className="text-sm text-muted-foreground">{text.scanned}</p>}
             {registered && (
               <p role="status" className="text-sm text-risk-flagged-foreground">
-                {text.alreadyRegistered}{" "}
+                {text.alreadyInSystem(registered.operator, copy.simStatus[registered.status] ?? registered.status)}{" "}
                 <Link href={`/sims/${registered.id}`} className="rounded-sm font-medium underline underline-offset-4">
                   {text.viewRegistered(formatPhone(registered.phoneNumber))}
                 </Link>
