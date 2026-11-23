@@ -63,7 +63,7 @@ sentence. Buttons for actions the role cannot do are disabled with a reason.
 | `updateSim` | `PUT /sims/{id}` | Same as `createSim`; the plan type shows read only and the tier changes through `setSimTier`. |
 | `setSimTier` | `PATCH /sims/{id}/tier` | Lower-case tiers; the screen reloads the SIM. |
 | `setAlertStatus` | `PATCH /alerts/{id}/status` | Sends `resolution` and the trimmed note only when clearing. 409 shows a "status changed meanwhile" line. |
-| `createAllocation` | `POST /allocations` | No date field: the backend uses the request time. "Handed over by" is an employee search that fills `assignedBy`. 409 marks the SIM as unavailable. |
+| `createAllocation` | `POST /allocations` | No date field: the backend uses the request time. "Handed over by" is optional: an employee search that fills `assignedBy`, which is left out of the request when nobody is chosen. The response has `assignedBy` and `assignedByName`, both null when not recorded. 409 marks the SIM as unavailable. |
 | `endAllocation` | `POST /allocations/{id}/return` | 409 shows "already ended". |
 | `addCarrier` | `POST /carriers` | 409 on `errors.name` shows "name taken". |
 | `renameCarrier` | `PUT /carriers/{id}` | Same as `addCarrier`. |

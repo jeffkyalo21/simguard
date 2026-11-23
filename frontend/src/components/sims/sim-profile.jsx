@@ -40,6 +40,7 @@ const alertColumns = [
 const allocationColumns = [
   { key: "employee", header: copy.columns.employee, cell: (a) => a.employeeName },
   { key: "department", header: copy.columns.department, cell: (a) => a.departmentName },
+  { key: "handedOverBy", header: copy.columns.handedOverBy, cell: (a) => a.assignedByName ?? copy.common.notRecorded },
   { key: "from", header: copy.columns.from, cell: (a) => formatDate(a.assignmentDate) },
   { key: "to", header: copy.columns.to, cell: (a) => (a.returnDate ? formatDate(a.returnDate) : text.current) },
 ];

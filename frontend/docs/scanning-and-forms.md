@@ -80,8 +80,8 @@ The scanned ICCID is looked up in the SIM list:
 The department and employee selects are replaced by one search field (name or
 email, 2 letters or more, debounced). Results show name, department and job
 role. The pick shows a read-only summary (name, email, department, job role).
-Department is no longer required. The form validates `simId`, `employeeId` and
-`assignedBy` only; "Handed over by" works as before.
+Department is no longer required. The form validates `simId` and `employeeId`
+only; "Handed over by (optional)" can be left empty and is then not sent.
 
 "Add new employee" appears under the results, and when there are none, for the
 Security Officer only (`employees.edit`). The dialog asks for name, email,

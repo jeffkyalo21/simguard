@@ -906,6 +906,7 @@ export const copy = {
     number: "Number",
     employee: "Employee",
     department: "Department",
+    handedOverBy: "Handed over by",
     tier: "Tier",
     dataUsed: "Data used",
     status: "Status",
@@ -962,7 +963,7 @@ export const copy = {
       assignerSearch: "Find who hands it over",
       assignerSearchPlaceholder: "Employee name",
       assignerHint: "The allocation starts now and records this employee as the one who handed it over.",
-      assigner: "Handed over by",
+      assigner: "Handed over by (optional)",
       assignerPlaceholder: "Choose an employee",
       assignerFirst: "Type 2 letters of a name first",
       noAssigners: "No employee matches",
@@ -972,7 +973,6 @@ export const copy = {
         simRequired: "Choose a SIM.",
         simUnavailable: "This SIM is no longer available.",
         employeeRequired: "Choose an employee.",
-        assignerRequired: "Choose who hands the SIM over.",
       },
     },
     confirm: {
@@ -1127,9 +1127,10 @@ export const copy = {
       noCarriers: "No carriers yet",
       addCarrier: "Add a carrier",
       plan: "Plan",
-      tier: "Tier",
+      tier: "Plan tier",
+      tierHint: "Sets the data bundle, the price and the peer group used in risk scoring.",
       cost: "Monthly cost (KES)",
-      costHint: "0 uses the tier's monthly cost.",
+      costHint: "Enter 0 to use the plan's standard price.",
       tierFailed: (number) => `${number} added, but its tier was not set. Change it on the SIM page.`,
       errors: {
         phoneRequired: "Enter a number.",
@@ -1139,7 +1140,7 @@ export const copy = {
         iccidTooLong: "Use 30 characters or fewer.",
         iccidTaken: "ICCID already exists.",
         operatorRequired: "Choose an operator.",
-        planRequired: "Choose a tier.",
+        planRequired: "Choose a plan tier.",
         costInvalid: "Enter 0 or more.",
       },
     },
@@ -1543,5 +1544,6 @@ export const copy = {
 
   common: {
     noValue: "None",
+    notRecorded: "Not recorded",
   },
 };

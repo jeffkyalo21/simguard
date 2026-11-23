@@ -21,7 +21,7 @@ import { classifyScannedSim, simFieldValue, withExtraSim } from "@/lib/scan-look
 import { copy } from "@/lib/copy";
 
 const text = copy.allocations.form;
-const FIELD_ORDER = ["simId", "employeeId", "assignedBy"];
+const FIELD_ORDER = ["simId", "employeeId"];
 const SEARCH_DELAY_MS = 250;
 
 // The backend answers 400 with sentences per field; each field shows its
@@ -29,14 +29,12 @@ const SEARCH_DELAY_MS = 250;
 const serverMessages = {
   simId: text.errors.simUnavailable,
   employeeId: text.errors.employeeRequired,
-  assignedBy: text.errors.assignerRequired,
 };
 
 function validate(values) {
   const errors = {};
   if (!values.simId) errors.simId = text.errors.simRequired;
   if (!values.employeeId) errors.employeeId = text.errors.employeeRequired;
-  if (!values.assignedBy) errors.assignedBy = text.errors.assignerRequired;
   return errors;
 }
 
@@ -270,7 +268,6 @@ function AllocationForm({ open, onOpenChange }) {
           label={text.assigner}
           value={values.assignedBy}
           options={assignerOptions}
-          error={errors.assignedBy}
           onChange={set("assignedBy")}
           placeholder={assignerPlaceholder}
           disabled={!assignerOptions.length}
