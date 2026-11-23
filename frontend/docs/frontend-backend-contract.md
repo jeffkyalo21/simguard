@@ -77,7 +77,7 @@ sentence. Buttons for actions the role cannot do are disabled with a reason.
 | (new) `runScoring` | `POST /admin/scoring/run` | Security Officer only; a `merged` answer says the request joined the queued run. |
 | (new) `getSystemStatus` | `GET /admin/system-status` | Admin System health: tiles and three charts; read every 30 s, paused while the tab is hidden. |
 | (new) `listAccessRequests`, `reviewAccessRequest` | `GET /access-requests`, `PATCH /access-requests/{id}/status` | Admin, Requests tab. Approving creates the account and the API emails a generated password; the page never sees it. `accountCreated` false means the email already had an account; `emailSent` false opens the "use Resend sign-in email" warning. See `backend/docs/access-requests.md`. |
-| (new) `listUsers`, `inviteUser` | `GET /users`, `POST /users` | Admin, Users tab. Invite sends name, email and role only; no password field exists in the UI. `emailSent` false shows the "try Resend" warning. |
+| (new) `listUsers`, `inviteUser` | `GET /users`, `POST /users` | Admin, Users tab. The list never contains deleted accounts (the API leaves them out). Invite sends name, email and role only; no password field exists in the UI. `emailSent` false shows the "try Resend" warning. |
 | (new) `changeUserRole`, `disableUser`, `enableUser`, `unlockUser`, `resetUserMfa` | `PUT /users/{id}/role`, `POST /users/{id}/disable`, `/enable`, `/unlock`, `/mfa/reset` | Row actions. 409 on role change and disable means your own account or the last active Admin. |
 | (new) `resendSignInEmail` | `POST /users/{id}/signin-email` | New generated password by email, also the way to recover a forgotten password. 409 for a disabled account. |
 

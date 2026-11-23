@@ -290,6 +290,11 @@ remain valid. In `audit_logs` and `auth_events` the old email is replaced by
 the placeholder (and IP address and user agent are cleared on the user's auth
 events). The same email can be invited again as a new account.
 
+There is no deleted flag. The `@deleted.invalid` email domain is the marker:
+`GET /api/users` (and `?role=`), `GET /api/users/{id}` and the `usersByRole`
+counts leave such accounts out, and `POST /api/users` refuses an email with
+that domain (400). Audit entries keep showing the actor as `Deleted user {id}`.
+
 Errors: 400 with a field error on `password` or `code`; 409 when the user is
 the last active Admin ("You are the last active Admin, so your account
 cannot be deleted. Make another user an Admin first."), checked under the same
@@ -365,7 +370,7 @@ screen reads it every 30 seconds.
 - `email.configured` is true or false only. The key is never returned.
 - `lastRun` is the latest finished run (queued and running runs are skipped);
   `failureReason` is its error summary cut to 300 characters.
-- `usersByRole` lists every role. `accessRequests` lists every status.
+- `usersByRole` lists every role and leaves out deleted accounts. `accessRequests` lists every status.
 - The two per-day lists have the last 14 UTC days, oldest first, zero filled.
   Sign-ins count the `login_succeeded` and `login_failed` auth events. Scoring
   runs are counted on the day they were requested; `failed` includes `partial`
@@ -397,7 +402,7 @@ Errors: 401, 403.
 | Method and path | Body | Success | Errors |
 | --------------- | ---- | ------- | ------ |
 | `GET /api/users?role=&page=&pageSize=` | | 200 `PagedResult<UserResponse>` | 400 |
-| `GET /api/users/{id}` | | 200 | 404 |
+| `GET /api/users/{id}` | | 200 | 404 (also for a deleted account) |
 | `POST /api/users` (invite) | `{ "email", "name", "role", "employeeId": null }` | 201, `Location: /api/users/{id}` | 400, 409 |
 | `PUT /api/users/{id}/role` | `{ "role": "Auditor" }` | 200 | 400, 404, 409 |
 | `POST /api/users/{id}/disable` | | 200 | 404, 409 |
