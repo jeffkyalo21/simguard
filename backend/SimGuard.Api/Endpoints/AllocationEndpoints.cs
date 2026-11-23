@@ -120,7 +120,12 @@ public static class AllocationEndpoints
 
         var simId = errors.RequiredId("simId", request.SimId);
         var employeeId = errors.RequiredId("employeeId", request.EmployeeId);
-        var assignedBy = errors.RequiredId("assignedBy", request.AssignedBy);
+        // Optional. When it is sent it must still be a positive id of an existing employee.
+        int? assignedBy = null;
+        if (request.AssignedBy is not null)
+        {
+            assignedBy = errors.RequiredId("assignedBy", request.AssignedBy);
+        }
 
         if (errors.HasErrors)
         {
@@ -140,7 +145,7 @@ public static class AllocationEndpoints
                 errors.Add("simId", $"SIM {simId} does not exist.");
             }
 
-            var employeeIds = new[] { employeeId, assignedBy };
+            var employeeIds = new[] { employeeId, assignedBy ?? employeeId };
             var existingEmployeeIds = await db.Employees
                 .Where(e => employeeIds.Contains(e.Id))
                 .Select(e => e.Id)
@@ -151,7 +156,7 @@ public static class AllocationEndpoints
                 errors.Add("employeeId", $"Employee {employeeId} does not exist.");
             }
 
-            if (!existingEmployeeIds.Contains(assignedBy))
+            if (assignedBy is not null && !existingEmployeeIds.Contains(assignedBy.Value))
             {
                 errors.Add("assignedBy", $"Employee {assignedBy} does not exist.");
             }

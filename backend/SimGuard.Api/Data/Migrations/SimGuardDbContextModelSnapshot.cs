@@ -376,7 +376,7 @@ namespace SimGuard.Api.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseSerialColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AssignedBy")
+                    b.Property<int?>("AssignedBy")
                         .HasColumnType("integer")
                         .HasColumnName("assigned_by");
 
@@ -1721,8 +1721,7 @@ namespace SimGuard.Api.Data.Migrations
                     b.HasOne("SimGuard.Api.Models.Employee", "AssignedByEmployee")
                         .WithMany("AllocationsAssigned")
                         .HasForeignKey("AssignedBy")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("SimGuard.Api.Models.Employee", "Employee")
                         .WithMany("Allocations")

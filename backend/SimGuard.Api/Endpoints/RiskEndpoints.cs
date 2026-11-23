@@ -194,7 +194,7 @@ public static class RiskEndpoints
                 a.ReturnDate,
                 EmployeeName = a.Employee.Name,
                 DepartmentName = a.Employee.Department.Name,
-                AssignedByName = a.AssignedByEmployee.Name
+                AssignedByName = a.AssignedByEmployee != null ? a.AssignedByEmployee.Name : null
             })
             .ToListAsync(cancellationToken);
 
@@ -239,7 +239,9 @@ public static class RiskEndpoints
             items.Add(new ActivityItem(
                 "allocationStarted",
                 a.AssignmentDate,
-                $"Assigned to {a.EmployeeName} ({a.DepartmentName}) by {a.AssignedByName}",
+                a.AssignedByName is null
+                    ? $"Assigned to {a.EmployeeName} ({a.DepartmentName})"
+                    : $"Assigned to {a.EmployeeName} ({a.DepartmentName}) by {a.AssignedByName}",
                 null,
                 null,
                 "allocation",
