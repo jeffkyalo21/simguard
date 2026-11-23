@@ -93,9 +93,14 @@ alerts are raised, typed and cooled down: [scoring-pipeline.md](scoring-pipeline
   "employeeName": "Jane Wanjiru",
   "departmentName": "Field Sales",
   "detectedOn": "2025-03-12",
-  "lastDetectedOn": "2025-03-31"
+  "lastDetectedOn": "2025-03-31",
+  "resolution": null
 }
 ```
+
+`resolution` (additive) is `confirmedMisuse` or `falsePositive` on a cleared
+alert and null otherwise, so a list can tell a confirmed misuse from an alert
+dismissed as normal use. `recentAlerts` on the detail carries the same field.
 
 ### GET /api/alerts
 
@@ -104,6 +109,7 @@ Query:
 | Parameter | Type | Notes |
 | --------- | ---- | ----- |
 | `status` | string | one of the statuses |
+| `resolution` | string | `confirmedMisuse` or `falsePositive`. Only cleared alerts have one, so send it with `status=cleared` |
 | `type` | string | one of the types |
 | `simId` | int | |
 | `minScore` | number | 0 to 1, inclusive |
@@ -113,7 +119,7 @@ Query:
 | `page`, `pageSize` | int | |
 
 200: `PagedResult<AlertListItem>`. Ties are broken by `id` descending.
-400: unknown `status`, `type`, `sort` or `order`; `minScore` outside 0 to 1;
+400: unknown `status`, `resolution`, `type`, `sort` or `order`; `minScore` outside 0 to 1;
 `from` after `to`; bad paging.
 
 ### GET /api/alerts/{id}
@@ -161,7 +167,8 @@ Query:
       "riskLevel": "medium",
       "status": "escalated",
       "createdAt": "2026-10-05T10:00:00Z",
-      "resolvedAt": null
+      "resolvedAt": null,
+      "resolution": null
     }
   ],
   "detectedOn": "2025-03-12",
@@ -339,6 +346,8 @@ Query: `days` = `7`, `30` or `90` (default 7). Any other value is 400.
   "flagged": 12,
   "toReview": 8,
   "resolved": 5,
+  "resolvedConfirmed": 2,
+  "resolvedDismissed": 3,
   "alertsByType": {
     "inactiveBilling": 3,
     "sharing": 7,
@@ -368,6 +377,8 @@ before.
 | `flagged` | alerts with status `flagged` (now, any age) |
 | `toReview` | alerts with status `escalated` (now, any age) |
 | `resolved` | alerts in the window that are now `cleared` |
+| `resolvedConfirmed` | of those, the ones cleared as `confirmedMisuse` |
+| `resolvedDismissed` | of those, the rest (cleared as `falsePositive`, or without a resolution). `resolvedConfirmed` plus `resolvedDismissed` always equals `resolved` |
 | `alertsByType` | alerts in the window, by type. An alert is in the window when `detectedOn` or `lastDetectedOn` is in `from`..`to`, so a SIM that is still misbehaving counts for the current window; alerts with neither date count by `createdAt` |
 | `needsReview` | the 5 most recent `flagged` or `escalated` alerts, as alert list items (with SIM and reasons) |
 | `tierChanges` | open tier recommendations, counted by `recommendation` (now) |

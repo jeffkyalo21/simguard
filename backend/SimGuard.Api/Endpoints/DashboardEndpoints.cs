@@ -93,6 +93,13 @@ public static class DashboardEndpoints
         var resolved = await inWindow
             .CountAsync(a => a.Status == AlertStatuses.Cleared, cancellationToken);
 
+        // Cleared alerts without a resolution (not created through the API)
+        // count as dismissed, so the two parts always add up to resolved.
+        var resolvedConfirmed = await inWindow
+            .CountAsync(
+                a => a.Status == AlertStatuses.Cleared && a.Resolution == AlertResolutions.ConfirmedMisuse,
+                cancellationToken);
+
         var counts = await inWindow
             .GroupBy(a => a.Type)
             .Select(g => new { Type = g.Key, Count = g.Count() })
@@ -128,6 +135,8 @@ public static class DashboardEndpoints
             flagged,
             toReview,
             resolved,
+            resolvedConfirmed,
+            resolved - resolvedConfirmed,
             alertsByType,
             needsReview,
             tierChanges,

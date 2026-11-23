@@ -309,6 +309,7 @@ Check 'Paging page=2&pageSize=5' 200 $page2 "items=$(@($page2.Data.items).Count)
 Check-True 'Pages do not overlap' (@($page1.Data.items | Where-Object { $_.id -in @($page2.Data.items | ForEach-Object { $_.id }) }).Count -eq 0)
 Check 'Bad status filter' 400 (Invoke-Api GET '/api/alerts?status=open' $null $officer)
 Check 'Bad type filter' 400 (Invoke-Api GET '/api/alerts?type=fraud' $null $officer)
+Check 'Bad resolution filter' 400 (Invoke-Api GET '/api/alerts?resolution=maybe' $null $officer)
 Check 'minScore above 1' 400 (Invoke-Api GET '/api/alerts?minScore=5' $null $officer)
 Check 'Bad sort' 400 (Invoke-Api GET '/api/alerts?sort=simId' $null $officer)
 Check 'from after to' 400 (Invoke-Api GET "/api/alerts?from=$toUtc&to=$fromUtc" $null $officer)
@@ -361,6 +362,14 @@ Check-True 'Reopen clears resolvedAt, resolution, note and resolvedBy' (($reopen
 Check 'Officer moves escalated to flagged' 200 (Invoke-Api PATCH $statusPath @{ status = 'flagged' } $officer)
 $final = Invoke-Api PATCH $statusPath @{ status = 'cleared'; resolution = 'confirmedMisuse' } $officer
 Check 'Officer clears it as confirmed misuse' 200 $final "resolvedBy=$($final.Data.resolvedBy.name)"
+
+# The resolution is on list items and filters the list (additive).
+$confirmedList = Invoke-Api GET '/api/alerts?status=cleared&resolution=confirmedMisuse&pageSize=100' $null $officer
+Check 'GET /api/alerts?status=cleared&resolution=confirmedMisuse' 200 $confirmedList "total=$($confirmedList.Data.total)"
+Check-True 'Resolution filter returns only confirmed misuse and includes the alert' ((@($confirmedList.Data.items | Where-Object { $_.resolution -ne 'confirmedMisuse' }).Count -eq 0) -and (@($confirmedList.Data.items | Where-Object { $_.id -eq $target.id }).Count -eq 1))
+$dismissedList = Invoke-Api GET '/api/alerts?status=cleared&resolution=falsePositive&pageSize=100' $null $officer
+Check-True 'Resolution filter falsePositive excludes the confirmed alert' ((@($dismissedList.Data.items | Where-Object { $_.resolution -ne 'falsePositive' }).Count -eq 0) -and (@($dismissedList.Data.items | Where-Object { $_.id -eq $target.id }).Count -eq 0))
+Check-True 'Open alerts list resolution as null' (@((Invoke-Api GET '/api/alerts?status=flagged&pageSize=100' $null $officer).Data.items | Where-Object { $null -ne $_.resolution }).Count -eq 0)
 
 # --- Audit log ---------------------------------------------------------------
 $auditPath = "/api/audit-logs?action=alert.status_changed&simId=$($target.simId)&pageSize=100"
@@ -454,6 +463,7 @@ Check 'Dashboard days=14' 400 (Invoke-Api GET '/api/dashboard/summary?days=14' $
 Check 'Dashboard days=abc' 400 (Invoke-Api GET '/api/dashboard/summary?days=abc' $null $officer)
 $summary = (Invoke-Api GET '/api/dashboard/summary?days=90' $null $officer).Data
 Check-True 'Dashboard flagged and toReview match the alert list' (($summary.flagged -eq (Invoke-Api GET '/api/alerts?status=flagged&pageSize=1' $null $officer).Data.total) -and ($summary.toReview -eq (Invoke-Api GET '/api/alerts?status=escalated&pageSize=1' $null $officer).Data.total))
+Check-True 'resolvedConfirmed and resolvedDismissed add up to resolved' (($summary.resolvedConfirmed -ge 0) -and ($summary.resolvedDismissed -ge 0) -and (($summary.resolvedConfirmed + $summary.resolvedDismissed) -eq $summary.resolved)) "confirmed=$($summary.resolvedConfirmed) dismissed=$($summary.resolvedDismissed) resolved=$($summary.resolved)"
 Check-True 'alertsByType has the four types plus other' ((@($summary.alertsByType.PSObject.Properties.Name) -join ',') -eq 'inactiveBilling,sharing,reselling,ghostUsage,other')
 Check-True 'needsReview has 5 flagged or escalated alerts with SIM and reasons' ((@($summary.needsReview).Count -eq 5) -and (@($summary.needsReview | Where-Object { $_.status -notin @('flagged', 'escalated') -or -not $_.simPhoneNumber -or @($_.reasons).Count -eq 0 }).Count -eq 0))
 Check-True 'tierChanges is empty and dataWaste is null' ((@($summary.tierChanges).Count -eq 0) -and ($null -eq $summary.dataWaste))

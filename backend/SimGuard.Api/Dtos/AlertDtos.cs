@@ -24,7 +24,8 @@ public record AlertListItem(
     string? EmployeeName,
     string? DepartmentName,
     DateOnly? DetectedOn,
-    DateOnly? LastDetectedOn)
+    DateOnly? LastDetectedOn,
+    string? Resolution)
 {
     // Employee and department come from the SIM's current allocation as
     // correlated subqueries, so a page is one SQL statement.
@@ -52,7 +53,8 @@ public record AlertListItem(
                 .Select(x => x.Employee.Department.Name)
                 .FirstOrDefault(),
             a.DetectedOn,
-            a.LastDetectedOn);
+            a.LastDetectedOn,
+            a.Resolution);
 }
 
 public record UserReference(int Id, string Name, string? Email);
@@ -72,7 +74,8 @@ public record RecentAlertItem(
     string RiskLevel,
     string Status,
     DateTime CreatedAt,
-    DateTime? ResolvedAt);
+    DateTime? ResolvedAt,
+    string? Resolution);
 
 public record AlertDetailResponse(
     int Id,
@@ -160,6 +163,8 @@ public record DashboardSummaryResponse(
     int Flagged,
     int ToReview,
     int Resolved,
+    int ResolvedConfirmed,
+    int ResolvedDismissed,
     IReadOnlyDictionary<string, int> AlertsByType,
     IReadOnlyList<AlertListItem> NeedsReview,
     IReadOnlyList<TierChangeCount> TierChanges,

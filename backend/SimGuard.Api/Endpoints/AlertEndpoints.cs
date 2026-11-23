@@ -40,6 +40,7 @@ public static class AlertEndpoints
 
     private static async Task<IResult> GetAlerts(
         string? status,
+        string? resolution,
         string? type,
         int? simId,
         decimal? minScore,
@@ -55,6 +56,7 @@ public static class AlertEndpoints
         var errors = new ValidationErrors();
         var paging = PageRequest.FromQuery(page, pageSize, errors);
         var statusValue = Vocabulary.Match("status", status, AlertStatuses.All, errors);
+        var resolutionValue = Vocabulary.Match("resolution", resolution, AlertResolutions.All, errors);
         var typeValue = Vocabulary.Match("type", type, AlertTypes.All, errors);
         var sortValue = Vocabulary.Match("sort", sort, ["createdAt", "riskScore"], errors) ?? "createdAt";
         var orderValue = Vocabulary.Match("order", order, ["desc", "asc"], errors) ?? "desc";
@@ -76,6 +78,11 @@ public static class AlertEndpoints
         if (statusValue is not null)
         {
             query = query.Where(a => a.Status == statusValue);
+        }
+
+        if (resolutionValue is not null)
+        {
+            query = query.Where(a => a.Resolution == resolutionValue);
         }
 
         if (typeValue is not null)
@@ -298,7 +305,8 @@ public static class AlertEndpoints
                 a.RiskLevel,
                 a.Status,
                 a.CreatedAt,
-                a.ResolvedAt))
+                a.ResolvedAt,
+                a.Resolution))
             .ToListAsync(cancellationToken);
 
         return detail with { RecentAlerts = recent };
