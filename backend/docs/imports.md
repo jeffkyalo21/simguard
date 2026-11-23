@@ -209,7 +209,8 @@ Creates active allocations by the same rules as `POST /api/allocations`:
 - `start_date` becomes the allocation's assignment date (midnight UTC). When
   empty, the assignment date is the time of the import.
 - `assigned_by` is the signed-in user's linked employee. When the account has
-  no linked employee, it is the allocated employee.
+  no linked employee, it is left empty (null) and the allocation shows
+  "Not recorded" as the person who handed the SIM over.
 
 Each new allocation writes its own `allocation.created` audit entry, in the
 same shape as the endpoint, in addition to `import.committed`. Allocations

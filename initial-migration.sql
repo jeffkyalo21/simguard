@@ -53,7 +53,7 @@ CREATE TABLE allocations (
     id serial NOT NULL,
     sim_id integer NOT NULL,
     employee_id integer NOT NULL,
-    assigned_by integer NOT NULL,
+    assigned_by integer,
     assignment_date timestamp without time zone NOT NULL DEFAULT (NOW()),
     return_date timestamp without time zone,
     CONSTRAINT "PK_allocations" PRIMARY KEY (id),

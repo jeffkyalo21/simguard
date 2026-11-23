@@ -156,7 +156,7 @@ public sealed class AllocationImportHandler : IImportHandler
                 {
                     SimId = row.Sim.Id,
                     EmployeeId = row.EmployeeId,
-                    AssignedBy = _callerEmployeeId ?? row.EmployeeId,
+                    AssignedBy = _callerEmployeeId,
                     AssignmentDate = row.StartDate ?? now
                 };
 

@@ -13,6 +13,7 @@
 // There is no mock data: a screen shows the backend's answer or an error.
 
 import { API_BASE, ApiError, api } from "@/lib/api";
+import { allocationBody } from "@/lib/allocation-body";
 import { bumpDataVersion } from "@/lib/data-version";
 import { normalizePhone } from "@/lib/validation";
 
@@ -348,16 +349,14 @@ export function setAlertStatus(id, { status, resolution, resolutionNote } = {}) 
 }
 
 /**
- * POST /allocations. `assignedBy` is the employee who hands the SIM over.
- * The backend dates the allocation at the time of the request. 409 when
- * the SIM is not available or already allocated.
+ * POST /allocations. `assignedBy`, the employee who hands the SIM over, is
+ * optional and left out when empty. The backend dates the allocation at the
+ * time of the request. 409 when the SIM is not available or already allocated.
  * @param {{ simId: number | string, employeeId: number | string,
- *   assignedBy: number | string }} body
+ *   assignedBy?: number | string }} body
  */
-export function createAllocation({ simId, employeeId, assignedBy }) {
-  return write(
-    api.post("/allocations", { simId: Number(simId), employeeId: Number(employeeId), assignedBy: Number(assignedBy) })
-  );
+export function createAllocation(values) {
+  return write(api.post("/allocations", allocationBody(values)));
 }
 
 /** POST /allocations/{id}/return. 409 when already returned. */

@@ -32,13 +32,3 @@ export async function readPrintedText(source, onProgress) {
     await worker.terminate();
   }
 }
-
-/** Copies the current video frame to a canvas, or null when it has no picture yet. */
-export function frameFromVideo(video) {
-  if (!video || !video.videoWidth) return null;
-  const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video, 0, 0);
-  return canvas;
-}

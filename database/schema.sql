@@ -65,7 +65,8 @@ CREATE TABLE allocations (
     id SERIAL PRIMARY KEY,
     sim_id INTEGER NOT NULL REFERENCES sims(id),
     employee_id INTEGER NOT NULL REFERENCES employees(id),
-    assigned_by INTEGER NOT NULL REFERENCES employees(id),
+    -- The employee who handed the SIM over. Optional: null when not recorded.
+    assigned_by INTEGER REFERENCES employees(id),
     assignment_date TIMESTAMP NOT NULL DEFAULT NOW(),
     return_date TIMESTAMP
 );

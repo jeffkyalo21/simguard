@@ -104,6 +104,7 @@ export function AllocationsView() {
     },
     { key: "employee", header: copy.columns.employee, cell: (item) => item.employeeName },
     { key: "department", header: copy.columns.department, cell: (item) => item.departmentName ?? copy.common.noValue },
+    { key: "handedOverBy", header: copy.columns.handedOverBy, cell: (item) => item.assignedByName ?? <span className="text-muted-foreground">{copy.common.notRecorded}</span> },
     { key: "start", header: copy.columns.startDate, cell: (item) => formatDate(item.assignmentDate) },
     {
       key: "end",
