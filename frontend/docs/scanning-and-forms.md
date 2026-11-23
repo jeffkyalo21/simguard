@@ -6,7 +6,8 @@ The SIM form (Add SIM) and the allocation form (New allocation) have a Scan
 button. It opens one shared dialog that reads the ICCID printed on the SIM card
 as a barcode.
 
-- **What is read:** the barcode (Code 128 and similar 1D codes) on the card. If
+- **What is read:** the barcode (Code 128, Code 39, Code 93, ITF, EAN-13,
+  EAN-8 and Codabar) on the card. If
   there is none, the person can ask to read the printed number instead. Only
   the SIM number is read. Nothing else is scanned, and ID cards or badges are
   not supported.
@@ -17,20 +18,45 @@ as a barcode.
   is stopped when the dialog closes.
 - **HTTPS:** browsers only give camera access on HTTPS pages or on
   `localhost`. On plain HTTP the dialog says so and the upload path still works.
+- **Engine:** the browser's own `BarcodeDetector` when it supports all of the
+  formats above (Chrome on Android, for example). Otherwise the
+  `barcode-detector` package, which runs zxing-cpp as WebAssembly. Safari and
+  iPhone use the package. The `.wasm` file is served by this app from
+  `/wasm/zxing_reader.wasm`, not from a CDN. `scripts/copy-wasm.mjs` copies it
+  from `node_modules` into `public/wasm` after `npm install` and before
+  `next build` (the folder is generated and git ignored), and
+  `next.config.mjs` sets its `Content-Type` and cache headers. The Docker build
+  runs the same script.
+- **Speed:** a camera frame is checked about every 100 ms at the size the
+  camera gives (ideal 1920x1080, no downscaling). A frame still being decoded
+  makes the next tick skip, so work never queues up, and nothing is shown as
+  loading while it looks. The first valid ICCID is accepted at once with a short
+  beep (Web Audio) and a brief vibration where the device has one, and the
+  dialog closes. In development the console shows how long the accepted frame
+  took to decode, never the scanned value.
+- **Camera:** the rear camera is asked for at 1920x1080 with continuous focus
+  where the device supports it. Tapping the picture focuses where the device
+  supports that. A light button shows only when the camera reports a torch.
 - **Check:** the number must be digits only (spaces and dashes are ignored), 19
   or 20 digits, start with 89 and pass the Luhn check digit (`src/lib/iccid.js`).
-  Otherwise the dialog says "That does not look like a SIM number, try again or
+  Printed text can hold the number in groups, for example
+  `SERIAL NUMBER 89254 02115 42202 46430 ACTIVATE BY 18/04/2022`. Letters are
+  never read as digits, so a number with an "O" in it is refused. Otherwise the dialog says "That does not look like a SIM number, try again or
   type it."
 - **Confirmation:** the scanned number only fills the field. Nothing saves by
   itself.
-- **Printed number (OCR):** tesseract.js runs on the device, restricted to
-  digits, and only results that pass the check are accepted. The library
+- **Printed number (OCR):** only when the person presses "Read the printed
+  number", never by itself. The barcode reader pauses while it reads and carries
+  on if no number is found. tesseract.js runs on the device, restricted to
+  digits, and only results that pass the check are accepted. The recognised text
+  is checked and dropped at once: it is not logged or stored, and only the
+  matched ICCID is kept. The library
   downloads its engine and English model from its default CDN the first time it
   is used (the picture itself never leaves the device). To serve them from the
   app instead, pass `workerPath`, `corePath` and `langPath` to `createWorker` in
   `src/components/scan/ocr.js`.
-- **Loading:** `@zxing/browser` and `tesseract.js` are imported only when the
-  dialog opens (and OCR is asked for).
+- **Loading:** `barcode-detector` is imported only when the dialog opens and
+  `tesseract.js` only when OCR is asked for.
 
 ### In the SIM form
 
