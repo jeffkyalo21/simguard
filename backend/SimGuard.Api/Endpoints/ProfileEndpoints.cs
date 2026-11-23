@@ -207,8 +207,8 @@ public static class ProfileEndpoints
         var id = user.Id;
         var oldEmail = user.Email ?? string.Empty;
         var role = await AuthEndpoints.GetRoleAsync(userManager, user);
-        var placeholderName = $"Deleted user {id}";
-        var placeholderEmail = $"deleted-user-{id}@deleted.invalid";
+        var placeholderName = DeletedAccounts.NameFor(id);
+        var placeholderEmail = DeletedAccounts.EmailFor(id);
 
         await using (var transaction = await UserEndpoints.BeginAdminChangeAsync(db, cancellationToken))
         {
