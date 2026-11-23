@@ -4,6 +4,7 @@
 // package is imported only when the scan dialog opens, and its WASM file is
 // served from /wasm (copied by scripts/copy-wasm.mjs), never from a CDN.
 
+import { cameraConstraintLadder, cameraErrorKind, tryNextConstraint } from "@/components/scan/camera-errors";
 import { guideFrameRect, printedNumberRect } from "@/components/scan/crop-region";
 
 /** The 1D codes SIM cards use. */
@@ -40,13 +41,30 @@ export async function createDetector() {
   return new BarcodeDetector({ formats: BARCODE_FORMATS });
 }
 
-/** Stops every track of the stream a video element is showing. */
-export function stopVideo(video) {
-  const stream = video?.srcObject;
-  if (stream && typeof stream.getTracks === "function") {
-    for (const track of stream.getTracks()) track.stop();
+const isDev = () => typeof process !== "undefined" && process.env.NODE_ENV !== "production";
+
+/**
+ * Opens the camera with the first request in the ladder that works, giving up
+ * wishes after an error that a simpler request can get past. In development
+ * the console shows the error names and the request that finally worked
+ * (never anything that was scanned).
+ */
+export async function openCamera(mediaDevices) {
+  if (!mediaDevices?.getUserMedia) throw Object.assign(new Error("No camera access."), { name: "TypeError" });
+
+  let last;
+  for (const constraints of cameraConstraintLadder()) {
+    try {
+      const stream = await mediaDevices.getUserMedia(constraints);
+      if (isDev()) console.debug("scan: camera opened with", JSON.stringify(constraints));
+      return stream;
+    } catch (error) {
+      last = error;
+      if (isDev()) console.debug("scan: camera request failed:", error?.name);
+      if (!tryNextConstraint(error)) break;
+    }
   }
-  if (video) video.srcObject = null;
+  throw last;
 }
 
 function capabilitiesOf(track) {
@@ -68,30 +86,46 @@ function capabilitiesOf(track) {
  *   pause(), resume() stop and restart looking at frames (the camera keeps running)
  *   torch             null, or { set(on) } when the camera has a torch
  *   focusAt(x, y)     null, or a function taking a point in 0..1 of the picture
+ * `isCancelled` says the caller no longer wants the camera (the dialog closed,
+ * or React ran the effect twice in development). A cancelled start releases
+ * its own stream and never touches the video element, which a newer start may
+ * already be using. Then it resolves with null.
  * @param {HTMLVideoElement} video
  * @param {(text: string) => void} onText
+ * @param {{ isCancelled?: () => boolean, mediaDevices?: MediaDevices,
+ *   makeDetector?: () => Promise<{ detect: (source: any) => Promise<any[]> }> }} [options]
  */
-export async function startCameraScan(video, onText) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      advanced: [{ focusMode: "continuous" }],
-    },
-  });
+export async function startCameraScan(video, onText, options = {}) {
+  const { isCancelled = () => false, mediaDevices = navigator.mediaDevices, makeDetector = createDetector } = options;
+  const stream = await openCamera(mediaDevices);
+  const release = () => {
+    for (const track of stream.getTracks()) track.stop();
+    // Only clear the element when it still shows this stream.
+    if (video.srcObject === stream) video.srcObject = null;
+  };
+
+  if (isCancelled()) {
+    release();
+    return null;
+  }
 
   let detector;
   try {
     video.srcObject = stream;
     // The picture shows while the reader loads: no waiting state for it.
-    const playing = video.play().catch(() => {});
-    [detector] = await Promise.all([createDetector(), playing]);
+    const playing = Promise.resolve(video.play()).catch(() => {});
+    const reader = makeDetector().catch((cause) => {
+      throw Object.assign(new Error("The barcode reader could not load.", { cause }), { name: "ReaderLoadError" });
+    });
+    [detector] = await Promise.all([reader, playing]);
   } catch (error) {
-    for (const track of stream.getTracks()) track.stop();
-    video.srcObject = null;
+    release();
     throw error;
+  }
+
+  if (isCancelled()) {
+    release();
+    return null;
   }
 
   const track = stream.getVideoTracks()[0];
@@ -164,8 +198,7 @@ export async function startCameraScan(video, onText) {
       stopped = true;
       window.clearTimeout(timer);
       window.clearTimeout(focusTimer);
-      for (const each of stream.getTracks()) each.stop();
-      video.srcObject = null;
+      release();
     },
     pause() {
       paused = true;
@@ -219,11 +252,10 @@ export async function decodeBarcodeFromFile(file) {
   }
 }
 
-/** Why the camera did not start: "blocked", "missing", "insecure" or "failed". */
+/** Why the camera did not start: a key of the scan messages (see camera-errors.js). */
 export function cameraProblem(error) {
-  if (typeof window !== "undefined" && !window.isSecureContext) return "insecure";
-  if (!navigator.mediaDevices?.getUserMedia) return "insecure";
-  if (error?.name === "NotAllowedError" || error?.name === "SecurityError") return "blocked";
-  if (error?.name === "NotFoundError" || error?.name === "OverconstrainedError") return "missing";
-  return "failed";
+  return cameraErrorKind(error, {
+    secure: typeof window === "undefined" || window.isSecureContext,
+    hasApi: Boolean(navigator.mediaDevices?.getUserMedia),
+  });
 }

@@ -49,6 +49,17 @@ as a barcode.
   beep (Web Audio) and a brief vibration where the device has one, and the
   dialog closes. In development the console shows how long the accepted frame
   took to decode, never the scanned value.
+- **Opening the camera:** the scanner asks for the rear camera at 1920x1080
+  with continuous focus, and if that fails with a constraint or device error it
+  tries the rear camera alone, then any camera (`camera-errors.js`). A refusal
+  or a missing camera stops the ladder at once. The messages are specific:
+  blocked, no camera, camera in use by another app or tab, unsupported
+  settings, barcode reader could not load, secure page needed. "Upload a photo
+  instead" always stays. In development the console shows the error names and
+  the request that worked, never anything scanned.
+- **Starting twice:** React runs the scan effect twice in development. A start
+  that was cancelled releases its own camera stream and never touches the video
+  element, so it cannot blank the newer start's preview.
 - **Camera:** the rear camera is asked for at 1920x1080 with continuous focus
   where the device supports it. Tapping the picture focuses where the device
   supports that. A light button shows only when the camera reports a torch.

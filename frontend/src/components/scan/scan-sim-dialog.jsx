@@ -21,6 +21,9 @@ const PROBLEM_TEXT = {
   blocked: text.cameraBlocked,
   missing: text.cameraMissing,
   insecure: text.cameraInsecure,
+  inUse: text.cameraInUse,
+  settings: text.cameraSettings,
+  reader: text.readerFailed,
   failed: text.cameraFailed,
 };
 
@@ -67,8 +70,10 @@ function ScanPanel({ onResult }) {
         // Keep looking: a stray barcode in view must not end the scan.
         setMessage(text.invalid);
       }
-    }).then(
+    }, { isCancelled: () => cancelled }).then(
       (started) => {
+        // Null: this start was cancelled and has already let go of the camera.
+        if (!started) return;
         if (cancelled) return started.stop();
         controls = started;
         controlsRef.current = started;
