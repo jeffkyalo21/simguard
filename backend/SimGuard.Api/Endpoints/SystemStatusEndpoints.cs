@@ -186,6 +186,7 @@ public static class SystemStatusEndpoints
     {
         var rows = await (
                 from u in db.Users.AsNoTracking()
+                where u.Email == null || !u.Email.EndsWith(DeletedAccounts.EmailDomain)
                 join ur in db.UserRoles on u.Id equals ur.UserId
                 join r in db.Roles on ur.RoleId equals r.Id
                 group u by new { Role = r.Name, u.IsDisabled } into g

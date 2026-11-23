@@ -166,6 +166,11 @@ public static class UserEndpoints
         var name = errors.RequiredString("name", request.Name, NameMaxLength);
         var role = ValidateRole(request.Role, errors);
 
+        if (DeletedAccounts.IsDeletedEmail(email))
+        {
+            errors.Add("email", $"email cannot end with {DeletedAccounts.EmailDomain}.");
+        }
+
         if (request.EmployeeId is not null && request.EmployeeId <= 0)
         {
             errors.Add("employeeId", "employeeId must be a positive integer.");
@@ -700,6 +705,8 @@ public static class UserEndpoints
     private static IQueryable<UserRow> QueryUserRows(SimGuardDbContext db) =>
         db.Users
             .AsNoTracking()
+            // Deleted accounts stay as rows for the audit trail but are not users any more.
+            .Where(u => u.Email == null || !u.Email.EndsWith(DeletedAccounts.EmailDomain))
             .Select(u => new UserRow
             {
                 Id = u.Id,
