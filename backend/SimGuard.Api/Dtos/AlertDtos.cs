@@ -153,7 +153,10 @@ public record ActivityItem(
     int ReferenceId,
     // Additive (issue #14): the day an opened alert was detected, which for
     // scored alerts is not the day the row was stored (occurredAt).
-    DateOnly? OccurredOn = null);
+    DateOnly? OccurredOn = null,
+    // Additive: how a cleared alert was closed (confirmedMisuse or
+    // falsePositive). Null for every other kind.
+    string? Resolution = null);
 
 public record DashboardSummaryResponse(
     int Days,

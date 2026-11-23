@@ -293,7 +293,8 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
       "action": null,
       "referenceType": "alert",
       "referenceId": 17,
-      "occurredOn": null
+      "occurredOn": null,
+      "resolution": "falsePositive"
     },
     {
       "kind": "audit",
@@ -303,7 +304,8 @@ The SIM profile timeline, newest first. Query: `page`, `pageSize`.
       "action": "sim.status_changed",
       "referenceType": "auditLog",
       "referenceId": 88,
-      "occurredOn": null
+      "occurredOn": null,
+      "resolution": null
     }
   ],
   "page": 1,
@@ -327,6 +329,8 @@ allocations it is null (the assigner is an employee, named in `summary`).
 `occurredOn` (additive, issue #14) is set on `alertOpened` rows only: the
 scored day the alert was detected, which for backfilled alerts is long
 before the row was stored. Screens show it in place of `occurredAt`.
+`resolution` (additive) is set on `alertCleared` rows only: `confirmedMisuse`
+or `falsePositive`, null on every other kind.
 404: unknown SIM.
 
 ## Dashboard

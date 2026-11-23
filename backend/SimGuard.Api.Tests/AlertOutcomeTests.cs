@@ -67,6 +67,32 @@ public sealed class AlertOutcomeTests(TestDatabase database) : IClassFixture<Tes
         Assert.Equal(after.Resolved, after.Confirmed + after.Dismissed);
     }
 
+    [DbFact]
+    public async Task The_SIM_activity_says_how_a_cleared_alert_was_closed()
+    {
+        await using var app = new Harness(database);
+        var simId = await app.SeedSimAsync();
+        await app.SeedAlertAsync(simId, AlertStatuses.Cleared, AlertResolutions.ConfirmedMisuse);
+        await app.SeedAlertAsync(simId, AlertStatuses.Cleared, AlertResolutions.FalsePositive);
+        await app.SeedAlertAsync(simId, AlertStatuses.Flagged, null);
+
+        var response = await app.Client.GetAsync($"/api/sims/{simId}/activity");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = body.RootElement.GetProperty("items").EnumerateArray().ToList();
+
+        var cleared = items
+            .Where(i => i.GetProperty("kind").GetString() == "alertCleared")
+            .Select(i => i.GetProperty("resolution").GetString())
+            .OrderBy(r => r, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(new[] { AlertResolutions.ConfirmedMisuse, AlertResolutions.FalsePositive }, cleared);
+
+        var others = items.Where(i => i.GetProperty("kind").GetString() != "alertCleared");
+        Assert.All(others, i => Assert.Equal(JsonValueKind.Null, i.GetProperty("resolution").ValueKind));
+    }
+
     private sealed record ListedAlert(int Id, string Status, string? Resolution);
 
     private sealed record Summary(int Resolved, int Confirmed, int Dismissed);
