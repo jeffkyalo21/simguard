@@ -57,8 +57,9 @@ export function iccidFromScan(text) {
 
   // Digits may be grouped with spaces or dashes, and two numbers can sit
   // next to each other, so every 19 or 20 digit window that starts with 89
-  // inside a run is tried.
-  const runs = String(text ?? "").match(/\d(?:[\s-]?\d)+/g) ?? [];
+  // inside a run is tried. Letters are never turned into digits: an "O" in
+  // the middle of a number breaks the run, so the number is refused.
+  const runs = String(text ?? "").match(/\d(?:[\s-]*\d)+/g) ?? [];
   for (const run of runs) {
     const digits = stripIccid(run);
     for (let start = 0; start < digits.length; start += 1) {

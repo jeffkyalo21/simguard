@@ -81,3 +81,28 @@ test("iccidFromScan rejects text without a valid number", () => {
   assert.equal(iccidFromScan("hello 12345").ok, false);
   assert.equal(iccidFromScan(undefined).ok, false);
 });
+
+// Made-up number with a valid check digit, as printed on a pack: groups of 5.
+const GROUPED = "89254 02115 42202 46430";
+const GROUPED_DIGITS = "89254021154220246430";
+
+test("iccidFromScan accepts digits grouped with spaces", () => {
+  assert.deepEqual(iccidFromScan(GROUPED), { ok: true, iccid: GROUPED_DIGITS });
+  assert.deepEqual(iccidFromScan("89254  02115\n42202 46430"), { ok: true, iccid: GROUPED_DIGITS });
+});
+
+test("iccidFromScan finds the grouped number in printed pack text", () => {
+  const printed = `SERIAL NUMBER ${GROUPED} ACTIVATE BY 18/04/2022`;
+  assert.deepEqual(iccidFromScan(printed), { ok: true, iccid: GROUPED_DIGITS });
+});
+
+test("iccidFromScan never reads the letter O or o as a zero", () => {
+  assert.equal(iccidFromScan("89254 O2115 42202 46430").ok, false);
+  assert.equal(iccidFromScan("89254 o2115 42202 46430").ok, false);
+  assert.equal(iccidFromScan("SERIAL NUMBER 89254 O2115 42202 46430 ACTIVATE BY 18/04/2022").ok, false);
+});
+
+test("iccidFromScan never reads other look-alike letters as digits", () => {
+  assert.equal(iccidFromScan("89254 02115 42202 4643l").ok, false);
+  assert.equal(iccidFromScan("89254 02115 42202 4643O").ok, false);
+});
