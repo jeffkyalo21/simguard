@@ -42,11 +42,12 @@ function Kpis({ data }) {
   const kpis = data?.kpis;
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <KpiCard label={text.kpis.activeSims} value={formatNumber(kpis?.activeSims)} loading={!kpis} />
       <KpiCard label={text.kpis.flagged} value={formatNumber(kpis?.flagged)} loading={!kpis} hero />
       <KpiCard label={text.kpis.toReview} value={formatNumber(kpis?.toReview)} loading={!kpis} />
       <KpiCard label={text.kpis.resolved} value={formatNumber(kpis?.resolved)} loading={!kpis} />
+      <KpiCard label={text.kpis.confirmedMisuse} value={formatNumber(kpis?.resolvedConfirmed)} loading={!kpis} />
     </div>
   );
 }

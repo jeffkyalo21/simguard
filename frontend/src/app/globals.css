@@ -43,6 +43,8 @@
   --color-risk-cleared-foreground: var(--risk-cleared-foreground);
   --color-risk-escalated: var(--risk-escalated);
   --color-risk-escalated-foreground: var(--risk-escalated-foreground);
+  --color-risk-confirmed: var(--risk-confirmed);
+  --color-risk-confirmed-foreground: var(--risk-confirmed-foreground);
   --color-risk-flagged: var(--risk-flagged);
   --color-risk-flagged-foreground: var(--risk-flagged-foreground);
   --color-risk-flagged-strong: var(--risk-flagged-strong);
@@ -239,6 +241,9 @@
   --risk-cleared: #dcf3e5;
   --risk-cleared-foreground: #17603c;
   --risk-cleared-strong: #1e7f4f;
+  /* Confirmed misuse: a solid maroon chip, unlike the pale flagged red. */
+  --risk-confirmed: #6b1030;
+  --risk-confirmed-foreground: #ffffff;
 
   /* shadcn tokens re-pointed at the glass palette. */
   --background: var(--backdrop-base);
@@ -308,6 +313,8 @@
   --risk-cleared: #10392a;
   --risk-cleared-foreground: #84dcae;
   --risk-cleared-strong: #4cc98b;
+  --risk-confirmed: #8a1c3f;
+  --risk-confirmed-foreground: #ffe3ea;
 
   --popover: rgb(34 28 24 / 0.94);
   --primary: #f6f2ec;

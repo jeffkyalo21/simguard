@@ -18,10 +18,11 @@ import { copy } from "@/lib/copy";
  * Focus is trapped inside and returns to the opener on close; Escape and
  * Cancel close it.
  * @param {{ open: boolean, onOpenChange: (open: boolean) => void, title: string,
- *   submitLabel: string, busy?: boolean, onSubmit: (event: SubmitEvent) => void,
+ *   submitLabel: string, busy?: boolean, submitDisabled?: boolean,
+ *   extraAction?: React.ReactNode, onSubmit: (event: SubmitEvent) => void,
  *   children: React.ReactNode, wide?: boolean }} props
  */
-export function FormDialog({ open, onOpenChange, title, submitLabel, busy = false, onSubmit, children, wide }) {
+export function FormDialog({ open, onOpenChange, title, submitLabel, busy = false, submitDisabled = false, extraAction, onSubmit, children, wide }) {
   const returnFocus = useReturnFocus(open);
 
   return (
@@ -38,7 +39,8 @@ export function FormDialog({ open, onOpenChange, title, submitLabel, busy = fals
                 {copy.actions.cancel}
               </Button>
             </DialogClose>
-            <BusyButton type="submit" busy={busy} className="h-10 px-4">
+            {extraAction}
+            <BusyButton type="submit" busy={busy} disabled={submitDisabled} className="h-10 px-4">
               {submitLabel}
             </BusyButton>
           </DialogFooter>

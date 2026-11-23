@@ -229,7 +229,8 @@ public static class RiskEndpoints
                     a.ResolvedByEmail,
                     null,
                     "alert",
-                    a.Id));
+                    a.Id,
+                    Resolution: a.Resolution));
             }
         }
 

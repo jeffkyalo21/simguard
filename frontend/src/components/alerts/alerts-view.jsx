@@ -9,12 +9,13 @@ import { GlassCard } from "@/components/glass/glass-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { RiskBadge } from "@/components/shared/risk-badge";
 import { useResource } from "@/hooks/use-resource";
+import { OUTCOME_FILTERS, alertOutcome, outcomeQuery } from "@/lib/alert-outcome";
 import { listAlerts, referenceData } from "@/lib/data";
 import { formatDate, formatDateTime, formatPhone } from "@/lib/format";
 import { copy } from "@/lib/copy";
 
 const FILTER_KEYS = ["status", "type", "minScore", "sort"];
-const statusOptions = ["flagged", "escalated", "cleared"].map((value) => ({ value, label: copy.alertStatus[value] }));
+const statusOptions = OUTCOME_FILTERS.map((value) => ({ value, label: copy.alertStatus[value] }));
 const typeOptions = referenceData.alertTypes.map((value) => ({ value, label: copy.alertTypes[value] }));
 const scoreOptions = [{ value: "0.8", label: copy.alerts.minimumScore }];
 const sortOptions = [
@@ -38,7 +39,8 @@ export function AlertsView() {
   const query = Object.fromEntries(FILTER_KEYS.map((key) => [key, searchParams.get(key) ?? ""]));
   const page = Math.max(Number(searchParams.get("page")) || 1, 1);
   const resource = useResource(
-    () => listAlerts({ ...query, page, sort: query.sort || "createdAt" }),
+    // The status filter holds an outcome; confirmed and cleared both ask for cleared alerts.
+    () => listAlerts({ ...outcomeQuery(query.status), type: query.type, minScore: query.minScore, page, sort: query.sort || "createdAt" }),
     [query.status, query.type, query.minScore, query.sort, page]
   );
   const result = resource.data;
@@ -50,7 +52,7 @@ export function AlertsView() {
     { key: "sim", header: copy.columns.number, link: true, cell: (alert) => formatPhone(alert.simPhoneNumber) },
     { key: "type", header: copy.columns.type, cell: (alert) => copy.alertTypes[alert.type] ?? alert.type },
     { key: "risk", header: copy.columns.risk, cell: (alert) => <RiskBar score={alert.riskScore} /> },
-    { key: "status", header: copy.columns.status, cell: (alert) => <RiskBadge level={alert.status} /> },
+    { key: "status", header: copy.columns.status, cell: (alert) => <RiskBadge level={alertOutcome(alert)} /> },
     { key: "date", header: copy.columns.detected, cell: (alert) => (alert.detectedOn ? formatDate(alert.detectedOn) : formatDateTime(alert.createdAt)) },
     {
       key: "employee", header: copy.columns.employee, cell: (alert) => (

@@ -1,10 +1,15 @@
-import { ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
+import { OctagonX, ShieldAlert, ShieldCheck, ShieldX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { copy } from "@/lib/copy";
 
-/** @typedef {"cleared" | "escalated" | "flagged"} RiskLevel */
+/** @typedef {"cleared" | "confirmed" | "escalated" | "flagged"} RiskLevel */
 
 const levels = {
+  // Confirmed misuse: a solid maroon chip and its own icon, so it never looks like an open flagged alert.
+  confirmed: {
+    Icon: OctagonX,
+    className: "bg-risk-confirmed text-risk-confirmed-foreground ring-1 ring-risk-confirmed-foreground/30",
+  },
   cleared: {
     Icon: ShieldCheck,
     className: "bg-risk-cleared text-risk-cleared-foreground",
