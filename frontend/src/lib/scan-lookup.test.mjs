@@ -1,7 +1,7 @@
 // Run with `npm test`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findRegisteredSim } from "./scan-lookup.js";
+import { findRegisteredSim, nextIntakeValues } from "./scan-lookup.js";
 import { iccidFromScan } from "./iccid.js";
 
 const sims = [
@@ -30,6 +30,11 @@ test("an empty ICCID or an empty result is not a duplicate", () => {
   assert.equal(findRegisteredSim("", sims), null);
   assert.equal(findRegisteredSim(undefined, sims), null);
   assert.equal(findRegisteredSim("8925401000000000011", []), null);
+});
+
+test("save and scan next keeps the carrier and clears the SIM details", () => {
+  const before = { phoneNumber: "0712 345 678", iccid: "8925401000000000011", carrierId: "3", planType: "field", monthlyCost: "500" };
+  assert.deepEqual(nextIntakeValues(before), { phoneNumber: "", iccid: "", carrierId: "3", planType: "", monthlyCost: "" });
 });
 
 test("a scan that fails the ICCID check is refused with a reason", () => {

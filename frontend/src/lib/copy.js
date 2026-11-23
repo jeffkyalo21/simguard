@@ -1118,6 +1118,8 @@ export const copy = {
       scanned: "Scanned. Check the number, then fill in the rest.",
       alreadyInSystem: (carrier, status) => `This SIM is already in the system. Carrier: ${carrier}. Status: ${status}.`,
       viewRegistered: (number) => `View ${number}`,
+      saveAndScanNext: "Save and scan next",
+      addedThisSession: (count) => `${count} ${count === 1 ? "SIM" : "SIMs"} added this session`,
       operator: "Operator",
       noCarriers: "No carriers yet",
       addCarrier: "Add a carrier",

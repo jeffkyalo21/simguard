@@ -21,7 +21,7 @@ import { ApiError, errorMessage } from "@/lib/api";
 import { createSim, listSims, setSimTier, updateSim } from "@/lib/data";
 import { useCarriers, useTiers } from "@/hooks/use-reference";
 import { formatPhone } from "@/lib/format";
-import { findRegisteredSim } from "@/lib/scan-lookup";
+import { findRegisteredSim, nextIntakeValues } from "@/lib/scan-lookup";
 import { simFieldErrors } from "@/lib/validation";
 import { copy } from "@/lib/copy";
 
@@ -113,6 +113,8 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
   const [scanned, setScanned] = useState(false);
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  // SIMs added with "Save and scan next" since the dialog opened.
+  const [added, setAdded] = useState(0);
   const carriers = useCarriers();
   const tierOptions = useTiers().map(({ tier }) => ({ value: tier, label: copy.tiers[tier] ?? tier }));
   const carrierOptions = carriers.map((carrier) => ({ value: String(carrier.id), label: carrier.name }));
@@ -163,8 +165,20 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
     if (first) document.getElementById(id)?.focus();
   }
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault();
+    return save(false);
+  }
+
+  // Closing the dialog also closes the scanner, so the camera is never left on.
+  function handleOpenChange(next) {
+    if (!next) setScanOpen(false);
+    onOpenChange(next);
+  }
+
+  async function save(scanNext) {
+    // An ICCID already in the system cannot be added; the Add button is off too.
+    if (registered) return;
 
     const fieldErrors = toMessages(simFieldErrors(values));
     setErrors(fieldErrors);
@@ -179,7 +193,18 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
       const number = formatPhone(saved.phoneNumber);
       toast.success(sim ? copy.sims.toasts.saved(number) : copy.sims.toasts.added(number));
       onSaved?.(saved);
-      onOpenChange(false);
+      if (scanNext) {
+        // Next SIM of the batch: same carrier, empty ICCID, camera back on.
+        setValues(nextIntakeValues(values));
+        setErrors({});
+        setRegistered(null);
+        setScanned(false);
+        askedRef.current = "";
+        setAdded((count) => count + 1);
+        setScanOpen(true);
+      } else {
+        onOpenChange(false);
+      }
     } catch (error) {
       if (saved) {
         // The SIM exists; only the tier failed. Close and say so.
@@ -204,13 +229,25 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
     <>
     <FormDialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={handleOpenChange}
       title={sim ? text.editTitle : text.addTitle}
       submitLabel={sim ? copy.actions.save : copy.actions.add}
       busy={busy}
       submitDisabled={registered !== null}
+      extraAction={
+        sim ? null : (
+          <Button type="button" variant="outline" className="h-10 px-4" disabled={busy || registered !== null} onClick={() => save(true)}>
+            {text.saveAndScanNext}
+          </Button>
+        )
+      }
       onSubmit={handleSubmit}
     >
+      {added > 0 && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {text.addedThisSession(added)}
+        </p>
+      )}
       <FormField id="sim-phoneNumber" label={text.phone} error={errors.phoneNumber}>
         {(field) => (
           <Input

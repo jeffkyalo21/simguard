@@ -28,6 +28,15 @@ export function findRegisteredSim(iccid, sims, ownId = null) {
   return sims.find((item) => item.iccid === wanted && item.id !== ownId) ?? null;
 }
 
+/**
+ * The add-SIM fields after "Save and scan next": the carrier stays, everything
+ * that belongs to one SIM is cleared.
+ * @param {{ carrierId: string }} values
+ */
+export function nextIntakeValues(values) {
+  return { phoneNumber: "", iccid: "", carrierId: values.carrierId, planType: "", monthlyCost: "" };
+}
+
 /** The form value for the SIM select: its id as text. */
 export function simFieldValue(sim) {
   return String(sim.id);
