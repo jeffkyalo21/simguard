@@ -76,13 +76,13 @@ function initialValues(sim, initialIccid = "") {
 
 /**
  * @param {{ id: string, label: string, value: string,
- *   options: { value: string, label: string }[], error?: string,
+ *   options: { value: string, label: string }[], error?: string, hint?: string,
  *   onChange: (value: string) => void, placeholder?: string,
  *   disabled?: boolean, children?: React.ReactNode }} props
  */
-export function SelectField({ id, label, value, options, error, onChange, placeholder = label, disabled, children }) {
+export function SelectField({ id, label, value, options, error, hint, onChange, placeholder = label, disabled, children }) {
   return (
-    <FormField id={id} label={label} error={error}>
+    <FormField id={id} label={label} hint={hint} error={error}>
       {(field) => (
         <>
           <Select value={value} onValueChange={onChange} disabled={disabled}>
@@ -334,6 +334,7 @@ function SimForm({ sim, initialIccid, open, onOpenChange, onSaved }) {
           <SelectField
             id="sim-planType"
             label={text.tier}
+            hint={text.tierHint}
             value={values.planType}
             options={tierOptions}
             error={errors.planType}
