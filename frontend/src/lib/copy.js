@@ -711,6 +711,7 @@ export const copy = {
   },
 
   risk: {
+    confirmed: "Confirmed misuse",
     cleared: "Cleared",
     escalated: "Escalated",
     flagged: "Flagged",
@@ -742,7 +743,7 @@ export const copy = {
     other: "Other",
   },
 
-  alertStatus: { label: "Alert status", flagged: "Flagged", escalated: "Escalated", cleared: "Cleared" },
+  alertStatus: { label: "Alert status", flagged: "Flagged", escalated: "Escalated", confirmed: "Confirmed misuse", cleared: "Cleared" },
   alerts: {
     statusFilter: "Filter by status",
     typeFilter: "Filter by type",
@@ -857,6 +858,7 @@ export const copy = {
       flagged: "Flagged",
       toReview: "To review",
       resolved: "Resolved",
+      confirmedMisuse: "Confirmed misuse",
     },
     dataWasted: "Data wasted",
     wastedShare: (percent) => `${percent}% of paid data`,
@@ -1064,6 +1066,7 @@ export const copy = {
       "user.role_changed": "User role changed",
       "user.password_reset": "User password reset",
       "user.mfa_reset": "User MFA reset",
+      alertConfirmed: "Alert confirmed as misuse",
       alertCleared: "Alert cleared",
       alertReopened: "Alert reopened",
     },
@@ -1204,6 +1207,7 @@ export const copy = {
     cycle: (start, end, asOf) => `Cycle ${start} to ${end}, up to ${asOf}.`,
     activity: {
       alertOpened: "Alert opened",
+      alertConfirmed: "Alert confirmed as misuse",
       alertCleared: "Alert cleared",
       allocationStarted: "Allocation started",
       allocationEnded: "Allocation ended",

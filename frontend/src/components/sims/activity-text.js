@@ -15,7 +15,9 @@ export function activityTime(entry) {
  * have their own label; audit rows use the audit action label.
  */
 export function activityText(entry) {
-  const label = copy.simProfile.activity[entry.kind]
+  // A cleared alert says whether misuse was confirmed; the other outcome keeps "Alert cleared".
+  const kind = entry.kind === "alertCleared" && entry.resolution === "confirmedMisuse" ? "alertConfirmed" : entry.kind;
+  const label = copy.simProfile.activity[kind]
     ?? copy.auditLog.actions[entry.action]
     ?? entry.action
     ?? entry.kind;
